@@ -63,10 +63,12 @@ quotesRouter.post('/callback', async (req, res) => {
       data: { estimatedValue: amount },
     });
 
-    const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
-    await logActivity(SYSTEM_USER_ID, 'QUOTE_RECEIVED', lead.id, {
-      quoteRef, amount, discountPct,
-    });
+    const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID;
+    if (SYSTEM_USER_ID) {
+      await logActivity(SYSTEM_USER_ID, 'QUOTE_RECEIVED', lead.id, {
+        quoteRef, amount, discountPct,
+      }).catch((e) => console.warn('[quotes:callback:activity]', e.message));
+    }
 
     res.status(201).json({ quote, lead: { id: lead.id, leadId: lead.leadId } });
   } catch (err: any) {
