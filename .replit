@@ -40,13 +40,13 @@ outputType = "console"
 name = "CRM Client"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd client && PORT=5173 pnpm run dev"
-waitForPort = 5173
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd client && PORT=8081 pnpm run dev"
+waitForPort = 8081
 
 [agent]
 stack = "PNPM_WORKSPACE"
