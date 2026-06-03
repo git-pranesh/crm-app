@@ -21,9 +21,12 @@ description: Tech stack decisions, port assignments, and known gotchas for the I
 - "CRM Client" → `cd client && PORT=5173 pnpm run dev` (webview type)
 
 ## Known gotchas
-- `postcss.config.ts` and `tailwind.config.ts` cause startup crash in Vite 5 ("ts-node required"). Must use `.js` extension for both. Fixed by using `postcss.config.js` and `tailwind.config.js`.
+- `postcss.config.ts` and `tailwind.config.ts` cause startup crash in Vite 5 ("ts-node required"). Must use `.js` extension for both.
 - Port 5001 is NOT in Replit's supported port list. Use 3001 for the API server.
 - pnpm workspace: added `server` and `client` entries to `pnpm-workspace.yaml` packages list.
+- **dotenv path**: server runs from `/server/` directory, so `import 'dotenv/config'` looks for `server/.env` (wrong). Fix: use `config({ path: resolve(__dirname, '../../.env') })` to load root `.env`. Must use `fileURLToPath(new URL('.', import.meta.url))` for `__dirname` in ESM.
+- **Prisma generate in pnpm workspace**: Prisma's `generate` command internally runs `pnpm add prisma@X -D` and `pnpm add @prisma/client@X` — these fail unless both are in the ROOT `package.json` (not just the sub-package). Added both to root `package.json`.
+- **Supabase client at module top-level**: crashes before dotenv loads in ES module resolution. Always use lazy factory functions (`getClient()`) so Supabase clients are created on first request, not on import.
 
 ## Brand colors
 - Terracotta/coral palette: brand-500 = #d95f32 (matches Quote Builder at proposals.interiorsbydex.com)

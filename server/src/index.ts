@@ -1,7 +1,14 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+// Load .env from workspace root (one level above /server/src)
+config({ path: resolve(__dirname, '../../.env') });
 import express from 'express';
 import cors from 'cors';
 import { healthRouter } from './routes/health.js';
+import { authRouter } from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -15,6 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', healthRouter);
+app.use('/api/auth', authRouter);
 
 app.listen(PORT, () => {
   console.log(`CRM Server running on port ${PORT}`);

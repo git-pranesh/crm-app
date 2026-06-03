@@ -1,0 +1,34 @@
+Continue building Interiors by DeX CRM. Add full database schema and authentication.
+
+ROLES: Designer, CRE, Business Lead (BL), Branch Head
+ACCESS RULES:
+- Designer: own leads only
+- CRE: create leads, log calls, qualify to MQL
+- BL: all leads under own team only, assign leads, approve discounts, receive SLA alerts
+- Branch Head: full access + can approve discounts when BL unavailable
+
+DATABASE SCHEMA (Prisma) — create these models:
+
+1. User: id, name, email, role (enum: DESIGNER|CRE|BL|BRANCH_HEAD), blId (self-ref for BL→Designer), isActive, createdAt
+2. Lead: id, leadId (X#### format, auto-gen), name, phone, phone2, email, source, adName, utmCampaign, utmAdSet, utmSource, projectType, scope, location, possessionTimeline, estimatedValue, intentRating (1-5), stage (enum: EFFECTIVE_LEAD|MQL|DQL|PROPOSAL_READY|PROPOSAL_PRESENTED|ONBOARDING|INACTIVE|ON_HOLD), onHoldRevivalDate, isDuplicate, assignedDesignerId, assignedBLId, currentOfferId, createdAt, updatedAt
+3. Contact: id, leadId, name, phone, email, isPrimary
+4. Call: id, leadId, loggedById, outcome (enum: ANSWERED|RNR_1..5|CALLBACK), duration, notes, recordingUrl (nullable), createdAt
+5. FollowUpTask: id, leadId, assignedToId, dueDate, dueTime, isCompleted, isOverdue, completedAt, createdAt
+6. Meeting: id, leadId, type (enum: DQL|PP), ppNumber (nullable), mode (enum: EC_VISIT|SITE_VISIT|VIRTUAL|PUBLIC_PLACE), status (enum: SCHEDULED|COMPLETED|RESCHEDULED|NO_SHOW), scheduledAt, rescheduledReason, mom, outcome, confirmationSent, momSent, createdAt
+7. Quote: id, leadId, quoteBuilderRef, amount, discountPct, status, createdAt
+8. DiscountRequest: id, leadId, quoteId, requestedById, amount, originalAmount, discountPct, reason, status (enum: PENDING|APPROVED|REJECTED), reviewedById, reviewerComment, createdAt, reviewedAt
+9. WhatsAppMessage: id, leadId, direction (INBOUND|OUTBOUND), body, templateId (nullable), sentById (nullable), twilioSid, createdAt
+10. EmailLog: id, leadId, type, sentTo, subject, sentAt, previewedById
+11. SLABreach: id, leadId, rule, breachedAt, resolvedAt (nullable)
+12. Offer: id, name, description, startDate, endDate, isActive
+13. LeadOffer: id, leadId, offerId, appliedAt
+14. InactivationFeedback: id, leadId, reason, feedbackFormSentAt, clientResponse, respondedAt
+15. ActivityLog: id, leadId, userId, action, meta (JSON), createdAt
+
+AUTH:
+- Use Supabase Auth
+- On signup/invite, assign role
+- Middleware: verifyToken, requireRole([...roles])
+- Seed 1 Branch Head admin account
+
+Generate: prisma/schema.prisma, server/middleware/auth.js, server/routes/auth.js (login, me), seed script
