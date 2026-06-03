@@ -4,8 +4,9 @@ import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
 import WhatsAppTab from '../components/tabs/WhatsAppTab';
+import DiscountTab from '../components/tabs/DiscountTab';
 
-type Tab = 'calls' | 'followups' | 'meetings' | 'whatsapp';
+type Tab = 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'discount';
 
 export default function LeadDetail() {
   const { leadId } = useParams<{ leadId: string }>();
@@ -29,6 +30,7 @@ export default function LeadDetail() {
     { id: 'followups', label: 'Follow-ups' },
     { id: 'meetings', label: 'Meetings' },
     { id: 'whatsapp', label: 'WhatsApp' },
+    { id: 'discount', label: 'Discount' },
   ];
 
   return (
@@ -36,7 +38,7 @@ export default function LeadDetail() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <Link to="/" className="text-gray-400 hover:text-gray-600 text-sm">← Back</Link>
+          <Link to="/dashboard" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</Link>
           <div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center">
@@ -76,6 +78,7 @@ export default function LeadDetail() {
         {activeTab === 'followups' && <FollowUpTab leadId={leadId!} />}
         {activeTab === 'meetings' && <MeetingsTab leadId={leadId!} />}
         {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
+        {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
       </div>
     </div>
   );

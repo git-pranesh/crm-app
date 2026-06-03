@@ -1,0 +1,54 @@
+Continue Interiors by DeX CRM. Build dashboard, all reports, and offer tracking.
+
+DASHBOARD (GET /api/dashboard):
+Role-scoped data:
+- totalLeads, leadsToday, leadsThisWeek, leadsThisMonth
+- stageFunnel: count per stage
+- sourceBreakdown: count per source (for pie chart)
+- conversionRates: EL→MQL%, MQL→DQL%, DQL→PP%, PP→Onboarding%
+- slaBreaches: active breach count + list (top 5)
+- teamActivity: calls logged today, stages moved today, tasks completed today — per agent (BL/Branch Head sees team; designer sees self)
+- personalStats (per designer): activeLeads, ppDone, onboardings, targetVsAchieved
+- blStats (per BL): same for their team
+
+REPORTS (GET /api/reports/:type with query params: startDate, endDate, designerId, blId, source, stage, projectType, location):
+
+1. lead_summary — total leads by source + time period
+2. pipeline — stage distribution + avg days in stage
+3. conversion — stage-by-stage conversion %
+4. timeline_performance — avg days: Lead→DQL, DQL→PP, Lead→Onboarding
+5. designer_performance — leads assigned, DQLs, PPs, onboardings, conversion%, SLA compliance%
+6. bl_performance — leads managed, closed, avg value, discount metrics (total requested, approved, rejected, avg discount%)
+7. source_performance — leads + conversion per source
+8. campaign_performance — leads + conversion per UTM campaign (Meta/Google)
+9. inactive_leads — who dropped, at what stage, why, inactivation feedback responses
+10. meeting_performance — scheduled vs completed vs no-show per designer
+11. sales_cycle — avg/fastest/slowest days Lead→Onboarding
+12. lead_aging — leads stuck past SLA threshold, how long
+13. monthly_trend — leads created per month (line chart data) + quarterly/half-yearly/annual aggregations (best/worst month by leads, best/worst by conversion)
+14. offer_performance — onboardings per offer name, conversion rate per offer
+
+All reports: return JSON data + support export to CSV (GET /api/reports/:type/export)
+
+SCHEDULED REPORTS (BullMQ):
+- ReportSchedule model: id, type (WEEKLY|MONTHLY), recipients (array of userId), lastSentAt
+- Weekly: every Monday 8am — send PDF/CSV summary to recipients
+- Monthly: 1st of month 8am
+- Weekly format vs monthly format differ (ref: use standard sales summary format for now, client to provide exact format later)
+
+OFFERS:
+- CRUD /api/offers — create/list/update offers (name, description, startDate, endDate)
+- POST /api/leads/:id/offer — apply offer to lead
+- Offer shown on lead record, tracked in LeadOffer
+
+DISCOUNT APPROVAL:
+- POST /api/leads/:id/discount-request — designer raises request (amount, originalAmount, discountPct, reason)
+- GET /api/discount-requests/pending — BL sees pending requests for their team
+- PATCH /api/discount-requests/:id — BL approves/rejects (status, reviewerComment mandatory on rejection)
+- On decision: notify designer in-app
+- Log to ActivityLog
+
+Frontend:
+- /dashboard — main dashboard with all panels (role-scoped)
+- /reports — report list → select type → show table + chart + export button
+- Lead detail: add Discount tab, Offer badge

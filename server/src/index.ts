@@ -17,8 +17,13 @@ import { whatsappRouter, leadWhatsAppRouter } from './routes/whatsapp.js';
 import { emailRouter } from './routes/email.js';
 import { slaRouter } from './routes/sla.js';
 import { feedbackRouter } from './routes/feedback.js';
+import { dashboardRouter } from './routes/dashboard.js';
+import { reportsRouter } from './routes/reports.js';
+import { offersRouter, leadOfferRouter } from './routes/offers.js';
+import { discountsRouter, leadDiscountRouter } from './routes/discounts.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
+import { scheduleReportJobs } from './jobs/reportScheduler.js';
 import './jobs/emailWorker.js';
 
 const app = express();
@@ -40,6 +45,8 @@ app.use('/api/leads/:leadId/calls', callsRouter);
 app.use('/api/leads/:leadId/tasks', tasksRouter);
 app.use('/api/leads/:leadId/meetings', meetingsRouter);
 app.use('/api/leads/:leadId/whatsapp', leadWhatsAppRouter);
+app.use('/api/leads/:leadId/offer', leadOfferRouter);
+app.use('/api/leads/:leadId/discount-request', leadDiscountRouter);
 
 // Standalone task routes
 app.use('/api/tasks', myTasksRouter);
@@ -58,6 +65,18 @@ app.use('/api/email', emailRouter);
 
 // SLA
 app.use('/api/sla', slaRouter);
+
+// Dashboard
+app.use('/api/dashboard', dashboardRouter);
+
+// Reports
+app.use('/api/reports', reportsRouter);
+
+// Offers
+app.use('/api/offers', offersRouter);
+
+// Discount requests
+app.use('/api/discount-requests', discountsRouter);
 
 // Public feedback form (no auth)
 app.use('/api/feedback', feedbackRouter);
@@ -80,8 +99,9 @@ app.listen(PORT, async () => {
     try {
       await scheduleMidnightJob();
       await scheduleSLACheck();
+      await scheduleReportJobs();
     } catch (e) {
-      console.warn('[jobs] Could not schedule background jobs (Redis may not be available):', e);
+      console.warn('[jobs] Could not schedule background jobs:', e);
     }
   } else {
     console.log('[jobs] Skipping background job schedule — Redis not configured');

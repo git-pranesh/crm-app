@@ -382,6 +382,17 @@ model ActivityLog {
   @@map("activity_logs")
 }
 
+model ReportSchedule {
+  id         String    @id @default(cuid())
+  /// WEEKLY | MONTHLY
+  type       String
+  recipients String[]
+  lastSentAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("report_schedules")
+}
+
 model NotificationLog {
   id        String   @id @default(cuid())
   userId    String

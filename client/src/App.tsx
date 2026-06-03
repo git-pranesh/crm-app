@@ -4,6 +4,7 @@ import { api } from './lib/api';
 import LeadDetail from './pages/LeadDetail';
 import Inbox from './pages/Inbox';
 import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
 import FeedbackForm from './pages/FeedbackForm';
 
 function Home() {
@@ -17,9 +18,10 @@ function Home() {
   }, []);
 
   const navLinks = [
-    { to: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { to: '/inbox', label: 'WhatsApp Inbox', icon: '💬' },
-    { to: '/leads/demo-lead-id', label: 'Lead Detail Demo', icon: '👤' },
+    { to: '/dashboard', label: 'Dashboard', icon: '📊', desc: 'Pipeline, SLA, conversions' },
+    { to: '/reports', label: 'Reports', icon: '📈', desc: '14 report types + CSV export' },
+    { to: '/inbox', label: 'WhatsApp Inbox', icon: '💬', desc: 'Role-scoped conversations' },
+    { to: '/leads/demo-lead-id', label: 'Lead Detail Demo', icon: '👤', desc: 'Calls, tasks, meetings, discounts' },
   ];
 
   return (
@@ -37,7 +39,7 @@ function Home() {
           ) : health ? (
             <>
               <p><span className="text-gray-400">status: </span><span className="text-green-600 font-semibold">{health.status}</span></p>
-              <p><span className="text-gray-400">timestamp: </span><span className="text-brand-600">{health.timestamp}</span></p>
+              <p><span className="text-gray-400">server: </span><span className="text-brand-600">localhost:3001</span></p>
             </>
           ) : (
             <p className="text-gray-400 animate-pulse">Connecting…</p>
@@ -52,7 +54,10 @@ function Home() {
               className="flex items-center gap-3 w-full bg-gray-50 hover:bg-brand-50 border border-gray-200 hover:border-brand-200 text-gray-700 px-4 py-3 rounded-xl transition-colors text-sm font-medium"
             >
               <span className="text-lg">{link.icon}</span>
-              {link.label}
+              <div className="text-left">
+                <p className="font-medium">{link.label}</p>
+                <p className="text-xs text-gray-400 font-normal">{link.desc}</p>
+              </div>
               <span className="ml-auto text-gray-400">→</span>
             </Link>
           ))}
@@ -68,6 +73,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/reports" element={<Reports />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/leads/:leadId" element={<LeadDetail />} />
         <Route path="/feedback/:token" element={<FeedbackForm />} />
