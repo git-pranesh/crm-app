@@ -1,0 +1,1 @@
+- [CRM Tech Stack](crm-tech-stack.md) — Supabase+Prisma+BullMQ stack; key gotchas on config file formats and port allocation

@@ -1,45 +1,78 @@
-# [Project name]
+# Interiors by DeX — CRM
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A fully custom CRM built for Interiors by DeX, an interior design firm. Replicates and extends TeleCRM's capabilities with interior-design-specific workflows: lead pipeline, meetings with MOM, quote builder integration, discount approvals, WhatsApp/email automation, SLA alerting, and reports.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+| Service | Command | Port |
+|---|---|---|
+| CRM Server (Express) | `cd server && PORT=3001 pnpm run dev` | 3001 |
+| CRM Client (Vite + React) | `cd client && PORT=5173 pnpm run dev` | 5173 |
+
+- `pnpm --filter @workspace/crm-server run dev` — run server only
+- `pnpm --filter @workspace/crm-client run dev` — run client only
+- `cd server && pnpm run db:generate` — generate Prisma client
+- `cd server && pnpm run db:push` — push schema to Supabase (dev)
+- `cd server && pnpm run db:migrate` — run Prisma migrations
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Backend:** Node.js 24, Express 4, TypeScript, `tsx` for dev
+- **Database:** PostgreSQL via Supabase + Prisma ORM
+- **Auth:** Supabase Auth with JWT
+- **Job Queue:** BullMQ + Redis (reminders, SLA cron, scheduled emails)
+- **File Storage:** Supabase Storage
+- **Frontend:** React 18, Vite 5, TailwindCSS 3
+- **Monorepo:** pnpm workspaces
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+```
+/server/src/index.ts          — Express entry point
+/server/src/routes/health.ts  — GET /api/health
+/server/src/lib/prisma.ts     — Prisma client singleton
+/server/src/lib/supabase.ts   — Supabase client (anon + admin)
+/server/src/jobs/index.ts     — BullMQ queue definitions (reminders, sla, emails)
+/prisma/schema.prisma         — Database schema (source of truth)
+/client/src/App.tsx           — React root component
+/client/tailwind.config.js    — Brand colors (terracotta/coral palette)
+/client/vite.config.ts        — Vite config + /api proxy to server:3001
+/.env.example                 — All required env var names with comments
+```
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Prisma schema lives at `/prisma/schema.prisma` (root); run `db:generate` from `/server` using `--schema=../prisma/schema.prisma`
+- Vite proxies `/api/*` → `localhost:3001` so frontend never hard-codes the API URL
+- `DIRECT_URL` (session pooler port 5432) is required alongside `DATABASE_URL` (transaction pooler port 6543) for Prisma migrations on Supabase
+- BullMQ queues are defined centrally in `/server/src/jobs/index.ts` and imported by individual worker files as the queue grows
+- Brand color palette (terracotta/coral, `brand-500 = #d95f32`) matches the existing Quote Builder at proposals.interiorsbydex.com
+
+## Required Environment Variables
+
+Copy `.env.example` → `.env` and fill in values before running.
+
+Key vars:
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `DATABASE_URL` (transaction pooler, port 6543)
+- `DIRECT_URL` (session pooler or direct, port 5432)
+- `REDIS_URL`
+- `JWT_SECRET`
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+8-stage lead pipeline (Effective Lead → MQL → DQL → Proposal Ready → Proposal Presented → Onboarding → Inactive → On Hold) with:
+- 4 roles: Designer, CRE, Business Lead, Branch Head
+- Call logging + mandatory follow-up tasks
+- Meetings with auto-email/SMS triggers and mandatory MOM
+- Embedded Quote Builder (proposals.interiorsbydex.com) with discount approval workflow
+- WhatsApp + email automation (BullMQ)
+- SLA engine with breach alerts
+- Meta + Google Ads lead capture with UTM tracking
+- Reports and per-designer/per-BL live dashboards
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- No business logic until Task 1 schema is confirmed
+- All 90 client features confirmed (see `attached_assets/` for full spec)
+- Calling approach (Option A log-only vs Option B telephony) pending client decision
