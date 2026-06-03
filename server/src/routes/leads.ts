@@ -128,8 +128,9 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         possessionTimeline: possessionTimeline?.trim() || undefined,
         estimatedValue: estimatedValue ? parseFloat(estimatedValue) : undefined,
         intentRating: intentRating ? parseInt(intentRating) : undefined,
-        assignedDesignerId: assignedDesignerId || undefined,
-        assignedBLId: assignedBLId || undefined,
+        // Auto-assign to creator if they are CRE or DESIGNER and no explicit assignment given
+        assignedDesignerId: assignedDesignerId || (['CRE', 'DESIGNER'].includes(user.role) ? user.id : undefined),
+        assignedBLId: assignedBLId || (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined),
         stage: 'EFFECTIVE_LEAD',
       },
       include: LEAD_INCLUDE,
@@ -344,6 +345,18 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       include: LEAD_INCLUDE,
     });
 
+    // Notify BL when assigned to a lead
+    const newBLId = assignedBLId !== undefined ? (assignedBLId || null) : undefined;
+    if (newBLId && newBLId !== existing.assignedBLId) {
+      await createNotification(
+        newBLId,
+        'BL_ASSIGNED',
+        `You have been assigned as BL for lead ${existing.leadId} — ${existing.name}`,
+        id,
+      );
+      await logActivity(user.id, 'BL_ASSIGNED', id, { blId: newBLId });
+    }
+
     if (stage && stage !== prevStage) {
       await logActivity(user.id, 'STAGE_CHANGED', id, { from: prevStage, to: stage });
 
@@ -434,6 +447,23 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (r
     });
 
     res.json({ lead: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:id/activity ────────────────────────────────────────────────
+leadsRouter.get('/:id/activity', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const activities = await prisma.activityLog.findMany({
+      where: { leadId: id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { id: true, name: true, role: true } },
+      },
+    });
+    res.json({ activities });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

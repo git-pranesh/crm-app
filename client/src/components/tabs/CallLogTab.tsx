@@ -11,6 +11,13 @@ const OUTCOMES = [
   { value: 'CALLBACK', label: 'Callback Scheduled' },
 ];
 
+function formatDuration(secs?: number) {
+  if (!secs) return '—';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}m ${s}s`;
+}
+
 const OUTCOME_COLORS: Record<string, string> = {
   ANSWERED: 'bg-green-100 text-green-700',
   RNR_1: 'bg-amber-100 text-amber-700',
@@ -146,13 +153,6 @@ export default function CallLogTab({ leadId }: Props) {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const formatDuration = (secs?: number) => {
-    if (!secs) return '—';
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}m ${s}s`;
   };
 
   return (

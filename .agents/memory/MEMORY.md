@@ -2,3 +2,6 @@
 - [Prisma Field Names](prisma-field-names.md) — non-obvious Prisma model/field naming gotchas for this CRM schema
 - [Prisma migrate command](prisma-migrate.md) — schema lives at root `prisma/schema.prisma`; run migrate from workspace root, not inside `server/`.
 - [Gap patch summary](gap-patch.md) — HANDED_OVER stage, DIP gate, env vars (TWILIO_SMS_NUMBER, SMART_ASSIGNMENT_ENABLED, BASE_URL), Google Form webhook activation note.
+- [CRE lead scoping + auto-assign](cre-lead-scoping.md) — CRE/DESIGNER leads list is scoped to assignedDesignerId=user.id; manually-created leads must auto-assign creator
+- [BL assignment notification](bl-assignment-notification.md) — PATCH /api/leads/:id must fire BL_ASSIGNED notification when assignedBLId changes to a new non-null value
+- [Notifications route path](notifications-route.md) — notifications endpoint is /api/notifications/my, not /api/notifications (returns 404 at root)
