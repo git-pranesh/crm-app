@@ -1,0 +1,49 @@
+Continue Interiors by DeX CRM. Build WhatsApp, email automation, and SLA engine.
+
+WHATSAPP (Twilio):
+Env vars: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER
+
+- POST /api/whatsapp/send — send message: leadId, body, templateId (optional). Save to WhatsAppMessage (direction: OUTBOUND). Send via Twilio API.
+- POST /api/whatsapp/webhook — Twilio inbound webhook. Parse payload, match to lead by phone, save as INBOUND message. Trigger in-app notification to assigned designer + BL.
+- Templates (stored in DB, seeded): pre_call_intro, rnr_followup, meeting_confirmation, mom_sent, onboarding_welcome, on_hold_notification
+- GET /api/leads/:id/whatsapp — full thread
+- GET /api/whatsapp/inbox — role-scoped:
+  - DESIGNER: own leads only
+  - BL: team leads only  
+  - BRANCH_HEAD / ADMIN: all leads
+  - Returns: latest message per lead, unread count, lead name
+
+EMAIL:
+Use Nodemailer + SMTP (env: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, FROM_EMAIL)
+Templates (HTML, stored in /server/templates/email/):
+  - meeting_confirmation.html
+  - mom.html
+  - onboarding.html
+  - no_show.html
+  - rescheduled.html
+  - on_hold.html
+  - inactivation_feedback.html (link to feedback form)
+
+- emailService.send(type, leadId, extraData) — fills template, logs to EmailLog, sends
+- For meeting_confirmation and mom: designer can preview+edit before send (API: GET /api/email/preview/:type/:leadId, PATCH /api/email/draft/:type/:leadId)
+- Inactivation feedback form: simple public page at /feedback/:token — stores response in InactivationFeedback
+
+SLA ENGINE (BullMQ cron, runs every hour):
+Rules:
+  1. First contact < 24h: lead created, no call logged within 24h → breach
+  2. MQL < 5 days: lead in EFFECTIVE_LEAD > 5 days → breach
+  3. DQL < 5 days: lead in MQL > 5 days without DQL meeting scheduled → breach
+  4. PP < 2 days: lead in PROPOSAL_READY > 2 days without PP meeting scheduled → breach
+
+On breach:
+- Create SLABreach record
+- Add "SLA Breached" flag on Lead
+- Create notification for BL + Branch Head (in-app + email)
+- Log to ActivityLog
+
+GET /api/sla/breaches — list active breaches, filterable. Used by dashboard breach panel.
+
+Frontend:
+- WhatsApp tab on lead detail
+- Global /inbox page (role-scoped)
+- SLA breach panel on dashboard

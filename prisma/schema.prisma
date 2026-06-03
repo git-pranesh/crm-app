@@ -149,6 +149,7 @@ model Lead {
   daysLeadToDQL      Int?
   daysDQLToPP        Int?
   daysPPToOnboarding Int?
+  isSLABreached      Boolean  @default(false)
 
   contacts             Contact[]
   calls                Call[]
@@ -286,6 +287,7 @@ model WhatsAppMessage {
   templateId String?
   sentById   String?
   twilioSid  String?
+  isRead     Boolean          @default(false)
   createdAt  DateTime         @default(now())
 
   lead   Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -354,6 +356,7 @@ model InactivationFeedback {
   id                 String    @id @default(cuid())
   leadId             String    @unique
   reason             String
+  formToken          String?   @unique
   feedbackFormSentAt DateTime?
   clientResponse     String?
   respondedAt        DateTime?

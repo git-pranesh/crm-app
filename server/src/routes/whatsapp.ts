@@ -1,0 +1,191 @@
+import { Router } from 'express';
+import { prisma } from '../lib/prisma.js';
+import { verifyToken } from '../middleware/auth.js';
+import { logActivity } from '../lib/activityLog.js';
+import { createNotification } from '../lib/notifications.js';
+import {
+  sendWhatsAppMessage,
+  fillTemplate,
+  WA_TEMPLATES,
+  isTwilioConfigured,
+} from '../lib/whatsapp.js';
+
+export const whatsappRouter = Router();
+export const leadWhatsAppRouter = Router({ mergeParams: true });
+
+// ── POST /api/whatsapp/send ───────────────────────────────────────────────────
+whatsappRouter.post('/send', verifyToken, async (req, res) => {
+  const user = req.user!;
+
+  const { leadId, body: rawBody, templateId, templateVars } = req.body as {
+    leadId?: string;
+    body?: string;
+    templateId?: string;
+    templateVars?: Record<string, string>;
+  };
+
+  if (!leadId) { res.status(400).json({ error: 'leadId is required' }); return; }
+  if (!rawBody && !templateId) { res.status(400).json({ error: 'body or templateId is required' }); return; }
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, leadId: true, name: true, phone: true },
+  });
+  if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (!lead.phone) { res.status(400).json({ error: 'Lead has no phone number' }); return; }
+
+  let messageBody = rawBody ?? '';
+  if (templateId) {
+    messageBody = fillTemplate(templateId, { clientName: lead.name, ...templateVars });
+  }
+
+  const twilioSid = await sendWhatsAppMessage(lead.phone, messageBody).catch((e) => {
+    console.error('[whatsapp] Send failed:', e.message);
+    return null;
+  });
+
+  const message = await prisma.whatsAppMessage.create({
+    data: {
+      leadId,
+      direction: 'OUTBOUND',
+      body: messageBody,
+      templateId,
+      sentById: user.id,
+      twilioSid,
+      isRead: true,
+    },
+  });
+
+  await logActivity(user.id, 'WHATSAPP_SENT', leadId, { templateId, twilioSid });
+
+  res.status(201).json({ message, sent: !!twilioSid || !isTwilioConfigured() });
+});
+
+// ── POST /api/whatsapp/webhook — Twilio inbound ───────────────────────────────
+whatsappRouter.post('/webhook', async (req, res) => {
+  const { From, Body, MessageSid } = req.body as {
+    From?: string;
+    Body?: string;
+    MessageSid?: string;
+  };
+
+  if (!From || !Body) {
+    res.status(400).send('Bad request');
+    return;
+  }
+
+  // Strip "whatsapp:" prefix from Twilio's From field
+  const phone = From.replace('whatsapp:', '');
+
+  const lead = await prisma.lead.findFirst({
+    where: { phone },
+    include: {
+      assignedDesigner: { select: { id: true } },
+      assignedBL: true,
+    },
+  });
+
+  if (!lead) {
+    console.log(`[whatsapp:webhook] Unmatched phone ${phone}`);
+    res.status(200).send('<Response/>');
+    return;
+  }
+
+  const message = await prisma.whatsAppMessage.create({
+    data: {
+      leadId: lead.id,
+      direction: 'INBOUND',
+      body: Body,
+      twilioSid: MessageSid,
+      isRead: false,
+    },
+  });
+
+  // Notify assigned designer
+  if (lead.assignedDesignerId) {
+    await createNotification(
+      lead.assignedDesignerId,
+      'RNR_ESCALATION', // reusing as generic type; spec doesn't define a WA type
+      `New WhatsApp from ${lead.name}: "${Body.substring(0, 80)}${Body.length > 80 ? '…' : ''}"`,
+      lead.id,
+    );
+  }
+  // Notify BL
+  if (lead.assignedBLId) {
+    await createNotification(
+      lead.assignedBLId,
+      'RNR_ESCALATION',
+      `WhatsApp inbound from ${lead.name} (${lead.leadId})`,
+      lead.id,
+    );
+  }
+
+  // Respond with empty TwiML so Twilio doesn't retry
+  res.setHeader('Content-Type', 'text/xml');
+  res.send('<Response/>');
+});
+
+// ── GET /api/leads/:leadId/whatsapp — full thread ─────────────────────────────
+leadWhatsAppRouter.get('/', verifyToken, async (req, res) => {
+  const { leadId } = req.params as { leadId: string };
+
+  const messages = await prisma.whatsAppMessage.findMany({
+    where: { leadId },
+    include: { sentBy: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Mark inbound as read
+  await prisma.whatsAppMessage.updateMany({
+    where: { leadId, direction: 'INBOUND', isRead: false },
+    data: { isRead: true },
+  });
+
+  res.json({ messages, templates: Object.keys(WA_TEMPLATES) });
+});
+
+// ── GET /api/whatsapp/inbox — role-scoped ────────────────────────────────────
+whatsappRouter.get('/inbox', verifyToken, async (req, res) => {
+  const user = req.user!;
+
+  let leadFilter: any = {};
+
+  if (user.role === 'DESIGNER') {
+    leadFilter = { assignedDesignerId: user.id };
+  } else if (user.role === 'BL') {
+    const teamMembers = await prisma.user.findMany({
+      where: { blId: user.id },
+      select: { id: true },
+    });
+    leadFilter = { assignedDesignerId: { in: teamMembers.map((m) => m.id) } };
+  }
+  // BRANCH_HEAD + ADMIN → no filter (all leads)
+
+  // Get all leads matching filter that have WhatsApp messages
+  const leads = await prisma.lead.findMany({
+    where: {
+      ...leadFilter,
+      whatsappMessages: { some: {} },
+    },
+    include: {
+      whatsappMessages: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+      _count: { select: { whatsappMessages: { where: { isRead: false, direction: 'INBOUND' } } } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  const inbox = leads.map((lead) => ({
+    leadId: lead.id,
+    leadNumber: lead.leadId,
+    leadName: lead.name,
+    latestMessage: lead.whatsappMessages[0] ?? null,
+    unreadCount: lead._count.whatsappMessages,
+  }));
+
+  const totalUnread = inbox.reduce((acc, row) => acc + row.unreadCount, 0);
+
+  res.json({ inbox, totalUnread });
+});

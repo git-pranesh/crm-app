@@ -2,6 +2,9 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from './lib/api';
 import LeadDetail from './pages/LeadDetail';
+import Inbox from './pages/Inbox';
+import Dashboard from './pages/Dashboard';
+import FeedbackForm from './pages/FeedbackForm';
 
 function Home() {
   const [health, setHealth] = useState<{ status: string; timestamp: string } | null>(null);
@@ -12,6 +15,12 @@ function Home() {
       .then(setHealth)
       .catch(() => setError('Server not reachable'));
   }, []);
+
+  const navLinks = [
+    { to: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { to: '/inbox', label: 'WhatsApp Inbox', icon: '💬' },
+    { to: '/leads/demo-lead-id', label: 'Lead Detail Demo', icon: '👤' },
+  ];
 
   return (
     <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
@@ -35,14 +44,18 @@ function Home() {
           )}
         </div>
 
-        <div className="text-sm text-gray-500">
-          <p className="mb-2">Demo: navigate to a lead detail page</p>
-          <Link
-            to="/leads/demo-lead-id"
-            className="inline-block bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 transition-colors"
-          >
-            Open Lead Detail Demo →
-          </Link>
+        <div className="space-y-2">
+          {navLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className="flex items-center gap-3 w-full bg-gray-50 hover:bg-brand-50 border border-gray-200 hover:border-brand-200 text-gray-700 px-4 py-3 rounded-xl transition-colors text-sm font-medium"
+            >
+              <span className="text-lg">{link.icon}</span>
+              {link.label}
+              <span className="ml-auto text-gray-400">→</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
@@ -54,7 +67,10 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/inbox" element={<Inbox />} />
         <Route path="/leads/:leadId" element={<LeadDetail />} />
+        <Route path="/feedback/:token" element={<FeedbackForm />} />
       </Routes>
     </BrowserRouter>
   );
