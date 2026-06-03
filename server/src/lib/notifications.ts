@@ -1,0 +1,51 @@
+import { prisma } from './prisma.js';
+
+export type NotificationType =
+  | 'OVERDUE_TASK'
+  | 'RNR_ESCALATION'
+  | 'DISCOUNT_REQUEST'
+  | 'SLA_BREACH'
+  | 'MEETING_NO_SHOW';
+
+export async function createNotification(
+  userId: string,
+  type: NotificationType,
+  message: string,
+  leadId?: string,
+) {
+  return prisma.notificationLog.create({
+    data: { userId, type, message, leadId },
+  });
+}
+
+/** Notify all BLs and Branch Heads */
+export async function notifyManagers(
+  type: NotificationType,
+  message: string,
+  leadId?: string,
+) {
+  const managers = await prisma.user.findMany({
+    where: { role: { in: ['BL', 'BRANCH_HEAD'] }, isActive: true },
+    select: { id: true },
+  });
+
+  await prisma.notificationLog.createMany({
+    data: managers.map((m) => ({ userId: m.id, type, message, leadId })),
+  });
+}
+
+/** Notify specific user's BL (if they have one) */
+export async function notifyUserBL(
+  userId: string,
+  type: NotificationType,
+  message: string,
+  leadId?: string,
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { blId: true },
+  });
+  if (user?.blId) {
+    await createNotification(user.blId, type, message, leadId);
+  }
+}

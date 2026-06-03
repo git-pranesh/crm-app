@@ -1,0 +1,32 @@
+Continue Interiors by DeX CRM. Build calls, follow-ups, and meetings.
+
+CALLS:
+- POST /api/leads/:id/calls — log call: outcome (ANSWERED/RNR_1 through RNR_5/CALLBACK), duration (minutes), notes, recordingUrl (nullable, for future Exotel)
+- Validation: followUpTaskId must be provided OR a new followup must be created in same request. Block call save if no follow-up set.
+- RNR tracking: count RNR calls on lead. After 5 RNR: return flag prompting escalation to BL (do NOT auto-inactivate). BL reviews → can move back to CRE. CRE retries. After 3 months from lead creation still RNR with CRE → prompt CRE to inactivate (confirm step, not auto).
+- GET /api/leads/:id/calls — list all calls on lead
+
+FOLLOW-UP TASKS:
+- POST /api/leads/:id/tasks — create task: dueDate, dueTime, assignedToId
+- GET /api/tasks/my — current user's tasks (upcoming, overdue, completed)
+- GET /api/tasks/team — BL sees team tasks; Branch Head sees all
+- BullMQ job: every midnight, scan FollowUpTask where dueDate = today AND isCompleted = false → set isOverdue = true, create notification for manager
+- PATCH /api/tasks/:id/complete — mark complete
+
+MEETINGS:
+- POST /api/leads/:id/meetings — schedule: type (DQL/PP), mode, scheduledAt. If PP: auto-number (PP1, PP2...). On create: queue email+SMS to client with date/time/agenda/location.
+- PATCH /api/meetings/:id/status — update status:
+  - COMPLETED: require mom field (block if empty). Auto-trigger MOM email. Log to ActivityLog.
+  - RESCHEDULED: require rescheduledReason (block if empty). Auto-trigger email+SMS to client. Log.
+  - NO_SHOW: auto-trigger email+SMS to client asking for next available time. Log.
+- Confirmation email auto-triggers on schedule (no manual checkbox).
+- Auto-calculate and store on Lead: daysLeadToDQL, daysDQLToPP, daysPPToOnboarding (recalculate on any meeting status update or stage change).
+- GET /api/leads/:id/meetings — list meetings
+
+NOTIFICATIONS (in-app):
+- NotificationLog model: id, userId, type, message, leadId, isRead, createdAt
+- POST notifications when: follow-up overdue, RNR escalation needed, discount request received, SLA breached, meeting no-show
+- GET /api/notifications/my — unread count + list
+- PATCH /api/notifications/:id/read
+
+Frontend: build Call Log tab, Follow-up tab, Meetings tab on /leads/:id page.

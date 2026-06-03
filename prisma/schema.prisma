@@ -100,6 +100,7 @@ model User {
   whatsappMessagesSent     WhatsAppMessage[]
   emailsPreviewed          EmailLog[]
   activityLogs             ActivityLog[]
+  notifications            NotificationLog[]
 
   @@map("users")
 }
@@ -144,6 +145,11 @@ model Lead {
   assignedBL       User?  @relation("BLLeads", fields: [assignedBLId], references: [id])
   currentOffer     Offer? @relation("CurrentOffer", fields: [currentOfferId], references: [id])
 
+  /// Auto-calculated milestone durations in days
+  daysLeadToDQL      Int?
+  daysDQLToPP        Int?
+  daysPPToOnboarding Int?
+
   contacts             Contact[]
   calls                Call[]
   followUpTasks        FollowUpTask[]
@@ -156,6 +162,7 @@ model Lead {
   leadOffers           LeadOffer[]
   inactivationFeedback InactivationFeedback?
   activityLogs         ActivityLog[]
+  notifications        NotificationLog[]
 
   @@map("leads")
 }
@@ -370,4 +377,21 @@ model ActivityLog {
   @@index([leadId])
   @@index([userId])
   @@map("activity_logs")
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String
+  /// OVERDUE_TASK | RNR_ESCALATION | DISCOUNT_REQUEST | SLA_BREACH | MEETING_NO_SHOW
+  type      String
+  message   String
+  leadId    String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User  @relation(fields: [userId], references: [id])
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@map("notification_logs")
 }
