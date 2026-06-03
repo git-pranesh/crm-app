@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import toast from 'react-hot-toast';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 interface DiscountRequest {
   id: string;
   originalAmount: number;
-  requestedAmount: number;
+  amount: number;
   discountPct: number;
   reason: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -25,23 +27,17 @@ interface Props { leadId: string }
 export default function DiscountTab({ leadId }: Props) {
   const [requests, setRequests] = useState<DiscountRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    originalAmount: '',
-    requestedAmount: '',
-    reason: '',
-  });
+  const [confirm, setConfirm] = useState<{ open: boolean }>({ open: false });
+  const [form, setForm] = useState({ originalAmount: '', amount: '', reason: '' });
 
   const loadRequests = async () => {
     try {
-      const data = await api.get<{ requests: DiscountRequest[] }>(
-        `/discount-requests?leadId=${leadId}`,
-      );
+      const data = await api.get<{ requests: DiscountRequest[] }>(`/discount-requests?leadId=${leadId}`);
       setRequests(data.requests);
     } catch (e: any) {
-      setError(e.message);
+      toast.error(e.message);
     } finally {
       setLoading(false);
     }
@@ -51,20 +47,28 @@ export default function DiscountTab({ leadId }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.originalAmount || !form.requestedAmount || !form.reason) return;
+    if (!form.originalAmount || !form.amount || !form.reason) {
+      toast.error('All fields are required');
+      return;
+    }
+    setConfirm({ open: true });
+  };
+
+  const doSubmit = async () => {
+    setConfirm({ open: false });
     setSubmitting(true);
-    setError(null);
     try {
       await api.post(`/leads/${leadId}/discount-request`, {
         originalAmount: Number(form.originalAmount),
-        requestedAmount: Number(form.requestedAmount),
+        amount: Number(form.amount),
         reason: form.reason,
       });
-      setForm({ originalAmount: '', requestedAmount: '', reason: '' });
+      toast.success('Discount request submitted for BL approval');
+      setForm({ originalAmount: '', amount: '', reason: '' });
       setShowForm(false);
       await loadRequests();
     } catch (e: any) {
-      setError(e.message);
+      toast.error(e.message);
     } finally {
       setSubmitting(false);
     }
@@ -73,14 +77,23 @@ export default function DiscountTab({ leadId }: Props) {
   const formatINR = (n: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
-  const discountPct = form.originalAmount && form.requestedAmount
-    ? (((Number(form.originalAmount) - Number(form.requestedAmount)) / Number(form.originalAmount)) * 100).toFixed(1)
+  const discountPct = form.originalAmount && form.amount
+    ? (((Number(form.originalAmount) - Number(form.amount)) / Number(form.originalAmount)) * 100).toFixed(1)
     : null;
 
   const hasPending = requests.some((r) => r.status === 'PENDING');
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={confirm.open}
+        title="Submit Discount Request?"
+        message={`Request ${discountPct}% discount — this will be sent to your BL for approval.`}
+        confirmLabel="Submit"
+        onConfirm={doSubmit}
+        onCancel={() => setConfirm({ open: false })}
+      />
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Discount Requests</h2>
@@ -108,69 +121,51 @@ export default function DiscountTab({ leadId }: Props) {
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">New Discount Request</h3>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Original Amount (₹) <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
-                min="0"
-                value={form.originalAmount}
+                type="number" min="0" value={form.originalAmount}
                 onChange={(e) => setForm({ ...form, originalAmount: e.target.value })}
-                required
+                required placeholder="500000"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                placeholder="e.g. 500000"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Requested Amount (₹) <span className="text-red-500">*</span>
+                Proposed Amount (₹) <span className="text-red-500">*</span>
               </label>
               <input
-                type="number"
-                min="0"
-                value={form.requestedAmount}
-                onChange={(e) => setForm({ ...form, requestedAmount: e.target.value })}
-                required
+                type="number" min="0" value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                required placeholder="450000"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                placeholder="e.g. 450000"
               />
             </div>
           </div>
-
-          {discountPct && (
+          {discountPct && Number(discountPct) > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center gap-2">
-              <span className="text-amber-600 text-lg">%</span>
-              <div>
-                <span className="font-semibold text-amber-700">{discountPct}% discount</span>
-                <span className="text-amber-600 text-sm ml-1">
-                  (₹{(Number(form.originalAmount) - Number(form.requestedAmount)).toLocaleString('en-IN')} off)
-                </span>
-              </div>
+              <span className="font-semibold text-amber-700">{discountPct}% discount</span>
+              <span className="text-amber-600 text-sm">
+                (₹{(Number(form.originalAmount) - Number(form.amount)).toLocaleString('en-IN')} off)
+              </span>
             </div>
           )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Reason <span className="text-red-500">*</span>
             </label>
             <textarea
-              rows={3}
-              value={form.reason}
+              rows={3} value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
-              required
-              placeholder="Why is this discount needed? (budget constraint, competitor offer, etc.)"
+              required placeholder="Why is this discount needed?"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
-
           <button
-            type="submit"
-            disabled={submitting}
+            type="submit" disabled={submitting}
             className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >
             {submitting ? 'Submitting…' : 'Submit for BL Approval'}
@@ -181,7 +176,11 @@ export default function DiscountTab({ leadId }: Props) {
       {loading ? (
         <div className="text-center py-10 text-gray-400 text-sm animate-pulse">Loading requests…</div>
       ) : requests.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">No discount requests for this lead</div>
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <span className="text-4xl mb-3">💰</span>
+          <p className="font-medium text-gray-900 mb-1">No discount requests</p>
+          <p className="text-sm text-gray-400">Use the button above to raise a discount request for BL approval</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {requests.map((req) => (
@@ -192,12 +191,12 @@ export default function DiscountTab({ leadId }: Props) {
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[req.status]}`}>
                       {req.status}
                     </span>
-                    <span className="text-base font-bold text-brand-600">{req.discountPct.toFixed(1)}%</span>
+                    <span className="text-base font-bold text-brand-600">{Number(req.discountPct).toFixed(1)}%</span>
                     <span className="text-xs text-gray-400">discount</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-500 line-through">{formatINR(req.originalAmount)}</span>
-                    <span className="text-gray-900 font-medium">{formatINR(req.requestedAmount)}</span>
+                    <span className="text-gray-400 line-through">{formatINR(req.originalAmount)}</span>
+                    <span className="text-gray-900 font-medium">{formatINR(req.amount)}</span>
                   </div>
                 </div>
                 <div className="text-right text-xs text-gray-400">
@@ -205,15 +204,11 @@ export default function DiscountTab({ leadId }: Props) {
                   <p>{new Date(req.createdAt).toLocaleDateString('en-IN')}</p>
                 </div>
               </div>
-
               <p className="text-sm text-gray-600 mb-2">{req.reason}</p>
-
               {req.reviewedBy && (
                 <div className={`rounded-lg px-3 py-2 text-xs ${req.status === 'APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                   <span className="font-medium">{req.reviewedBy.name}</span>
-                  {req.status === 'REJECTED' && req.reviewerComment && (
-                    <span className="ml-1">— {req.reviewerComment}</span>
-                  )}
+                  {req.status === 'REJECTED' && req.reviewerComment && <span className="ml-1">— {req.reviewerComment}</span>}
                   {req.status === 'APPROVED' && <span className="ml-1">approved this request</span>}
                 </div>
               )}

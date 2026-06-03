@@ -7,8 +7,12 @@ config({ path: resolve(__dirname, '../../.env') });
 
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
+import { leadsRouter } from './routes/leads.js';
 import { callsRouter } from './routes/calls.js';
 import { tasksRouter, myTasksRouter } from './routes/tasks.js';
 import { meetingsRouter, meetingStatusRouter } from './routes/meetings.js';
@@ -21,6 +25,11 @@ import { dashboardRouter } from './routes/dashboard.js';
 import { reportsRouter } from './routes/reports.js';
 import { offersRouter, leadOfferRouter } from './routes/offers.js';
 import { discountsRouter, leadDiscountRouter } from './routes/discounts.js';
+import { leadWebhooksRouter } from './routes/leadWebhooks.js';
+import { quotesRouter, usersDiscountRouter } from './routes/quotes.js';
+import { importRouter } from './routes/import.js';
+import { adminRouter } from './routes/admin.js';
+import { callWebhookRouter } from './routes/callWebhook.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
@@ -28,17 +37,62 @@ import './jobs/emailWorker.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
+const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
+
+// ── Security ──────────────────────────────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled for iframe support
 
 app.use(cors({
   origin: process.env.CLIENT_URL ?? 'http://localhost:5173',
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests — please try again later' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { error: 'Too many auth attempts — please wait 15 minutes' },
+});
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ── Raw body for Meta webhook signature verification ──────────────────────────
+app.use('/api/leads/webhook', express.raw({ type: 'application/json' }), (req, _res, next) => {
+  if (Buffer.isBuffer(req.body)) {
+    (req as any).rawBody = req.body;
+    req.body = JSON.parse(req.body.toString('utf-8'));
+  }
+  next();
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(generalLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', healthRouter);
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
+
+// Webhooks (rate-limited separately)
+app.use('/api/leads/webhook', webhookLimiter, leadWebhooksRouter);
+app.use('/api/calls/webhook', webhookLimiter, callWebhookRouter);
+app.use('/api/quotes', quotesRouter);
+
+// Leads CRUD
+app.use('/api/leads', leadsRouter);
 
 // Lead sub-resources
 app.use('/api/leads/:leadId/calls', callsRouter);
@@ -47,6 +101,9 @@ app.use('/api/leads/:leadId/meetings', meetingsRouter);
 app.use('/api/leads/:leadId/whatsapp', leadWhatsAppRouter);
 app.use('/api/leads/:leadId/offer', leadOfferRouter);
 app.use('/api/leads/:leadId/discount-request', leadDiscountRouter);
+
+// Bulk import
+app.use('/api/leads/import', importRouter);
 
 // Standalone task routes
 app.use('/api/tasks', myTasksRouter);
@@ -78,11 +135,17 @@ app.use('/api/offers', offersRouter);
 // Discount requests
 app.use('/api/discount-requests', discountsRouter);
 
+// Users
+app.use('/api/users/:id/discount-authority', usersDiscountRouter);
+
+// Admin panel (Branch Head only)
+app.use('/api/admin', adminRouter);
+
 // Public feedback form (no auth)
 app.use('/api/feedback', feedbackRouter);
 
 // ── Global error handler ──────────────────────────────────────────────────────
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('[server:error]', err.message);
   res.status(500).json({ error: 'Internal server error' });
 });
@@ -90,10 +153,10 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`CRM Server running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/api/health`);
+  console.log(`BASE_URL: ${BASE_URL}`);
 
   const redisConfigured =
-    process.env.REDIS_URL && process.env.REDIS_URL !== 'redis://localhost:6379';
+    process.env.REDIS_URL && !process.env.REDIS_URL.includes('localhost');
 
   if (redisConfigured) {
     try {

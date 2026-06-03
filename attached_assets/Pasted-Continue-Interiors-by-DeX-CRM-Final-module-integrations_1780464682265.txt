@@ -1,0 +1,51 @@
+Continue Interiors by DeX CRM. Final module: integrations, admin panel, and polish.
+
+META LEAD ADS INTEGRATION:
+- Verify webhook: GET /api/leads/webhook/meta (returns hub.challenge for Meta verification)
+- Receive leads: POST /api/leads/webhook/meta (verify X-Hub-Signature-256, parse leadgen_id, fetch lead data from Graph API using PAGE_ACCESS_TOKEN, create lead)
+- Env: META_PAGE_ACCESS_TOKEN, META_APP_SECRET, META_FORM_ID
+
+GOOGLE ADS INTEGRATION:
+- Receive via Google Ads webhook or Zapier webhook fallback
+- POST /api/leads/webhook/google — parse UTM params, create lead, assign to CRE
+
+QUOTE BUILDER INTEGRATION:
+- Embed proposals.interiorsbydex.com in lead detail (iframe with ?leadId=X#### pre-filled)
+- Webhook: POST /api/quotes/callback — Quote Builder posts back when quote created: leadId, amount, discountPct, quoteRef
+- On receive: create Quote record, update lead.estimatedValue, log to ActivityLog
+- Discount authority check: GET /api/users/:id/discount-authority — returns maxDiscountPct for designer. Quote Builder calls this before allowing discount submission.
+
+BULK IMPORT:
+- POST /api/leads/import — accept .xlsx or .csv
+- Use exceljs to parse
+- Column mapping: leadId (skip if exists, use for dedup), name, phone, email, source, stage, designerName (match to User), blName (match to User), projectType, estimatedValue, createdAt
+- Dry-run mode: ?dryRun=true — returns preview of what would be imported, errors, duplicate count
+- Production run: import valid rows, return summary
+
+ADMIN PANEL (/admin — Branch Head only):
+- User management: list users, invite (email + role), deactivate, reassign leads on deactivation
+- Offer management: CRUD offers
+- Report schedule management: set recipients for weekly/monthly reports
+- System health: queue job count, last SLA cron run, webhook event log
+
+EXOTEL READINESS (stub only — do not activate):
+- Add recordingUrl column to Call (already in schema)
+- Add POST /api/calls/webhook/exotel — stub endpoint that logs payload to console + returns 200
+- Comment: "Activate when Exotel credentials provided — maps to Call model"
+
+CUSTOM DOMAIN:
+- App must work on custom domain crm.interiorsbydex.com
+- Set BASE_URL env var used in all email links, webhook URLs, feedback form links
+- All hardcoded localhost refs must use BASE_URL
+
+FINAL POLISH:
+- Loading states on all tables and forms
+- Error boundary on React app
+- Mobile-responsive layout (sidebar collapses to hamburger)
+- All forms: validation feedback inline
+- Confirm dialogs for destructive actions (inactivate, reject discount)
+- Empty states for all list pages
+- Toast notifications for all async actions
+- Rate limiting on webhook endpoints (express-rate-limit)
+- Helmet.js for security headers
+- Input sanitization on all POST/PATCH endpoints

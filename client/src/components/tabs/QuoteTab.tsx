@@ -1,0 +1,132 @@
+import { useState } from 'react';
+import { api } from '../../lib/api';
+import toast from 'react-hot-toast';
+
+interface Quote {
+  id: string;
+  quoteBuilderRef?: string;
+  amount?: number;
+  discountPct?: number;
+  status: string;
+  createdAt: string;
+}
+
+interface Props { leadId: string; leadRef: string }
+
+const QUOTE_BUILDER_URL = import.meta.env.VITE_QUOTE_BUILDER_URL ?? 'https://proposals.interiorsbydex.com';
+
+export default function QuoteTab({ leadId, leadRef }: Props) {
+  const [showIframe, setShowIframe] = useState(false);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+
+  const loadQuotes = async () => {
+    setLoadingQuotes(true);
+    try {
+      const data = await api.get<{ quotes: Quote[] }>(`/quotes/lead/${leadId}`);
+      setQuotes(data.quotes);
+    } catch {
+      toast.error('Could not load quotes');
+    } finally {
+      setLoadingQuotes(false);
+    }
+  };
+
+  useState(() => { loadQuotes(); });
+
+  const iframeSrc = `${QUOTE_BUILDER_URL}?leadId=${encodeURIComponent(leadRef)}`;
+
+  const formatINR = (n: number) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+  const STATUS_COLORS: Record<string, string> = {
+    DRAFT: 'bg-gray-100 text-gray-600',
+    SENT: 'bg-blue-100 text-blue-700',
+    ACCEPTED: 'bg-green-100 text-green-700',
+    REJECTED: 'bg-red-100 text-red-700',
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">Quote Builder</h2>
+          <p className="text-sm text-gray-500">{quotes.length} quote{quotes.length !== 1 ? 's' : ''} for {leadRef}</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={loadQuotes}
+            className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg text-gray-700 transition-colors"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowIframe(!showIframe)}
+            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+          >
+            {showIframe ? 'Hide Builder' : '+ New Quote'}
+          </button>
+        </div>
+      </div>
+
+      {showIframe && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+            <span className="text-xs text-gray-500 font-mono">{iframeSrc}</span>
+            <button
+              onClick={() => setShowIframe(false)}
+              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <iframe
+            src={iframeSrc}
+            title="Quote Builder"
+            className="w-full"
+            style={{ height: '600px' }}
+            sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
+          />
+        </div>
+      )}
+
+      {loadingQuotes ? (
+        <div className="text-center py-10 text-gray-400 text-sm animate-pulse">Loading quotes…</div>
+      ) : quotes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-14 text-center">
+          <span className="text-4xl mb-3">📝</span>
+          <p className="font-medium text-gray-900 mb-1">No quotes yet</p>
+          <p className="text-sm text-gray-400">Open the Quote Builder above to create the first proposal for {leadRef}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {quotes.map((q) => (
+            <div key={q.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[q.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {q.status}
+                  </span>
+                  {q.quoteBuilderRef && (
+                    <span className="text-xs text-gray-400 font-mono">Ref: {q.quoteBuilderRef}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  {q.amount && <span className="font-semibold text-gray-900">{formatINR(q.amount)}</span>}
+                  {q.discountPct && q.discountPct > 0 && (
+                    <span className="text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
+                      {Number(q.discountPct).toFixed(1)}% off
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span className="text-xs text-gray-400">
+                {new Date(q.createdAt).toLocaleDateString('en-IN')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

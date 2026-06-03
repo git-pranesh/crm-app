@@ -1,1 +1,2 @@
 - [CRM Tech Stack](crm-tech-stack.md) — Supabase+Prisma+BullMQ stack; key gotchas on config file formats and port allocation
+- [Prisma Field Names](prisma-field-names.md) — non-obvious Prisma model/field naming gotchas for this CRM schema
