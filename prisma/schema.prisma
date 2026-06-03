@@ -289,20 +289,20 @@ model Quote {
 }
 
 model DiscountRequest {
-  id             String         @id @default(cuid())
-  leadId         String
-  quoteId        String?
-  requestedById  String
-  amount         Decimal        @db.Decimal(12, 2)
-  originalAmount Decimal        @db.Decimal(12, 2)
-  discountPct    Decimal        @db.Decimal(5, 2)
-  reason         String
-  status         DiscountStatus @default(PENDING)
-  reviewedById   String?
+  id              String         @id @default(cuid())
+  leadId          String
+  quoteId         String?
+  requestedById   String
+  amount          Decimal        @db.Decimal(12, 2)
+  originalAmount  Decimal        @db.Decimal(12, 2)
+  discountPct     Decimal        @db.Decimal(5, 2)
+  reason          String
+  status          DiscountStatus @default(PENDING)
+  reviewedById    String?
   /// Mandatory on rejection
   reviewerComment String?
-  createdAt      DateTime       @default(now())
-  reviewedAt     DateTime?
+  createdAt       DateTime       @default(now())
+  reviewedAt      DateTime?
 
   lead        Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
   quote       Quote? @relation(fields: [quoteId], references: [id])
@@ -367,7 +367,7 @@ model Offer {
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
 
-  currentLeads Lead[]     @relation("CurrentOffer")
+  currentLeads Lead[]      @relation("CurrentOffer")
   leadOffers   LeadOffer[]
 
   @@map("offers")

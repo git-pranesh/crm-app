@@ -1,0 +1,413 @@
+You are now performing a comprehensive audit of the Interiors by DeX CRM 
+that was just built across Modules 0–7. Do NOT build new features. 
+Audit only. Report results.
+
+Run every test below. For each test output:
+✅ PASS — with evidence (response body, DB record, log line)
+❌ FAIL — with exact error, file, line number
+⚠️ PARTIAL — what works, what doesn't
+
+At the end produce a single summary table.
+
+---
+
+## SECTION 1 — SERVER HEALTH
+
+1.1 Start the server. Confirm no startup errors in console.
+1.2 GET /api/health → must return { status: "ok", timestamp: <ISO> }
+1.3 Confirm Prisma connected to DB: run `npx prisma db pull` — must 
+    return schema matching prisma/schema.prisma with zero drift.
+1.4 Confirm all BullMQ queues registered: log queue names on startup.
+    Expected: sla-check, follow-up-check, performance-recalc, 
+    report-scheduler, reminder-jobs
+1.5 Confirm Redis connected (BullMQ dependency). If Redis unavailable, 
+    flag — queues will silently fail.
+
+---
+
+## SECTION 2 — AUTH & ROLES
+
+Create test users via seed or API before running these:
+- designer1@test.com / role: DESIGNER
+- cre1@test.com / role: CRE
+- bl1@test.com / role: BL (has designer1 in their team)
+- branchhead1@test.com / role: BRANCH_HEAD
+
+2.1 POST /api/auth/login with each test user → must return JWT
+2.2 GET /api/auth/me with each JWT → must return correct role
+2.3 DESIGNER token tries GET /api/admin/users → must return 403
+2.4 CRE token tries PATCH /api/admin/users/:id/deactivate → must 403
+2.5 BRANCH_HEAD token hits GET /api/admin/users → must return user list
+2.6 Expired/invalid JWT on any protected route → must return 401
+2.7 Confirm invite flow:
+    POST /api/admin/users/invite { email, role, name } with BRANCH_HEAD token
+    → check UserInvite record created in DB
+    → check invite email queued (check EmailLog or mail service mock)
+    GET /api/accept-invite/:token → returns { email, role }
+    POST /api/accept-invite/:token { password } → creates User + Supabase auth record
+
+---
+
+## SECTION 3 — LEAD MANAGEMENT
+
+3.1 POST /api/leads/manual with CRE token:
+    { name: "Test Lead", phone: "9876543210", source: "Walk-in" }
+    → leadId must be X#### format, continuing from last ID
+    → lead assigned to CRE
+    → ActivityLog entry created
+
+3.2 Duplicate detection:
+    POST same phone again → response must include { isDuplicate: true, warning: "..." }
+    Check DB: both leads exist, second has isDuplicate=true
+
+3.3 Round-robin assignment:
+    Create 4 leads via Meta webhook → check assignedTo cycles across 
+    available CREs (not all going to same CRE)
+
+3.4 PATCH /api/leads/:id/stage to MQL with CRE token
+    → ActivityLog entry created with userId + timestamp
+    → SLA timer for MQL started (SLABreach record not yet created — lead just entered)
+
+3.5 DESIGNER token tries to view a lead NOT assigned to them 
+    → must return 403 or empty
+
+3.6 BL token tries to view a lead from a DIFFERENT BL's team 
+    → must return 403 or empty
+
+3.7 Bulk import:
+    POST /api/leads/import?dryRun=true with a 5-row CSV 
+    (include 1 duplicate, 1 missing required field)
+    → returns preview: 3 valid, 1 duplicate, 1 error — no DB writes
+    POST same without dryRun → 3 leads created, report returned
+
+3.8 Custom fields:
+    POST /api/admin/custom-fields { key: "carpet_area", label: "Carpet Area", fieldType: "NUMBER" }
+    PATCH /api/leads/:id { customFields: { carpet_area: 1200 } }
+    GET /api/leads/:id → response includes customFields.carpet_area = 1200
+
+---
+
+## SECTION 4 — CALLS & FOLLOW-UPS
+
+4.1 POST /api/leads/:id/calls WITHOUT follow-up task:
+    { outcome: "ANSWERED", duration: 5, notes: "test" }
+    → must return 400: "Follow-up task required before saving call"
+
+4.2 POST same WITH follow-up in same request:
+    { outcome: "ANSWERED", duration: 5, notes: "test", 
+      followUp: { dueDate: "2025-12-01", dueTime: "10:00", assignedToId: <designerId> } }
+    → Call created + FollowUpTask created in same transaction
+    → ActivityLog entry created
+
+4.3 Log 5 RNR calls on same lead (RNR_1 through RNR_5):
+    → After 5th: response must include { escalationRequired: true, 
+      message: "5 RNR reached. Escalate to BL." }
+    → NO auto stage change, NO auto inactivation
+
+4.4 BL moves RNR lead back to CRE:
+    PATCH /api/leads/:id/stage { stage: "EFFECTIVE_LEAD", assignToCRE: true }
+    → lead assigned to CRE, logged
+
+4.5 Simulate midnight cron (call the job function directly):
+    Create a FollowUpTask with dueDate = yesterday, isCompleted = false
+    Run follow-up-check job manually
+    → task.isOverdue set to true in DB
+    → Notification created for manager
+
+4.6 GET /api/tasks/my with designer token → returns only that designer's tasks
+    GET /api/tasks/team with BL token → returns all tasks across BL's team
+
+---
+
+## SECTION 5 — MEETINGS
+
+5.1 POST /api/leads/:id/meetings:
+    { type: "DQL", mode: "VIRTUAL", scheduledAt: "<future datetime>" }
+    → Meeting created
+    → EmailLog entry for meeting_confirmation created
+    → SmsLog entry for meeting_confirmation created
+    → Check email body contains date, time, agenda
+
+5.2 POST second PP meeting on same lead:
+    { type: "PP", mode: "SITE_VISIT", scheduledAt: "<future datetime>" }
+    → ppNumber = 1
+    POST third PP meeting → ppNumber = 2
+
+5.3 PATCH /api/meetings/:id/status { status: "COMPLETED" } WITHOUT mom:
+    → must return 400: "MOM is required"
+
+5.4 PATCH with MOM:
+    { status: "COMPLETED", mom: "Discussed budget of 15L...", outcome: "Positive" }
+    → Meeting updated
+    → EmailLog entry for mom email created
+    → SmsLog entry for mom SMS created
+
+5.5 PATCH { status: "RESCHEDULED" } WITHOUT reason → must return 400
+    PATCH { status: "RESCHEDULED", rescheduledReason: "Client travel" }
+    → EmailLog + SmsLog for rescheduled triggered
+
+5.6 PATCH { status: "NO_SHOW" }
+    → EmailLog + SmsLog for no_show triggered
+    → Notification created for BL
+
+5.7 Check milestone auto-calc:
+    After DQL meeting completed → lead.daysLeadToDQL populated
+    After PP meeting completed → lead.daysDQLToPP populated
+
+---
+
+## SECTION 6 — QUOTES & DISCOUNTS
+
+6.1 POST /api/quotes/callback:
+    { leadId: "X1001", amount: 1500000, discountPct: 5, quoteRef: "QB-001" }
+    → Quote record created
+    → lead.estimatedValue updated to 1500000
+    → ActivityLog entry created
+
+6.2 POST /api/leads/:id/discount-request with DESIGNER token:
+    { amount: 1500000, originalAmount: 1600000, discountPct: 6.25, reason: "Price match" }
+    → DiscountRequest created with status PENDING
+    → Notification created for BL
+
+6.3 GET /api/discount-requests/pending with BL token
+    → returns the pending request
+
+6.4 PATCH /api/discount-requests/:id { status: "REJECTED" } WITHOUT comment
+    → must return 400: "Comment required on rejection"
+
+6.5 PATCH with { status: "APPROVED", reviewerComment: "Approved" }
+    → status updated, reviewedById set, reviewedAt set
+    → Notification created for designer
+    → ActivityLog entry created
+
+6.6 GET /api/users/:id/discount-authority with DESIGNER token
+    → returns { maxDiscountPct: <value> } (from designer's profile)
+
+---
+
+## SECTION 7 — WHATSAPP & EMAIL
+
+7.1 POST /api/whatsapp/send:
+    { leadId: <id>, body: "Hello, this is a test message" }
+    → WhatsAppMessage record created (direction: OUTBOUND)
+    → Twilio API called (check logs — will fail if no real creds, but request must be attempted)
+
+7.2 POST /api/whatsapp/webhook (simulate Twilio inbound):
+    { From: "whatsapp:+919876543210", Body: "Hi, interested in your services", 
+      MessageSid: "SM123" }
+    → WhatsAppMessage record created (direction: INBOUND)
+    → Matched to correct lead by phone
+    → Notification created for assigned designer + BL
+
+7.3 GET /api/whatsapp/inbox with DESIGNER token
+    → returns only leads assigned to that designer
+
+7.4 GET /api/whatsapp/inbox with BRANCH_HEAD token
+    → returns all leads across all teams
+
+7.5 GET /api/leads/:id/whatsapp
+    → returns full message thread in chronological order
+
+7.6 Move lead to ON_HOLD with revivalDate:
+    → EmailLog entry created for on_hold email
+    → SmsLog entry created for on_hold SMS
+    → WhatsAppMessage (OUTBOUND) created for on_hold_notification template
+
+7.7 Inactivate a lead:
+    → EmailLog entry for inactivation_feedback created
+    → SmsLog entry created
+    → InactivationFeedback record created with feedbackFormSentAt set
+    → Public feedback URL resolves: GET /feedback/:token → returns form
+
+---
+
+## SECTION 8 — SLA ENGINE
+
+8.1 Create a lead. Do NOT log any call.
+    Fast-forward by updating lead.createdAt to 25 hours ago in DB.
+    Run SLA cron job manually (call the job function directly).
+    → SLABreach record created: rule = "FIRST_CONTACT_24H"
+    → Notification created for BL + Branch Head
+    → lead has slaBreached flag
+
+8.2 Move lead to MQL. Update lead.stageChangedAt to 6 days ago.
+    Run SLA cron.
+    → SLABreach record: rule = "MQL_5_DAYS"
+
+8.3 GET /api/sla/breaches with BL token
+    → returns both breaches for their team
+
+8.4 GET /api/dashboard with BL token
+    → slaBreaches panel contains the breached leads
+
+8.5 Confirm SLA badge visible in:
+    GET /api/leads (list) → breached leads have slaBreached: true in response
+    (Frontend should render badge — visual check)
+
+---
+
+## SECTION 9 — AD INTEGRATIONS & UTM
+
+9.1 POST /api/leads/webhook/meta (simulate Meta Lead Ads payload):
+    {
+      "object": "page",
+      "entry": [{
+        "changes": [{
+          "field": "leadgen",
+          "value": {
+            "leadgen_id": "TEST123",
+            "page_id": "PAGE123",
+            "form_id": "FORM123"
+          }
+        }]
+      }]
+    }
+    → Lead created (may be stub if no real PAGE_ACCESS_TOKEN — confirm graceful fallback)
+    → If stub: confirm endpoint returns 200 with { received: true }
+    → Check UTM fields on created lead
+
+9.2 POST /api/leads/webhook/google with UTM payload:
+    { name: "Google Lead", phone: "9123456789", 
+      utm_campaign: "summer_2025", utm_source: "google", utm_adset: "bangalore_interiors" }
+    → Lead created with utmCampaign, utmSource, utmAdSet populated
+    → Auto-assigned to CRE
+
+---
+
+## SECTION 10 — DASHBOARD & REPORTS
+
+10.1 GET /api/dashboard with BRANCH_HEAD token
+    → all 7 panels present: totalLeads, stageFunnel, sourceBreakdown, 
+      conversionRates, slaBreaches, teamActivity, personalStats
+    → no null values on counts (should be 0 not null for empty)
+
+10.2 GET /api/dashboard with DESIGNER token
+    → returns only personalStats for that designer
+    → does NOT expose other designers' data
+
+10.3 Run each of the 14 report types (pass dummy date range):
+    GET /api/reports/lead_summary?startDate=2025-01-01&endDate=2025-12-31
+    GET /api/reports/pipeline
+    GET /api/reports/conversion
+    GET /api/reports/timeline_performance
+    GET /api/reports/designer_performance
+    GET /api/reports/bl_performance
+    GET /api/reports/source_performance
+    GET /api/reports/campaign_performance
+    GET /api/reports/inactive_leads
+    GET /api/reports/meeting_performance
+    GET /api/reports/sales_cycle
+    GET /api/reports/lead_aging
+    GET /api/reports/monthly_trend
+    GET /api/reports/offer_performance
+    → each must return 200 with data array (empty array OK, not 404/500)
+
+10.4 Inactive leads report specifically:
+    GET /api/reports/inactive_leads
+    → response includes feedbackFormSentAt, clientResponded, 
+      feedbackResponse fields per row
+    → aggregate summary present: { totalInactivated, responseRate }
+
+10.5 GET /api/reports/lead_summary/export
+    → returns CSV file with correct Content-Type: text/csv
+
+10.6 Check scheduled report config:
+    GET /api/admin/report-schedules
+    → returns WEEKLY + MONTHLY schedules
+
+---
+
+## SECTION 11 — GAP PATCH SPECIFIC (Module 7)
+
+11.1 Stage enum check:
+    Confirm HANDED_OVER exists in Prisma schema.
+    PATCH /api/leads/:id/stage { stage: "HANDED_OVER" } 
+    WITHOUT DIP checklist complete → must return 400
+
+11.2 DIP checklist:
+    Move lead to ONBOARDING
+    → DIPChecklist record auto-created with all booleans false
+    → BL receives notification
+
+    PATCH /api/leads/:id/dip-checklist 
+    { welcomeMailSent: true, discountApprovalFormSent: true, 
+      npsTriggered: true, cxApprovalReceived: true }
+    → completedAt set on checklist
+    → Branch Head notified
+
+    Now PATCH stage to HANDED_OVER → must succeed
+
+11.3 Smart assignment flag:
+    Confirm SMART_ASSIGNMENT_ENABLED=false in env (default off)
+    Round-robin still works with flag off
+
+11.4 Custom field builder:
+    Create field, update lead, retrieve lead → value persists (tested in 3.8)
+    Deactivate field: PATCH /api/admin/custom-fields/:id { isActive: false }
+    GET /api/leads/:id → field value still visible as read-only, not editable
+
+11.5 User deactivation guard:
+    Try to deactivate a user with active leads
+    → GET /api/admin/users/:id/deactivation-preview returns { activeLeads: N }
+    → PATCH /api/admin/users/:id/deactivate returns 409 with lead count
+    Reassign leads: POST /api/admin/users/:id/reassign-leads { reassignToUserId }
+    → all leads moved
+    → PATCH deactivate now succeeds
+
+11.6 Recording URL on call:
+    Manually update a Call record: SET recordingUrl = 'https://test.com/rec.mp3'
+    GET /api/leads/:id (with calls) → call row includes recordingUrl
+    GET /api/calls/:id/recording-url → returns { recordingUrl }
+
+11.7 Exotel webhook:
+    POST /api/calls/webhook/exotel:
+    { CallSid: "EX123", From: "+919876543210", Duration: "120", 
+      RecordingUrl: "https://exotel.com/rec123.mp3", StartTime: "<now>" }
+    → matches existing Call record by phone + timestamp window OR creates new one
+    → Call.recordingUrl updated in DB
+    → returns 200
+
+---
+
+## SECTION 12 — SECURITY BASICS
+
+12.1 All POST/PATCH endpoints: send request with no auth token → 401
+12.2 SQL injection probe: 
+    GET /api/leads?search='; DROP TABLE leads; --
+    → must return 200 with empty results, no error, no DB damage
+12.3 Rate limit on webhook endpoints:
+    Hit POST /api/leads/webhook/meta 20 times in 10 seconds
+    → must start returning 429 after threshold
+12.4 Confirm Helmet.js headers present on any response:
+    Check for: X-Content-Type-Options, X-Frame-Options, 
+    X-XSS-Protection in response headers
+12.5 Confirm BASE_URL env var used in all email links:
+    Check EmailLog.body for any hardcoded "localhost" → must be zero
+
+---
+
+## FINAL OUTPUT REQUIRED
+
+After running ALL tests, produce this exact output:
+
+1. SUMMARY TABLE:
+   | Section | Tests Run | Passed | Failed | Partial |
+   For each section above.
+
+2. CRITICAL FAILURES (if any):
+   List only ❌ FAIL items with: test ID, error message, file:line
+
+3. PARTIAL ITEMS:
+   List ⚠️ items with what works and what doesn't
+
+4. FILES MODIFIED ACROSS ALL MODULES:
+   List every file in the project with a one-line description of what it does.
+
+5. ENVIRONMENT CHECKLIST:
+   List every env var the app needs. Mark each:
+   ✅ SET — value confirmed in .env
+   ❌ MISSING — app will fail or degrade without it
+   ⚠️ STUB — placeholder value, needs real credential before production
+
+6. READY FOR PRODUCTION? 
+   YES / NO — with list of blockers if NO.
