@@ -125,3 +125,21 @@ callsRouter.get('/', verifyToken, async (req, res) => {
 
   res.json({ calls, rnrCount, needsEscalation: rnrCount >= ESCALATION_THRESHOLD });
 });
+
+// ── Standalone router — GET /api/calls/:id/recording-url ─────────────────────
+export const callsStandaloneRouter = Router();
+
+callsStandaloneRouter.get('/:id/recording-url', verifyToken, async (req, res) => {
+  try {
+    const call = await prisma.call.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, recordingUrl: true },
+    });
+    if (!call) { res.status(404).json({ error: 'Call not found' }); return; }
+    // Stub: returns recordingUrl from DB.
+    // Will proxy Exotel API for fresh signed URLs when EXOTEL_SID is configured.
+    res.json({ recordingUrl: call.recordingUrl ?? null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});

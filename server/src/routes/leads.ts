@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
+import { createNotification } from '../lib/notifications.js';
+import { sendSms } from '../services/smsService.js';
 
 export const leadsRouter = Router();
 
@@ -179,14 +181,22 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       stage, projectType, scope, location,
       estimatedValue, intentRating, possessionTimeline,
       assignedDesignerId, assignedBLId,
-      onHoldRevivalDate,
-    } = req.body as Record<string, string>;
+      onHoldRevivalDate, customFields,
+    } = req.body as Record<string, any>;
 
     const existing = await prisma.lead.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
 
     const prevStage = existing.stage;
-    const newStage = stage || prevStage;
+
+    // ── DIP gate: block ONBOARDING → HANDED_OVER without complete DIP checklist ─
+    if (stage === 'HANDED_OVER' && prevStage === 'ONBOARDING') {
+      const dip = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
+      if (!dip?.completedAt) {
+        res.status(409).json({ error: 'Complete DIP checklist before closing the sales task.' });
+        return;
+      }
+    }
 
     const lead = await prisma.lead.update({
       where: { id },
@@ -206,15 +216,103 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(assignedDesignerId !== undefined && { assignedDesignerId: assignedDesignerId || null }),
         ...(assignedBLId !== undefined && { assignedBLId: assignedBLId || null }),
         ...(onHoldRevivalDate && { onHoldRevivalDate: new Date(onHoldRevivalDate) }),
+        ...(customFields && {
+          customFields: { ...(existing.customFields as Record<string, unknown> ?? {}), ...customFields },
+        }),
       },
       include: LEAD_INCLUDE,
     });
 
     if (stage && stage !== prevStage) {
       await logActivity(user.id, 'STAGE_CHANGED', id, { from: prevStage, to: stage });
+
+      // Auto-create DIPChecklist when moving to ONBOARDING
+      if (stage === 'ONBOARDING') {
+        await prisma.dIPChecklist.upsert({
+          where: { leadId: id },
+          create: { leadId: id },
+          update: {},
+        });
+        if (existing.assignedBLId) {
+          await createNotification(
+            existing.assignedBLId,
+            'ONBOARDING_DIP_REQUIRED',
+            `Lead ${existing.leadId} onboarded — complete DIP checklist to close the sales task`,
+            id,
+          );
+        }
+      }
+
+      // SMS: ON_HOLD notification
+      if (stage === 'ON_HOLD' && existing.phone) {
+        const revivalStr = onHoldRevivalDate
+          ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
+          : 'a future date';
+        sendSms(
+          existing.phone,
+          `Hi ${existing.name}, your Interiors by DeX project has been put on hold until ${revivalStr}. We'll be in touch. - Interiors by DeX`,
+          id,
+        ).catch((e) => console.warn('[leads:sms:on_hold]', e.message));
+      }
+
+      // SMS: INACTIVE — send feedback form link
+      if (stage === 'INACTIVE' && existing.phone) {
+        const baseUrl = process.env.BASE_URL ?? '';
+        sendSms(
+          existing.phone,
+          `Hi ${existing.name}, a quick note about your Interiors by DeX project. Please share your feedback: ${baseUrl}/feedback/${existing.leadId} - Interiors by DeX`,
+          id,
+        ).catch((e) => console.warn('[leads:sms:inactive]', e.message));
+      }
     }
 
     res.json({ lead });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/leads/:id/assign-direct — BL direct designer assignment ────────
+leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { designerId } = req.body as { designerId?: string };
+
+    if (!designerId) {
+      res.status(400).json({ error: 'designerId is required' });
+      return;
+    }
+
+    const [lead, designer] = await Promise.all([
+      prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true } }),
+      prisma.user.findUnique({ where: { id: designerId }, select: { id: true, name: true, blId: true } }),
+    ]);
+
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!designer) { res.status(404).json({ error: 'Designer not found' }); return; }
+
+    // Verify designer is on this BL's team
+    if (designer.blId !== user.id) {
+      res.status(403).json({ error: 'Designer is not on your team' });
+      return;
+    }
+
+    const updated = await prisma.lead.update({
+      where: { id },
+      data: {
+        assignedDesignerId: designerId,
+        assignmentPath: 'DIRECT',
+      },
+      include: LEAD_INCLUDE,
+    });
+
+    await logActivity(user.id, 'DIRECT_ASSIGNMENT', id, {
+      designerName: designer.name,
+      assignedById: user.id,
+    });
+
+    res.json({ lead: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

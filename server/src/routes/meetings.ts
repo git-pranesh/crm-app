@@ -4,6 +4,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, rescheduleEmail } from '../lib/email.js';
+import { sendSms } from '../services/smsService.js';
 import { recalculateMilestones } from '../lib/milestones.js';
 import { queues } from '../jobs/index.js';
 
@@ -104,6 +105,20 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   await recalculateMilestones(leadId);
+
+  // SMS: meeting confirmation (auto-trigger)
+  if (lead.phone) {
+    const meetingLabel = ppNumber ? `PP${ppNumber}` : type;
+    const dateStr = new Date(scheduledAt).toLocaleString('en-IN', {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+    });
+    sendSms(
+      lead.phone,
+      `Hi ${lead.name}, your ${meetingLabel} meeting is confirmed for ${dateStr}. - Interiors by DeX`,
+      leadId,
+    ).catch((e) => console.warn('[meetings:sms:scheduled]', e.message));
+  }
 
   res.status(201).json({ meeting });
 });
@@ -210,6 +225,29 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
           subject: emailPayload.subject,
         },
       });
+    }
+  }
+
+  // SMS: status-triggered messages
+  if (lead.phone) {
+    if (status === 'COMPLETED') {
+      sendSms(
+        lead.phone,
+        `Hi ${lead.name}, your meeting summary (MOM) has been emailed to you. - Interiors by DeX`,
+        lead.id,
+      ).catch((e) => console.warn('[meetings:sms:mom]', e.message));
+    } else if (status === 'RESCHEDULED') {
+      sendSms(
+        lead.phone,
+        `Hi ${lead.name}, your meeting has been rescheduled. Reason: ${rescheduledReason}. We'll share the new time shortly. - Interiors by DeX`,
+        lead.id,
+      ).catch((e) => console.warn('[meetings:sms:rescheduled]', e.message));
+    } else if (status === 'NO_SHOW') {
+      sendSms(
+        lead.phone,
+        `Hi ${lead.name}, we missed you at today's meeting. Please reply with your available times and we'll reschedule. - Interiors by DeX`,
+        lead.id,
+      ).catch((e) => console.warn('[meetings:sms:no_show]', e.message));
     }
   }
 

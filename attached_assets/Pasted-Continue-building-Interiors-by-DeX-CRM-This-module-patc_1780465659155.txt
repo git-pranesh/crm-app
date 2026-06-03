@@ -1,0 +1,273 @@
+Continue building Interiors by DeX CRM. This module patches 13 confirmed gaps from the feature spec.
+
+---
+
+GAP 1 — SMS PROVIDER
+Add SMS sending via Twilio SMS (same account as WhatsApp).
+Env: TWILIO_SMS_NUMBER (already have TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN)
+
+Create server/services/smsService.js:
+- smsService.send(toPhone, message) — sends SMS via Twilio REST API
+- All phone numbers must be formatted E.164 before sending (+91XXXXXXXXXX for India)
+- Log all SMS sends to a new SmsLog model: id, leadId (nullable), toPhone, body, twilioSid, status, createdAt
+
+Attach SMS triggers to these existing events (all already have email triggers — add SMS alongside):
+- Meeting scheduled → send confirmation SMS to lead's primary phone
+- Meeting rescheduled → SMS with new time + reason
+- Meeting no-show → SMS asking for next available time  
+- Lead moved to On Hold → SMS with revival date + reason
+- Lead inactivated → SMS with inactivation feedback form link
+- MOM sent → SMS notifying client MOM has been emailed
+
+---
+
+GAP 2 — ON HOLD WHATSAPP TRIGGER
+When lead.stage moves to ON_HOLD:
+- Already queues email (existing)
+- ADD: send WhatsApp message using template "on_hold_notification"
+  Template variables: clientName, revivalDate, reason
+- Use existing whatsappService, same pattern as other auto-triggers
+- Log to WhatsAppMessage table (direction: OUTBOUND, templateId: 'on_hold_notification')
+
+---
+
+GAP 3 — EMAIL PREVIEW UI (Frontend)
+Build EmailPreviewModal component (React):
+- Triggered from meeting "Mark as Completed" flow (before MOM sends) and from "Move to Proposal Ready" stage action
+- GET /api/email/preview/:type/:leadId → returns { subject, html, to }
+- Show rendered HTML preview in modal (use iframe with srcdoc)
+- Allow free-text edits to subject + body (textarea, not rich editor)
+- PATCH /api/email/draft/:type/:leadId { subject, body } → saves draft
+- "Send Now" button → POST /api/email/send/:type/:leadId → sends saved draft or default if no draft
+- "Send without review" option bypasses modal (for meeting confirmation, which auto-sends)
+Email types requiring preview: mom, onboarding, proposal_ready_notification
+Email types that auto-send without preview: meeting_confirmation, rescheduled, no_show, on_hold
+
+---
+
+GAP 4 — INACTIVATION FEEDBACK IN INACTIVE LEADS REPORT
+Update report type "inactive_leads" (GET /api/reports/inactive_leads):
+Add these fields to each row in the response:
+- feedbackFormSentAt (timestamp or null)
+- clientResponded (boolean)
+- feedbackResponse (text or null — from InactivationFeedback.clientResponse)
+- feedbackRespondedAt (timestamp or null)
+
+Add aggregate summary at top of report response:
+- totalInactivated, formSentCount, responseCount, responseRate (%)
+- Group responses by text (top reasons) — simple frequency count on clientResponse field
+
+Frontend: add "Feedback" column group to inactive leads report table. Show response rate badge at top.
+
+---
+
+GAP 5 — CRE → DESIGNER DIRECT ASSIGNMENT FLOW
+Add alternate assignment path alongside existing CRE → BL → Designer flow:
+
+New field on Lead: assignmentPath (enum: STANDARD | DIRECT) — default STANDARD
+
+PATCH /api/leads/:id/assign-direct:
+- Role: BL or BRANCH_HEAD only
+- Body: { designerId }
+- Sets assignedDesignerId, sets assignmentPath = DIRECT, skips BL round-robin
+- Logs to ActivityLog: "Direct assignment to [designer name] by [user name]"
+
+Frontend: on lead detail, assignment section shows current path. BL sees "Reassign directly to designer" option (dropdown of their team's designers).
+
+Note: CRE → Designer without BL involvement is future scope. Current implementation = BL initiates direct assignment manually. Build the data model correctly so future automation just calls the same endpoint.
+
+---
+
+GAP 6 — PERFORMANCE-BASED SMART ASSIGNMENT (FOUNDATION)
+This is future-active but needs correct data foundation now.
+
+Add to User model (already has conversionRate stub):
+- totalLeadsAssigned (int, default 0)
+- totalLeadsConverted (int, default 0) 
+- avgProjectValue (decimal, default 0)
+- performanceTier (enum: BASIC | STANDARD | PREMIUM, default BASIC)
+
+Add server/jobs/performanceRecalc.js (BullMQ job, runs nightly at 2am):
+- For each active Designer: recalculate conversionRate = converted/assigned, avgProjectValue from closed leads
+- Update performanceTier: BASIC (<20% conversion), STANDARD (20-40%), PREMIUM (>40%)
+
+Add GET /api/admin/assignment-config:
+- Returns current tier thresholds (editable by Branch Head)
+- Returns which lead sources/values are routed to which tier
+
+Add POST /api/admin/assignment-config to update thresholds.
+
+Smart assignment logic stub in server/services/assignmentService.js:
+- assignLeadToDesigner(lead, blId) function
+- Currently: round-robin (existing behavior)  
+- If feature flag SMART_ASSIGNMENT_ENABLED=true: filter designers by performanceTier based on lead.estimatedValue, then round-robin within that tier
+- Feature flag OFF by default — Branch Head can enable from admin panel
+
+---
+
+GAP 7 — DYNAMIC CUSTOM FIELDS
+Add flexible extra fields per lead without schema migrations.
+
+Add to Lead model: customFields (JSON, default {})
+
+Add CustomFieldDefinition model:
+- id, key (unique slug e.g. "carpet_area"), label ("Carpet Area"), fieldType (enum: TEXT|NUMBER|DATE|SELECT), selectOptions (JSON array, nullable), isActive, createdAt
+
+CRUD /api/admin/custom-fields (Branch Head only):
+- GET — list all defined custom fields
+- POST — create new field definition
+- PATCH /:id — update label, options, isActive
+- DELETE /:id — soft delete (set isActive=false, preserve historical data)
+
+Lead API changes:
+- GET /api/leads/:id — response includes customFields merged with CustomFieldDefinition metadata
+- PATCH /api/leads/:id — accept customFields object, validate keys against active definitions, save to lead.customFields JSON
+
+Frontend: on lead detail "Details" tab, after standard fields, render custom fields dynamically from definitions. Active fields = editable inputs. Inactive fields = show historical value greyed out (read-only).
+
+---
+
+GAP 8 — STAR RATING DEFINITIONS
+Add IntentRatingConfig model:
+- rating (int 1-5, primary key), label (e.g. "Very Cold"), description (e.g. "Just browsing, no timeline"), color (hex)
+
+Seed default definitions:
+- 1★ Cold — No budget, no timeline
+- 2★ Warm — Has interest, unclear budget  
+- 3★ Interested — Budget defined, timeline vague
+- 4★ Hot — Ready to proceed, needs proposal
+- 5★ Burning Hot — Decision imminent
+
+PATCH /api/admin/intent-ratings (Branch Head only) — update labels/descriptions
+
+Frontend: wherever star rating shows on lead (lead card, lead detail header, kanban card) — show tooltip on hover with label + description from config. Star rating input on lead edit shows labels alongside stars.
+
+---
+
+GAP 9 — GOOGLE FORM DQL QUESTIONNAIRE (STUB — PENDING CLIENT)
+Build the data model and API now. Activate when client confirms.
+
+Add DQLQuestionnaire model:
+- id, leadId (unique — one per lead), formResponseId (Google Forms response ID), responses (JSON), submittedAt
+
+Add POST /api/integrations/google-form-webhook:
+- Receives webhook from Google Forms (via Apps Script or Zapier)
+- Body: { formResponseId, leadIdentifier, responses: { question: answer } }
+- leadIdentifier = Lead ID (X####) submitted as a form field
+- Matches to lead, creates DQLQuestionnaire record
+- Logs to ActivityLog: "DQL questionnaire received"
+- Triggers in-app notification to assigned Designer + BL
+
+GET /api/leads/:id/questionnaire — returns questionnaire if exists
+
+Frontend: on lead detail Meetings tab, if DQL meeting exists and questionnaire received, show "View Pre-meeting Questionnaire" button that expands the responses inline.
+
+If no questionnaire: show "Awaiting questionnaire" placeholder (only visible when lead is in DQL stage or beyond).
+
+Comment in code: "// ACTIVATION REQUIRED: client must set up Google Form with Lead ID field + configure Apps Script webhook to POST to this endpoint. See docs/google-form-setup.md"
+
+Create docs/google-form-setup.md with plain-English setup instructions.
+
+---
+
+GAP 10 — USER INVITE FLOW
+Replace any placeholder user creation with proper invite system.
+
+Add UserInvite model:
+- id, email, role, invitedById, token (UUID, unique), expiresAt (48h), acceptedAt (nullable), createdAt
+
+POST /api/admin/users/invite (Branch Head only):
+- Body: { email, role, name }
+- Creates UserInvite record
+- Sends invite email: "You've been invited to Interiors by DeX CRM. Click to set up your account: [BASE_URL]/accept-invite/[token]"
+
+GET /api/accept-invite/:token (public):
+- Validates token not expired + not accepted
+- Returns { email, role, name } for prefill
+
+POST /api/accept-invite/:token (public):
+- Body: { password, confirmPassword }
+- Creates Supabase Auth user with email+password
+- Creates User record in DB with role from invite
+- Marks invite as accepted
+- Returns JWT → redirect to /dashboard
+
+Frontend pages:
+- /accept-invite/:token — set password form (public, no auth required)
+- /admin/users — list users, "Invite User" button opens modal (name, email, role dropdown), pending invites shown with "Resend" option
+
+---
+
+GAP 11 — LEAD REASSIGNMENT ON USER DEACTIVATION
+Update PATCH /api/admin/users/:id/deactivate:
+
+Current: sets isActive=false immediately
+Change to two-step flow:
+
+Step 1 — GET /api/admin/users/:id/deactivation-preview:
+- Returns: { activeLeads: count, leads: [{ id, leadId, name, stage }] }
+- If count = 0: deactivation is safe, proceed directly
+- If count > 0: must reassign before deactivating
+
+Step 2 — POST /api/admin/users/:id/reassign-leads:
+- Body: { reassignToUserId } (must be same role, same BL team for designers)
+- Bulk updates all active leads to new assignee
+- Logs each reassignment to ActivityLog
+
+Step 3 — PATCH /api/admin/users/:id/deactivate:
+- Now allowed only if activeLeads count = 0
+- Returns 409 error with { message: "Reassign X leads before deactivating", count: X } if leads still exist
+
+Frontend: deactivate button on user card → check preview → if leads exist, show reassignment modal with target user dropdown → confirm → deactivate.
+
+---
+
+GAP 12 — CALLING: RECORDING PLAYBACK UI
+The recordingUrl column already exists on Call model (nullable).
+When Exotel activates, it will populate this field via webhook.
+
+Add to Call Log tab on lead detail page:
+- Each call row: if recordingUrl is not null → show audio player (HTML5 <audio> tag with controls)
+- If recordingUrl is null → show "Manual log" badge (grey)
+- Recording URLs from Exotel are time-limited signed URLs — add a "Refresh recording link" button that hits GET /api/calls/:id/recording-url (stub endpoint, returns recordingUrl from DB for now, will proxy Exotel API later)
+
+Add to Exotel webhook stub (already in M6):
+POST /api/calls/webhook/exotel — update stub to actually:
+- Match call by phone number + timestamp (within 5 min window)
+- If match found: update Call.recordingUrl, Call.duration with Exotel data
+- If no match: create new Call record with outcome=ANSWERED, source='exotel_auto'
+- Return 200
+
+---
+
+GAP 13 — DIP CHECKLIST POST-ONBOARDING
+(Client explicitly noted this in feature 2.1. Minimal v1 implementation — not full v2 scope.)
+
+Add DIPChecklist model:
+- id, leadId (unique), welcomeMailSent (bool), discountApprovalFormSent (bool), npsTriggered (bool), internalMailThreadUrl (text, nullable), cxApprovalReceived (bool), completedAt (nullable), createdAt
+
+When lead moves to ONBOARDING stage:
+- Auto-create DIPChecklist record with all booleans false
+- Send BL a notification: "Lead X#### onboarded — complete DIP checklist to close sales task"
+
+PATCH /api/leads/:id/dip-checklist:
+- Role: BL only
+- Body: any subset of the boolean fields + internalMailThreadUrl
+- Updates checklist
+- When all 4 booleans true: set completedAt = now, notify Branch Head
+
+Lead can only move from ONBOARDING to a "Project Handed Over" status (add this as a 9th pipeline stage: HANDED_OVER) after DIPChecklist.completedAt is set. Block stage move with error: "Complete DIP checklist before closing sales task."
+
+GET /api/leads/:id/dip-checklist — returns checklist state
+
+Frontend: on lead detail, when stage = ONBOARDING, show "DIP Checklist" panel (not a tab — inline panel below stage indicator). Each checklist item = checkbox + optional note. Progress bar showing X/4 complete. Disabled "Move to Handed Over" button until all complete.
+
+---
+
+FINAL ADDITIONS:
+
+1. Add HANDED_OVER to Stage enum in Prisma (9th stage, after ONBOARDING)
+2. Update all stage filters, reports, and funnel charts to include HANDED_OVER
+3. Run prisma migrate dev --name gap_patch after all model changes
+4. Update seed script to include IntentRatingConfig defaults and a sample CustomFieldDefinition ("Carpet Area", NUMBER)
+5. Add docs/ folder with: google-form-setup.md, exotel-setup.md (stub), whatsapp-setup.md (Twilio steps)

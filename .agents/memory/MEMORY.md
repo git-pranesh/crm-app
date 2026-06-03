@@ -1,2 +1,4 @@
 - [CRM Tech Stack](crm-tech-stack.md) — Supabase+Prisma+BullMQ stack; key gotchas on config file formats and port allocation
 - [Prisma Field Names](prisma-field-names.md) — non-obvious Prisma model/field naming gotchas for this CRM schema
+- [Prisma migrate command](prisma-migrate.md) — schema lives at root `prisma/schema.prisma`; run migrate from workspace root, not inside `server/`.
+- [Gap patch summary](gap-patch.md) — HANDED_OVER stage, DIP gate, env vars (TWILIO_SMS_NUMBER, SMART_ASSIGNMENT_ENABLED, BASE_URL), Google Form webhook activation note.

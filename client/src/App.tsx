@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import Admin from './pages/Admin';
 import FeedbackForm from './pages/FeedbackForm';
+import AcceptInvite from './pages/AcceptInvite';
 
 function Home() {
   const [health, setHealth] = useState<{ status: string; timestamp: string } | null>(null);
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="/leads/:leadId" element={<LeadDetail />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/feedback/:token" element={<FeedbackForm />} />
+          <Route path="/accept-invite/:token" element={<AcceptInvite />} />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

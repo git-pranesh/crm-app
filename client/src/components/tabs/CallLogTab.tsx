@@ -21,6 +21,75 @@ const OUTCOME_COLORS: Record<string, string> = {
   CALLBACK: 'bg-blue-100 text-blue-700',
 };
 
+interface CardProps { call: CallRecord; onRecordingRefresh: (url: string) => void }
+
+function CallCard({ call, onRecordingRefresh }: CardProps) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState(call.recordingUrl ?? null);
+  const isManual = !recordingUrl;
+
+  const handleRefreshRecording = async () => {
+    setRefreshing(true);
+    try {
+      const data = await api.get<{ recordingUrl: string | null }>(`/calls/${call.id}/recording-url`);
+      if (data.recordingUrl) {
+        setRecordingUrl(data.recordingUrl);
+        onRecordingRefresh(data.recordingUrl);
+      }
+    } catch (e) {
+      console.warn('Recording refresh failed:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${OUTCOME_COLORS[call.outcome] ?? 'bg-gray-100 text-gray-600'}`}>
+            {call.outcome.replace('_', ' ')}
+          </span>
+          <span className="text-xs text-gray-400">{formatDuration(call.duration)}</span>
+          {isManual && (
+            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Manual</span>
+          )}
+        </div>
+        <div className="text-right text-xs text-gray-400 shrink-0">
+          <p>{call.loggedBy.name}</p>
+          <p>{new Date(call.createdAt).toLocaleDateString('en-IN')}</p>
+        </div>
+      </div>
+
+      {call.notes && (
+        <p className="text-sm text-gray-600 mt-2">{call.notes}</p>
+      )}
+
+      {/* Recording player */}
+      {recordingUrl ? (
+        <div className="mt-3">
+          <audio
+            controls
+            src={recordingUrl}
+            className="w-full h-9"
+            preload="none"
+          />
+        </div>
+      ) : (
+        <div className="mt-2">
+          <button
+            onClick={handleRefreshRecording}
+            disabled={refreshing}
+            className="text-xs text-brand-600 hover:text-brand-700 hover:underline disabled:opacity-50"
+          >
+            {refreshing ? 'Checking…' : '↻ Fetch recording'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props { leadId: string }
 
 export default function CallLogTab({ leadId }: Props) {
@@ -209,23 +278,9 @@ export default function CallLogTab({ leadId }: Props) {
       ) : (
         <div className="space-y-2">
           {calls.map((call) => (
-            <div key={call.id} className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${OUTCOME_COLORS[call.outcome] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {call.outcome.replace('_', ' ')}
-                  </span>
-                  <span className="text-xs text-gray-400">{formatDuration(call.duration)}</span>
-                </div>
-                <div className="text-right text-xs text-gray-400">
-                  <p>{call.loggedBy.name}</p>
-                  <p>{new Date(call.createdAt).toLocaleDateString('en-IN')}</p>
-                </div>
-              </div>
-              {call.notes && (
-                <p className="text-sm text-gray-600 mt-2">{call.notes}</p>
-              )}
-            </div>
+            <CallCard key={call.id} call={call} onRecordingRefresh={(url) => {
+              setCalls((prev) => prev.map((c) => c.id === call.id ? { ...c, recordingUrl: url } : c));
+            }} />
           ))}
         </div>
       )}

@@ -21,7 +21,7 @@ const SLA_RULES = [
         where: {
           createdAt: { lt: cutoff },
           calls: { none: {} },
-          stage: { not: 'INACTIVE' },
+          stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
           isSLABreached: false,
         },
         select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },

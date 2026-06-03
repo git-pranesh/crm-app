@@ -24,6 +24,10 @@ export default function MeetingsTab({ leadId }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Pre-DQL questionnaire
+  const [questionnaire, setQuestionnaire] = useState<{ responses: Record<string, string>; submittedAt: string } | null>(null);
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+
   // Schedule form
   const [form, setForm] = useState({ type: '', mode: '', scheduledAt: '' });
 
@@ -47,6 +51,12 @@ export default function MeetingsTab({ leadId }: Props) {
   };
 
   useEffect(() => { loadMeetings(); }, [leadId]);
+
+  useEffect(() => {
+    api.get<{ questionnaire: { responses: Record<string, string>; submittedAt: string } | null }>(`/leads/${leadId}/questionnaire`)
+      .then((d) => setQuestionnaire(d.questionnaire))
+      .catch(() => {});
+  }, [leadId]);
 
   const handleSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,6 +310,35 @@ export default function MeetingsTab({ leadId }: Props) {
                   <p className="text-xs font-medium text-gray-500 mb-0.5">MOM</p>
                   <p className="text-xs text-gray-700">{meeting.mom}</p>
                 </div>
+              )}
+
+              {/* Pre-DQL questionnaire view */}
+              {meeting.type === 'DQL' && questionnaire && (
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowQuestionnaire(!showQuestionnaire)}
+                    className="text-xs text-brand-600 hover:text-brand-700 font-medium hover:underline"
+                  >
+                    {showQuestionnaire ? '▲ Hide' : '▼ View'} Pre-meeting Questionnaire
+                  </button>
+                  {showQuestionnaire && (
+                    <div className="mt-2 bg-fuchsia-50 border border-fuchsia-100 rounded-lg p-3 space-y-2">
+                      <p className="text-xs text-fuchsia-600 font-medium mb-1">
+                        Submitted: {new Date(questionnaire.submittedAt).toLocaleDateString('en-IN')}
+                      </p>
+                      {Object.entries(questionnaire.responses).map(([q, a]) => (
+                        <div key={q}>
+                          <p className="text-xs font-medium text-gray-600">{q}</p>
+                          <p className="text-xs text-gray-800">{a}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {meeting.type === 'DQL' && !questionnaire && (
+                <p className="text-xs text-gray-400 mt-2 italic">No pre-meeting questionnaire submitted yet</p>
               )}
             </div>
           ))}

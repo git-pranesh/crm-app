@@ -25,12 +25,14 @@ interface DashboardData {
 const STAGE_COLORS: Record<string, string> = {
   EFFECTIVE_LEAD: '#6366f1', MQL: '#8b5cf6', DQL: '#d946ef',
   PROPOSAL_READY: '#f59e0b', PROPOSAL_PRESENTED: '#f97316', ONBOARDING: '#22c55e',
+  HANDED_OVER: '#0d9488',
 };
 const PIE_COLORS = ['#d95f32', '#f97316', '#f59e0b', '#6366f1', '#8b5cf6', '#22c55e', '#06b6d4'];
 
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Eff. Lead', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'Prop. Ready', PROPOSAL_PRESENTED: 'Prop. Done', ONBOARDING: 'Onboarding',
+  HANDED_OVER: 'Handed Over',
 };
 
 const RULE_LABELS: Record<string, string> = {

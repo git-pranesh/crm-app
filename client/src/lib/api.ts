@@ -60,6 +60,7 @@ export interface CallRecord {
   outcome: string;
   duration?: number;
   notes?: string;
+  recordingUrl?: string | null;
   createdAt: string;
   loggedBy: { id: string; name: string; role: string };
 }

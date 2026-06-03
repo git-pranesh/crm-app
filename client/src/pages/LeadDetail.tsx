@@ -8,6 +8,7 @@ import MeetingsTab from '../components/tabs/MeetingsTab';
 import WhatsAppTab from '../components/tabs/WhatsAppTab';
 import DiscountTab from '../components/tabs/DiscountTab';
 import QuoteTab from '../components/tabs/QuoteTab';
+import DIPChecklistPanel from '../components/DIPChecklistPanel';
 
 type Tab = 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'discount' | 'quotes';
 
@@ -27,6 +28,7 @@ const STAGE_COLORS: Record<string, string> = {
   PROPOSAL_READY: 'bg-amber-100 text-amber-700',
   PROPOSAL_PRESENTED: 'bg-orange-100 text-orange-700',
   ONBOARDING: 'bg-green-100 text-green-700',
+  HANDED_OVER: 'bg-teal-100 text-teal-700',
   INACTIVE: 'bg-gray-100 text-gray-500',
   ON_HOLD: 'bg-slate-100 text-slate-600',
 };
@@ -109,6 +111,13 @@ export default function LeadDetail() {
           </div>
         </div>
       </div>
+
+      {/* DIP Checklist — visible during ONBOARDING and HANDED_OVER */}
+      {lead && (lead.stage === 'ONBOARDING' || lead.stage === 'HANDED_OVER') && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-4">
+          <DIPChecklistPanel leadId={leadId!} stage={lead.stage} />
+        </div>
+      )}
 
       {/* Tabs — horizontal scroll on mobile */}
       <div className="bg-white border-b border-gray-200">

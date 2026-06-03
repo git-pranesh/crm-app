@@ -30,10 +30,16 @@ import { quotesRouter, usersDiscountRouter } from './routes/quotes.js';
 import { importRouter } from './routes/import.js';
 import { adminRouter } from './routes/admin.js';
 import { callWebhookRouter } from './routes/callWebhook.js';
+import { callsStandaloneRouter } from './routes/calls.js';
+import { googleFormWebhookRouter, questionnaireRouter } from './routes/questionnaire.js';
+import { acceptInviteRouter } from './routes/acceptInvite.js';
+import { dipChecklistRouter } from './routes/dipChecklist.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
+import { schedulePerformanceRecalc } from './jobs/performanceRecalc.js';
 import './jobs/emailWorker.js';
+import './jobs/performanceRecalc.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -89,6 +95,13 @@ app.use('/api/auth', authLimiter, authRouter);
 // Webhooks (rate-limited separately)
 app.use('/api/leads/webhook', webhookLimiter, leadWebhooksRouter);
 app.use('/api/calls/webhook', webhookLimiter, callWebhookRouter);
+app.use('/api/integrations/google-form-webhook', webhookLimiter, googleFormWebhookRouter);
+
+// Public invite acceptance (no auth)
+app.use('/api/accept-invite', acceptInviteRouter);
+
+// Standalone calls (recording URL)
+app.use('/api/calls', callsStandaloneRouter);
 app.use('/api/quotes', quotesRouter);
 
 // Leads CRUD
@@ -101,6 +114,8 @@ app.use('/api/leads/:leadId/meetings', meetingsRouter);
 app.use('/api/leads/:leadId/whatsapp', leadWhatsAppRouter);
 app.use('/api/leads/:leadId/offer', leadOfferRouter);
 app.use('/api/leads/:leadId/discount-request', leadDiscountRouter);
+app.use('/api/leads/:leadId/questionnaire', questionnaireRouter);
+app.use('/api/leads/:leadId/dip-checklist', dipChecklistRouter);
 
 // Bulk import
 app.use('/api/leads/import', importRouter);
@@ -163,6 +178,7 @@ app.listen(PORT, async () => {
       await scheduleMidnightJob();
       await scheduleSLACheck();
       await scheduleReportJobs();
+      await schedulePerformanceRecalc();
     } catch (e) {
       console.warn('[jobs] Could not schedule background jobs:', e);
     }

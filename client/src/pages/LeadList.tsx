@@ -19,13 +19,14 @@ const STAGE_COLORS: Record<string, string> = {
   PROPOSAL_READY: 'bg-amber-100 text-amber-700',
   PROPOSAL_PRESENTED: 'bg-orange-100 text-orange-700',
   ONBOARDING: 'bg-green-100 text-green-700',
+  HANDED_OVER: 'bg-teal-100 text-teal-700',
   INACTIVE: 'bg-gray-100 text-gray-500',
   ON_HOLD: 'bg-slate-100 text-slate-600',
 };
 
 const STAGE_OPTIONS = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
-  'ONBOARDING', 'INACTIVE', 'ON_HOLD',
+  'ONBOARDING', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
 ];
 
 const SOURCE_OPTIONS = [

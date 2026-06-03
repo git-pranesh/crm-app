@@ -4,7 +4,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 
 export const reportsRouter = Router();
 
-const PIPELINE_STAGES = ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING'];
+const PIPELINE_STAGES = ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER'];
 
 // ── CSV helper ────────────────────────────────────────────────────────────────
 function toCSV(rows: Record<string, unknown>[]): string {
@@ -155,7 +155,7 @@ async function blPerformance(q: Record<string, string>) {
       prisma.lead.count({ where: { ...bWhere, stage: 'ONBOARDING' } }),
       prisma.discountRequest.findMany({
         where: { lead: bWhere },
-        select: { status: true, discountPct: true, originalAmount: true, requestedAmount: true },
+        select: { status: true, discountPct: true, originalAmount: true, amount: true },
       }),
     ]);
     const approved = discountReqs.filter((r) => r.status === 'APPROVED');
@@ -224,21 +224,55 @@ async function inactiveLeads(q: Record<string, string>) {
   const leads = await prisma.lead.findMany({
     where,
     include: {
-      inactivationFeedback: { select: { reason: true, clientResponse: true, respondedAt: true } },
+      inactivationFeedback: {
+        select: {
+          reason: true,
+          feedbackFormSentAt: true,
+          clientResponse: true,
+          respondedAt: true,
+        },
+      },
       assignedDesigner: { select: { name: true } },
     },
     orderBy: { updatedAt: 'desc' },
     take: 500,
   });
-  return leads.map((l) => ({
+
+  const rows = leads.map((l) => ({
     leadId: l.leadId,
     name: l.name,
     designer: l.assignedDesigner?.name ?? 'Unassigned',
     source: l.source,
     reason: l.inactivationFeedback?.reason ?? '',
-    clientFeedback: l.inactivationFeedback?.clientResponse ?? '',
+    feedbackFormSentAt: l.inactivationFeedback?.feedbackFormSentAt?.toISOString() ?? null,
+    clientResponded: !!(l.inactivationFeedback?.respondedAt),
+    feedbackResponse: l.inactivationFeedback?.clientResponse ?? null,
+    feedbackRespondedAt: l.inactivationFeedback?.respondedAt?.toISOString() ?? null,
     inactivatedAt: l.updatedAt.toISOString().split('T')[0],
   }));
+
+  // Aggregate summary
+  const totalInactivated = rows.length;
+  const formSentCount = rows.filter((r) => r.feedbackFormSentAt).length;
+  const responseCount = rows.filter((r) => r.clientResponded).length;
+  const responseRate = formSentCount > 0 ? +((responseCount / formSentCount) * 100).toFixed(1) : 0;
+
+  // Top feedback reasons (frequency count)
+  const reasonMap: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.feedbackResponse) {
+      reasonMap[r.feedbackResponse] = (reasonMap[r.feedbackResponse] ?? 0) + 1;
+    }
+  }
+  const topReasons = Object.entries(reasonMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([response, count]) => ({ response, count }));
+
+  return {
+    summary: { totalInactivated, formSentCount, responseCount, responseRate, topReasons },
+    rows,
+  };
 }
 
 async function meetingPerformance(q: Record<string, string>) {
@@ -295,7 +329,7 @@ async function leadAging(q: Record<string, string>) {
   };
   const where = buildLeadWhere(q);
   const leads = await prisma.lead.findMany({
-    where: { ...where, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'ONBOARDING'] } },
+    where: { ...where, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'ONBOARDING', 'HANDED_OVER'] } },
     select: {
       leadId: true, name: true, stage: true, updatedAt: true, isSLABreached: true,
       assignedDesigner: { select: { name: true } },
