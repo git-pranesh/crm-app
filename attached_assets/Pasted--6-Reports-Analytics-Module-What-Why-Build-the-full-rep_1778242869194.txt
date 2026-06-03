@@ -1,0 +1,48 @@
+#6 - Reports & Analytics Module
+What & Why
+Build the full reporting and analytics module so management has real-time visibility into lead flow, team performance, conversion rates, and pipeline health — replacing all manual analysis currently done in Excel. This includes 13 report types, a live dashboard, visual charts, export functionality, and automated report scheduling via email.
+
+Done looks like
+The main dashboard (shown on login for BL and Branch Head) displays a live summary: total leads, leads this week/month/today, a visual sales funnel (Effective Lead → MQL → DQL → Proposal Ready → Proposal Presented → Onboarded), total onboarded projects, conversion rates, and lead source breakdown (pie chart)
+The SLA breach panel on the dashboard shows all currently breached leads
+13 named reports are available in a Reports section, each with filter controls and live data:
+Lead Summary — total, by source, by period
+Lead Pipeline — current stage distribution with days-in-stage per lead
+Lead Conversion — stage-by-stage conversion rates with percentages (Lead→MQL, MQL→DQL, DQL→Proposal, Proposal→Onboarding)
+Lead Timeline Performance — average days: Lead to DQL, DQL to PP, Lead to PP, DQL to Onboarding, Lead to Onboarding
+Designer Performance — leads assigned, DQL completed, proposals presented, projects onboarded, conversion rates per designer
+Business Lead Performance — leads assigned, projects closed, average order value per BL
+Lead Source Performance — leads per source, DQL rate, proposal rate, onboarding rate per source
+Inactive Leads — name, source, designer, inactivation reason, stage at which lead dropped
+Meeting Performance — initial meetings scheduled vs completed, PP meetings scheduled vs completed, completion rates
+Sales Cycle Duration — average days Lead to Onboarding, DQL to Onboarding, fastest and slowest conversion
+Lead Aging — leads stuck in a stage longer than the SLA threshold, showing days overdue
+Lead Source Breakdown — pie chart and table of all sources
+Monthly Lead Trend — line chart of leads created per month
+All reports support filtering by date range, designer, BL, lead source, lead stage, project type, and location
+All reports can be exported to Excel (.xlsx) and CSV
+Visual charts are included: funnel chart, pie chart (lead source), bar charts (conversion rates, designer performance), line chart (monthly trend)
+Report scheduling: admin can configure automated weekly and monthly report emails (selecting which reports to include and which recipients); the system sends them on schedule without manual intervention
+Report access is role-based: Designers see only their own lead data in reports; BL, Branch Head, and Admin see all data
+Out of scope
+Post-onboarding stage reports (DIP, WIP, Handover — deferred to v2)
+Real-time streaming analytics (reports refresh on page load or on a set interval)
+Tasks
+Dashboard — Build the main dashboard page with live summary cards (total leads, this week, this month, today), the visual pipeline funnel, conversion rate cards, lead source pie chart, and SLA breach panel. All data fetched from the API in real time.
+
+Report engine and API — Build the server-side query layer that powers all 13 reports, with support for all filter parameters. Each report has a dedicated API endpoint returning structured data.
+
+Report pages UI — Build the Reports section with a report list and individual report pages showing filterable data tables and relevant visual charts (using a charting library). Implement all 13 reports connected to the report engine API.
+
+Export functionality — Implement Excel (.xlsx) and CSV export for every report. Export respects the currently applied filters.
+
+Automated report scheduling — Build the admin report scheduling configuration UI (select reports, frequency, recipients). Implement the background scheduler that generates and emails the selected reports on the configured schedule.
+
+Relevant files
+artifacts/api-server/src/routes/
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+Dependencies
+Meetings, Quotes & Discount Workflow
+External Integrations & Data Migration
+Communications, WhatsApp & SLA Alerts

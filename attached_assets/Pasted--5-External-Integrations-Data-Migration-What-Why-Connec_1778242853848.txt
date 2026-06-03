@@ -1,0 +1,31 @@
+#5 - External Integrations & Data Migration
+What & Why
+Connect the CRM to the external platforms the business relies on: Google Forms (for the DQL pre-meeting questionnaire, auto-pulling client responses into the lead record), Meta and Google Ads platforms (so new leads from paid campaigns appear in the CRM automatically without manual entry), and a one-time import of the ~600 existing leads from the Google Sheets master tracker. This eliminates all external dependencies and ensures no leads are lost in transit.
+
+Done looks like
+Google Forms is connected: when a Designer sends the pre-meeting design questionnaire link from within a lead record, the CRM tracks that it was sent; when the client submits the form, their responses automatically appear on the lead's DQL meeting record without anyone having to check Google Forms manually
+Meta Lead Ads is connected: when a new lead submits a Meta ad form, it appears in the CRM within minutes as a new lead record with all available fields pre-filled (name, contact number, source marked as META)
+Google Ads lead forms are connected similarly, with source marked as Google
+New leads from Meta and Google are auto-assigned to the CRE for initial qualification
+A one-time import tool allows an admin to upload the exported Google Sheets file (CSV or Excel); the system maps columns to CRM fields, shows a preview of what will be imported (with validation warnings for missing or malformed data), and imports all ~600 leads preserving their original X-prefix IDs, dates, stage history, and notes
+Duplicate detection runs during import: if a lead with the same contact number already exists, the import flags it for manual review rather than creating a duplicate
+Out of scope
+Ongoing Google Sheets sync (one-time import only, per client decision)
+WhatsApp and email integrations (Task 4)
+Google OAuth for user login (email/password auth is used per Task 1)
+Tasks
+Google Forms integration — Connect to Google Forms API; allow a Designer to link a specific form to the DQL meeting for a lead and mark it as sent. Set up a webhook or polling mechanism to detect new form submissions and attach the responses to the correct lead meeting record.
+
+Meta Lead Ads integration — Connect to the Meta Lead Ads webhook; when a new lead submits a Meta ad form, create a CRM lead record with the submitted fields, mark the source as META, and assign it to the CRE queue for initial contact.
+
+Google Ads lead form integration — Connect to Google Ads lead form extensions API similarly; auto-create leads with source marked as Google Ads and assign to the CRE queue.
+
+Google Sheets one-time import tool — Build an admin import page that accepts an uploaded CSV/Excel file from the master tracker, maps columns to CRM fields (with a configurable mapping UI in case column headers differ), validates data, shows a preview with error/warning highlights, and runs the import preserving all original IDs, dates, and notes. Include duplicate detection by contact number.
+
+Relevant files
+artifacts/api-server/src/routes/
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+scripts/src/
+Dependencies
+Lead Management Core

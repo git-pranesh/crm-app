@@ -1,0 +1,37 @@
+#4 - Communications, WhatsApp & SLA Alerts
+What & Why
+Integrate WhatsApp Business API so all client communication happens within the CRM rather than on personal devices — solving the client's stated pain point of not being able to track what each team member is saying to clients. Also build the SLA monitoring engine that flags every breach in real time so no lead falls through the cracks, and implement email automation for key events (meeting confirmations, MOM, onboarding emails).
+
+Done looks like
+Each lead has a "Messages" tab showing the complete WhatsApp conversation thread with that client, visible to all authorised users (BL, Branch Head see all; Designer sees their own leads)
+Team members compose and send WhatsApp messages directly from within the CRM; messages are delivered to the client's WhatsApp via WhatsApp Business API using the company's office SIM / Business account
+All pre-defined message templates from the process document are available as one-click templates: Pre-call intro, RNR 1-5, meeting confirmation (EC and Virtual), meeting reminder, post-visit follow-up (quote ready and follow-up needed), MOM thank-you, and DQL scheduling messages
+Incoming WhatsApp replies from clients appear in the CRM thread in real time
+The system sends automated email notifications for: meeting scheduled (confirmation to client), meeting MOM (after Designer marks meeting complete), onboarding confirmation; all from pre-defined templates that can be previewed before sending
+SLA breach engine runs continuously and evaluates every active lead against the defined SLAs: initial contact within 24h of lead creation, lead moved to MQL within 5 days, DQL meeting scheduled within 3 days of MQL, PP meeting within 2 days of Proposal Ready; if any SLA is exceeded the lead is flagged with a visual "SLA Breached" badge
+BL and Branch Head receive in-app and email alerts when any lead in their scope breaches an SLA
+A "Breach" panel on the dashboard lists all currently breached leads sorted by severity (how many hours overdue)
+Out of scope
+Google Forms and Meta/Google lead import (Task 5)
+Report aggregations on communication activity (Task 6)
+Mobile app (deferred to v2)
+Tasks
+WhatsApp Business API integration — Set up the WhatsApp Business API connection using the company's Business account credentials. Implement webhook to receive incoming messages and the send-message API to deliver outbound messages. Store all messages in the database tied to the lead record.
+
+In-CRM messaging UI — Build the Messages tab on the lead detail page: a chat-style thread showing sent and received WhatsApp messages with timestamps and sender identity. Include the template selector and a free-text compose box.
+
+Message templates library — Implement all RNR, meeting, and follow-up templates from the process document as selectable templates with token substitution (client name, date, time, designer name, etc.).
+
+Email automation — Implement transactional email sending (via an email provider) for meeting confirmations, MOM send, and onboarding emails. Use templates matching the process document's email scripts.
+
+SLA rules engine — Build the SLA definition table (rules per pipeline stage with hour/day thresholds), a background job that evaluates all active leads against their SLAs on a schedule, and a flag system that marks breached leads. Trigger alerts (in-app notification + email) to BL and Branch Head on first breach.
+
+SLA breach UI — Surface breached leads with a visual badge on the lead list and a dedicated "Breaches" panel on the dashboard showing lead name, stage, SLA rule breached, and hours overdue.
+
+Relevant files
+artifacts/api-server/src/app.ts
+artifacts/api-server/src/routes/
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+Dependencies
+Lead Management Core

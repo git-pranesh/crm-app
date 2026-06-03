@@ -1,0 +1,599 @@
+Below is a cleaned English transcription of the uploaded text. I preserved the demo structure, timestamps, questions, and key details. I cannot confirm some names, company names, and spellings because the source appears to be an auto-transcript with phonetic errors. Source: 
+
+---
+
+## English Transcript
+
+### 0:00 – Introduction
+
+Founded in 2017, I am working here as a Team Lead – Sales. My name is Priya, and I am going to present this demo in front of you.
+
+Let me start with a short 30-second introduction about ourselves and our company, so you know whom you are going to partner with in the future.
+
+We were founded in 2017. Our aim is to provide cutting-edge SaaS solutions to create the best impact and sustainable business growth. Our purpose is to deliver a seamless customer journey, enable better relationships with customers, and eliminate manual work through automation.
+
+We are trusted by companies like Shiprocket, Jio, Mahindra Tractors, Rapido, and more than 5,000 such companies.
+
+Right now, we are handling clients majorly in India — around 80% in India and 20% in the Middle East, Malaysia, and Africa.
+
+We are trusted by more than 5,000 companies, have 50,000+ active users, and handle 1 crore+ calls per month.
+
+---
+
+### 1:04 – Understanding the Business Challenges
+
+First things first, let me start by understanding your business, because this session is all about you and your business.
+
+I would like to know if you are facing any particular challenges or concerns in your business right now that brought you here to understand a new CRM and explore options in the market.
+
+The challenges could be WhatsApp automation, lead management, lead leakage, follow-ups, or anything else.
+
+Anybody who would like to take the lead can introduce themselves, mention the city they are from, and share any problems they are facing. Even a one-word answer in the chat box is fine.
+
+---
+
+### 1:59 – Participant Introduction: Tripik Travels
+
+Hello, my name is Ajmuddin, and I am the founder of Tripik Travels. Can you hear me?
+
+Yes, I can hear you, sir.
+
+We do not have a calling system for our clients, and the calls are not being recorded. We are also looking for WhatsApp automation, and we are looking for the best CRM applicable to our business. That is why I am here.
+
+Okay, thank you so much.
+
+---
+
+### 2:42 – Participant Challenges
+
+We are unable to track agent activity. That is one thing.
+
+Second, we are not able to remember whom we have to follow up with.
+
+Third, we also want WhatsApp automation for our clients.
+
+Fourth, we are unable to track which campaign is giving us the best results. We are not able to set up UTM parameters because we do not have a CRM.
+
+Thank you. I have heard all your concerns, and I will make sure I cover these points during my demo.
+
+---
+
+### 3:22 – Demo Agenda
+
+Today, I am going to cover:
+
+Lead management — lead capturing and lead integrations available on TeleCRM.
+
+Calling and lead qualification.
+
+Pipeline and smart filters.
+
+Communication — because for immediate businesses, the major modes of communication are calling and WhatsApp.
+
+I will show how we call from TeleCRM, how calls are placed, how call recordings work, WhatsApp Cloud API, chatbots, bulk messaging, and WhatsApp communication.
+
+Then I will cover team performance, reports, dashboards, custom views, and role-based access.
+
+Then I will cover automation and AI, including powerful automations, schedules and reminders, smart workflows, AI agent, and Conversion API.
+
+Finally, I will cover pricing and onboarding — what makes TeleCRM different, pricing and plans, onboarding, and support.
+
+---
+
+### 4:31 – Lead Capturing
+
+The first thing I am going to show you is how quickly and effectively TeleCRM captures your leads.
+
+These leads can come from major social media platforms such as Meta Ads and Google Ads, through Excel sheets if you have old data, or from other sources. You want to bring all leads into one single platform and then cater to those leads properly.
+
+TeleCRM helps you capture all these leads within seconds.
+
+The first way to capture a lead is manual lead addition. You can add leads one by one, have full control over each entry, and instantly set up follow-ups. This is ideal for businesses that work through walk-ins or want to add leads individually.
+
+The system also helps prevent duplication.
+
+For Excel or bulk upload, you can import thousands of leads into TeleCRM if they are present in an Excel sheet. Duplicate prevention is built in. The system automatically tracks duplicate leads based on contact number and email ID.
+
+Auto field mapping is also available. You can do complex lead assignments when uploading Excel data, and there will be zero errors.
+
+Integrations are also available. We have many integrations that help you bring all your leads from social media platforms and different channels into TeleCRM. Lead capture through website forms and landing pages happens in real time, with zero manual effort.
+
+Automatic assignment to team members can also be done.
+
+---
+
+### 6:18 – Live Lead Capture Activity
+
+I am going to paste a link in the Zoom chat box. This is a small activity. I would like all of you to participate so I can show how quickly TeleCRM captures your leads live and how quickly you can address them.
+
+Please click on the link, fill in your name and contact number, and I will come to the live platform and show how quickly it captures the lead.
+
+Thank you. I see five people have filled in the details: Bharat, Archana, Vaishali, Rohit Arora, and Yogesh Gupta.
+
+You can see these five leads are available here. Four of these are webinar scheduled leads. That means these leads were supposed to attend our webinar, and they have filled in their details again. The system has captured the lead again on the previous lead based on contact number or email ID.
+
+You can see how quickly this lead was captured — 35 seconds back, 40 seconds back, one minute back. This is how quickly TeleCRM captures leads live on the system.
+
+This helps your team respond to leads as soon as possible. It helps with faster lead capture, no lead leakage, duplication prevention, faster lead response, prevention of manual errors, and no human error.
+
+There are several out-of-the-box connectors to bring leads from different platforms such as Justdial, IndiaMART, Facebook, and others. Custom integrations are also available if you have your own CRM, landing page API, or webhook.
+
+---
+
+### 8:51 – Integration Options
+
+Integrations are available with platforms such as:
+
+Facebook, Instagram, WhatsApp, WhatsApp API, Google Meet, Zoom.
+
+B2B marketplaces such as Justdial, IndiaMART, and TradeIndia.
+
+E-commerce platforms such as Shopify and WooCommerce.
+
+Payment gateways such as Razorpay and WordPress.
+
+Lead portals and sources such as Google Forms, Google Sheets, 99acres, MagicBricks, Sulekha, and Housing.com for real estate.
+
+For cloud telephony, integrations are available with Tata Tele, Exotel, TeleCMI, and others.
+
+---
+
+### 9:42 – Making Calls and Viewing Call History
+
+Now I will show how the CRM helps you make a connection, how you can call, listen to call recordings, and see the complete lead history.
+
+One participant asks whether the leads reflected on the web app will also reflect on the phone app.
+
+Yes, I am showing both the web app and the mobile app simultaneously.
+
+Here are the leads that filled the form today. I will open one lead and show how it looks on the mobile app and desktop app, how to make a call, and what actions can be taken.
+
+To call from TeleCRM, you need an Android mobile phone, a SIM number, and the TeleCRM app. The mobile app and web app work simultaneously. If you update anything on the mobile app, it gets updated on the desktop app and vice versa.
+
+---
+
+### 12:20 – Lead Details and Custom Fields
+
+I am opening Vaishali’s lead. It is a webinar scheduled lead.
+
+These are the lead statuses. You can customize lead statuses based on your business requirement.
+
+These are lead fields, which contain additional information about the lead. You can save company name, email ID, additional contact numbers, or anything else you want. You can create your own lead fields based on business requirements.
+
+---
+
+### 13:02 – Tasks and One-Click Calling
+
+By task, I mean the actions you can take on this lead.
+
+The first action is calling. I can place a call by clicking the one-click call option on my mobile phone or from the desktop app. The call is placed from my Android mobile phone.
+
+Let me click the call option.
+
+Vaishali, please pick up your call so I can show the call recording feature.
+
+The call is placed. The call lasts around 17 seconds.
+
+After hanging up, the 17-second outgoing call is reflected in the lead history.
+
+While placing the call, I can also fill any sales form that I have designed for my workspace. You can create your own sales forms based on your requirements if you want to capture additional information about the client.
+
+For example, if I ask what integrations are needed and select WhatsApp, I can keep adding information during the call. This helps telecallers stick to the SOP and ask all relevant questions.
+
+I can also enter the follow-up date and save it for future reference.
+
+---
+
+### 15:21 – Call Recording and Screen Sharing Issue
+
+All incoming, outgoing, and missed calls are captured in TeleCRM. Every call can be tracked in the lead history.
+
+There is a brief screen visibility issue. Participants say the screen is stuck. The presenter shares the screen again and confirms that both the mobile screen and desktop screen are visible.
+
+On the right side is the mobile app. On the left side is the desktop app. Whatever actions are taken from either place are redirected through the Android mobile phone — either to dial a call or send a WhatsApp message.
+
+The 17-second call made to Vaishali is visible in the lead history. If you want to listen to the call recording, you can click the speaker icon and listen to the complete recording on both the mobile app and desktop app.
+
+The lead history shows when the lead came in, what form was filled, which actions were taken, previous calls by team members, notes, WhatsApp messages, and WhatsApp message tracking.
+
+---
+
+### 19:00 – Follow-Up Tasks
+
+The second option is the task option. A task is a follow-up task that you put on the lead.
+
+This is one of the major problems for every business: people do not remember every follow-up manually, and it is tedious to track everything on Excel or Google Sheets.
+
+I will click on call follow-ups and set a five-minute task as an example. Otherwise, you can select a custom date and time from the calendar.
+
+I write a note: “Busy, call her later,” and create the task.
+
+TeleCRM will remind me about this upcoming task so I do not forget to follow up with Vaishali on time.
+
+A reminder popup appears on both the mobile app and desktop app. If I click it, it takes me back to the lead, and I can call. If I ignore it, it shows in call follow-up tasks as late or pending.
+
+Managers can track all late, upcoming, and pending tasks and ask why someone is late in calling leads. This transparency is available in the system.
+
+---
+
+### 20:40 – Calling System Benefits
+
+Inside TeleCRM, you do not need third-party dialers such as MyOperator or Exotel. You only need an Android mobile phone, a SIM card, and the TeleCRM app.
+
+Why this matters:
+
+All calls are tracked and recorded — incoming, outgoing, and missed calls.
+
+Every call is logged automatically with duration and notes.
+
+There is zero additional dialer cost.
+
+Connect rates are higher because calls are made from mobile numbers, which people are more likely to pick up compared to IP calls.
+
+It is compliant and secure because calls stay on your registered corporate SIM, and the data stays with your organization.
+
+---
+
+### 21:27 – Sales Forms
+
+Sales forms are available to collect additional information about the client.
+
+You can create fields such as budget range, decision timeline, current CRM being used, team size, key challenge, and so on.
+
+This helps you follow your SOP automatically, qualify leads better, capture answers during calls, set the right follow-up task, and store data inside the lead for future tracking.
+
+---
+
+### 22:03 – WhatsApp Communication
+
+Now coming to WhatsApp communication, which is handled very well by TeleCRM.
+
+I open Vaishali’s lead and click WhatsApp. I am going to send a WhatsApp message to Vaishali using one of my pre-created templates. You can create multiple templates.
+
+I select one message and click send. I am sending this from my web app, but I can also do the same from the mobile app. The message is redirected through my mobile phone.
+
+Vaishali confirms she received the message and replies “Thanks.”
+
+The reply is captured in the lead history. Both outgoing and incoming WhatsApp messages are tracked on the web app and mobile app.
+
+This is the WhatsApp chatting feature of TeleCRM. The presenter claims that other CRMs generally open a separate tab or require tracking WhatsApp, calls, and API messages separately, while TeleCRM gives everything on a single platform.
+
+A participant asks whether normal messages can be sent apart from templates.
+
+The answer: yes. If you type “hello” and send it, the customer will receive it. This is real-time person-to-person communication, not automated messaging.
+
+---
+
+### 25:02 – Number Visibility and Data Security
+
+A participant asks whether the number will be shown when using the application for calls and WhatsApp.
+
+The presenter says that if a call is made from the mobile phone, the number will be displayed. The participant asks whether the lead’s number will show inside the application.
+
+The presenter says yes, the lead number is shown inside the application. But if the business does not want telecallers to see the full number, TeleCRM can hide it by masking the number.
+
+Another participant asks: if the client’s number is hidden but the telecaller calls the client, can the client call back on the number?
+
+The answer is yes. Since the SIM is calling, the client can call back on the same number.
+
+Another question is about Truecaller verification. The presenter says they have done Truecaller verification for their team members, so the name appears with a verified symbol.
+
+---
+
+### 28:09 – WhatsApp and CRM in One Place
+
+Everything is in one place. There is no switching between WhatsApp and CRM. The full conversation history is available inside the lead.
+
+---
+
+### 28:18 – Team Performance and Reports
+
+Now coming to real-time team performance tracking.
+
+Managers and business owners want to know what is happening with leads, how their team is performing, how many calls are being made, how many are connected, how many are not connected, call duration for each team member, and whether calls are actually happening.
+
+Reports help with all this and keep data at your fingertips.
+
+TeleCRM gives three types of reports:
+
+1. Leaderboard report
+2. Detailed call report
+3. Pipeline / filter-based lead report
+
+---
+
+### 29:02 – Leaderboard Report
+
+The leaderboard report shows that 388 calls were done today by the team, with a total duration of 5 hours and 25 minutes.
+
+The highest number of calls was done by a team member named Kala, with 61 calls and one hour of duration.
+
+When clicking Kala’s name, you can see the first call was done at 10:37 AM and the last call at 4:44 PM. You can see how many calls were made, on how many leads, how many were incoming, outgoing, missed, and connected.
+
+The presenter says they have set a connected-call timer, where calls longer than 60 seconds are counted as connected calls. This can be customized for each business.
+
+You can also see incoming and outgoing WhatsApp messages.
+
+If you want to see connected calls in detail, you can see the leads the agent spoke to, click any lead, listen to the recording, see notes, API messages, missed calls, and all actions taken.
+
+---
+
+### 31:00 – Detailed Call Report
+
+The detailed call report is for deeper analysis.
+
+For example, if you want to see the hourly performance of a team member, you can click the member’s name and see the distribution of work.
+
+You can see the most productive hour, hours when the person did not work, and whether they were active.
+
+For example, you can filter the time from 12 PM to 2 PM and see which leads were called around 1 PM. You can click any lead and see what happened with that lead.
+
+---
+
+### 32:20 – WhatsApp Cloud API Clarification
+
+A participant asks whether WhatsApp integration includes automation.
+
+The presenter clarifies that the WhatsApp chatting feature shown earlier is different. For chatbots, bulk messages, drip marketing campaigns, and automation, WhatsApp Cloud API is needed. It is a separate service by Meta but can be integrated with TeleCRM on a single platform.
+
+---
+
+### 32:50 – Smart Filters and Lead Reports
+
+The third report allows deeper lead analysis.
+
+For example, the team has 993 leads. You can analyze which leads came from which source, which leads are lost, why they were lost, how many were called, and how many were not called.
+
+You can add conditions and filters based on lead status or lead field.
+
+For example, filtering leads created in April shows 1,722 leads. The chart view shows segregation: open leads, lost leads, webinar done leads, etc.
+
+If there are 892 lost leads, you can click and see them. Then you can filter by number of calls and see that 85 leads had zero calls but were still marked as lost. The manager can ask why those leads were marked lost without even contacting them once.
+
+The presenter says this kind of reporting, which may otherwise take months, can be done within seconds on TeleCRM.
+
+Filters can be saved for future reference.
+
+---
+
+### 35:04 – Dashboard and Role-Based Views
+
+The leaderboard helps spot top performers and motivate the team.
+
+WhatsApp activity tracks incoming and outgoing WhatsApp messages by each team member.
+
+Call charts track total calls, connected calls, duration, sales conversion, reminders, and tasks.
+
+Smart filters help analyze the pipeline. Pie charts and bar charts are available. Detailed table reports and exports are available with full lead-level granularity — every field, every stage, every agent.
+
+Personalized dashboards are available for every person based on access.
+
+Owners have the highest rights, including deleting, downloading, and transferring data.
+
+Managers can see team performance in real time, intervene quickly, view team leaderboards, agent-wise conversions, pipeline by stage, and pending tasks.
+
+Callers can see their own dashboard with pending follow-ups, call tasks, dues, and everything they need to focus on in the morning.
+
+The presenter shows an admin dashboard with demo scheduled view, team follow-ups, reactivated leads, missed call tracker, demo scheduled leads, demo done leads, and high-priority leads.
+
+---
+
+### 37:42 – WhatsApp Cloud API
+
+The presenter says WhatsApp Cloud API is important for those who want chatbots, automation, bulk messaging, drip marketing campaigns, and related workflows.
+
+You do not need external tools such as AiSensy, WATI, Interakt, or DoubleTick. You only need to pay per-message charges directly to Meta. TeleCRM says it does not add markup and gives the WhatsApp Cloud API platform along with TeleCRM so everything can be used from a single portal.
+
+With WhatsApp Cloud API, you can:
+
+Send automatic welcome messages.
+
+Build WhatsApp chatbots that work 24/7.
+
+Send bulk broadcast messages.
+
+Run drip marketing campaigns at regular intervals.
+
+Everything happens from one platform.
+
+The presenter shows the WhatsApp Cloud API inbox, where all WhatsApp messages, bulk messages, and drip campaigns can be tracked.
+
+When you click a lead, the lead details open on the same page. You can see the status, assignee, lead details, call from there, and take actions from the same page.
+
+---
+
+### 39:43 – Shared Inbox Clarification
+
+A participant asks where client replies get delivered.
+
+The presenter says this is a shared inbox. All team members can receive replies for their respective leads in this inbox. When they reply back, the receiver gets it from the business WhatsApp number.
+
+The number shown is the approved WhatsApp Cloud API number. A business can take approval for a single centralized number and run WhatsApp Cloud API from that number.
+
+A participant asks whether only existing leads in the platform can be retargeted this way, not new leads.
+
+The presenter says new leads can be added into the system and then targeted.
+
+---
+
+### 40:57 – Workflows and Automation
+
+Now coming to powerful automation.
+
+The presenter says you do not need tools like Pabbly, Make, or similar automation platforms. TeleCRM automation does it natively and can save ₹10,000 to ₹50,000 per month.
+
+Without code, you can build:
+
+Smart lead assignment logic.
+
+SOPs and alerts.
+
+Drip marketing funnels over WhatsApp or email.
+
+Data pushes to third parties such as Google Sheets, your own API, or any webhook endpoint.
+
+The presenter shows how a TeleCRM workflow looks on the live portal.
+
+You can create complex workflows. For example, when a new WhatsApp lead comes in, the system checks an event. If the event includes “partnership,” it assigns the lead to Rayan. Otherwise, it assigns the lead equally among other team members. Automated replies and lead field updates can also be triggered.
+
+Anything you want to automate can be done with workflows, and the system follows the workflow accordingly.
+
+---
+
+### 42:48 – Schedules
+
+Schedules can be set up for EMI reminders, birthday wishes, meeting reminders, and appointment reminders — especially useful for healthcare and similar industries.
+
+These reminders can be sent using WhatsApp Cloud API.
+
+---
+
+### 43:07 – AI Agent
+
+The presenter introduces the AI Agent feature.
+
+With TeleCRM’s AI Agent, you can connect your ChatGPT Pro account, and AI audits every call. It can generate summaries of calls, which is useful because it is not humanly possible to listen to every call recording and do all audits manually.
+
+The AI can help identify tone, intent, and outcome. It can send auto-alerts if the agent deviates from the script.
+
+The presenter says there is zero extra platform cost because it is built into TeleCRM.
+
+Instead of paying for separate tools like Observe.AI, Gong, or meeting recorders, you can do audits inside TeleCRM.
+
+---
+
+### 44:08 – Conversion API
+
+Conversion API is useful for the marketing team.
+
+If you identify that a certain type of lead is performing well for your business, you can send such signals back to Google and Meta Ads. Then those platforms can start giving more relevant leads.
+
+The presenter says Conversion API is available in TeleCRM, with no need for Pabbly, Make, or complex API setup. It can be done within minutes.
+
+---
+
+### 44:40 – What Makes TeleCRM Different
+
+The presenter says you do not need extra third-party tools, separate dialers, separate WhatsApp tools, or platforms like WebEngage.
+
+Compared with other platforms that charge separately for data migration, training, onboarding, cloud storage, lead integrations, and security updates, TeleCRM says it includes these in the pricing.
+
+---
+
+### 45:07 – Pricing
+
+Quarterly plan: ₹1,999 per user per month.
+
+The presenter says there are no hidden charges, no multiple add-ons, no implementation fee, and no storage fee.
+
+For the WhatsApp chatting feature, the charge is ₹200 per user per month separately.
+
+For WhatsApp API setup, if the customer wants TeleCRM to help with Meta approval and setup, there is a one-time setup cost of ₹1,999. Otherwise, they can follow a video and do the integration themselves free of cost.
+
+Annual plan: ₹799 per user per month, billed annually.
+
+WhatsApp chatting remains ₹200 per user per month.
+
+WhatsApp API setup remains ₹1,999 one-time if TeleCRM handles the setup.
+
+The presenter compares costs for five users and says TeleCRM would charge ₹16,485 for a full quarter, leading to claimed savings of around ₹74,765 compared to using separate tools.
+
+---
+
+### 47:01 – Clients and Leadership
+
+The presenter mentions brands associated with TeleCRM, including names such as Housing.com, Mahindra Tractors, Rapido, Shiprocket, Mercedes-Benz, Upgrade, BYJU’S, Jio, and others. I cannot confirm all brand names due to transcript quality.
+
+The presenter introduces leadership:
+
+Rahul Mohan Gupta, Founder and CEO of TeleCRM. He is described as having enterprise software engineering and product development experience, with previous experience at Oracle and other companies.
+
+Kashif Kudrakar, CMO, described as having experience in digital marketing and analytics leadership.
+
+Shiraz Anwar, Head of Operations, described as having worked with companies such as MakeMyTrip and Paytm.
+
+The presenter says customers are in safe hands because the team has experienced people to help.
+
+---
+
+### 48:24 – What Happens After Payment
+
+After payment, customers get a dedicated account management team.
+
+An account manager is assigned to the business. The presenter says this person has onboarded more than 300 companies and understands industry pain points.
+
+A WhatsApp support group is created. The presenter says they do not use a ticketing system because tickets can take time. Instead, customers can put queries in the WhatsApp support group during business hours.
+
+The support is described as faster than email and better than chatbot support.
+
+Consultative setup is provided at zero extra cost, including industry-specific CRM configuration, workflow building, and proactive guidance on best practices.
+
+The presenter says there are no setup fees or hidden charges.
+
+The company has 100+ professionals. Engineering is led by Lav Vasnani, and business/support is led by Mohammad Kama, who is said to have guided more than 5,000 businesses.
+
+---
+
+### 49:46 – Q&A: Incoming Call Tracking
+
+The presenter asks if anyone has questions.
+
+Vaishali asks whether the CRM tracks incoming leads/calls, meaning whether the SIM integrated with the CRM is completely tracked with incoming and outgoing calls and from which number the incoming call came.
+
+The presenter answers yes. Whatever incoming calls come on that number, if the number is already available in TeleCRM, a popup appears before picking up the call, similar to Truecaller, so the caller can see who is calling.
+
+Vaishali asks whether TeleCRM tracks all incoming calls from clients.
+
+The presenter says there is a setting where personal contacts can be segregated. You can sync all calls or sync only TeleCRM calls.
+
+---
+
+### 50:46 – Q&A: Star Rating
+
+Vaishali asks about the two-star, three-star, and other ratings shown on leads — whether they indicate high-prospect, medium-prospect, etc.
+
+The presenter says this can be customized. In their setup, the rating is based on team size. For example, a team size of three to five people may be marked as two-star, and a team size of more than 20 may be marked as five-star.
+
+But customers can customize the star rating based on their own intent logic — high intent, low intent, or anything else.
+
+---
+
+### 51:30 – Q&A: License-Based Pricing
+
+Yogesh asks about pricing.
+
+The presenter explains that pricing is based on the number of users. One user equals one license. If three people are in the team, three TeleCRM licenses are needed.
+
+---
+
+### 52:06 – Q&A: WhatsApp API and Regular WhatsApp
+
+A participant says they joined in the middle and asks whether the team will be able to chat using WhatsApp API.
+
+The presenter explains that the team can chat with leads through their regular SIM numbers using WhatsApp. WhatsApp API is an optional Meta service used only if the business wants bulk messages, chatbots, or automation.
+
+Without WhatsApp API, the business can still connect regular WhatsApp numbers.
+
+---
+
+### 52:47 – Q&A: Storage and Export
+
+A participant asks where leads from WhatsApp or calls will be stored and whether backups are available.
+
+The presenter says all leads are available inside TeleCRM. There is no need to save contacts separately.
+
+If needed, leads can be exported. There are options to export activity reports, sales forms, lead sources, and all leads. Owners have access to delete, download, and transfer leads.
+
+---
+
+### 53:19 – Q&A: Lead Categories
+
+A participant says they are in a distribution business and may have regular retail customers as well as wholesalers or retailers. They ask whether categories can be created.
+
+The presenter explains that star ratings can be used if they want to mark high prospects. For separate categories, notes or statuses/fields can be created based on business requirements.
+
+---
+
+## Limitation
+
+This is a cleaned English transcription based on the provided auto-transcript. I cannot confirm exact speaker names, some brand names, or a few unclear phrases because the source text contains transcription errors and phonetic spellings.

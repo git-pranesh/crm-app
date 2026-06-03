@@ -1,0 +1,34 @@
+#3 - Meetings, Quotes & Discount Workflow
+What & Why
+Build the three interconnected workflows that sit at the heart of the sales process: scheduling and tracking DQL and PP meetings, embedding the existing DynamicQuoteBuilder so quotes are generated and logged inside the CRM against the correct Lead ID, and a formal discount approval workflow where Designers raise requests that Business Leads approve or reject within the CRM. These workflows replace manual tracking and the separate Google Form discount process.
+
+Done looks like
+From any lead record, a Designer or CRE can schedule an Initial (DQL) meeting or a PP meeting by selecting date, time, mode (EC Visit or Virtual), and setting status (Scheduled / Completed / Rescheduled / No-show)
+Meeting schedule confirmation is tracked: "Schedule sent to client" and "MOM sent to client" are toggleable checkboxes on each meeting record
+Completed meetings prompt the user to log the outcome and meeting notes before marking Done
+The CRM embeds the existing DynamicQuoteBuilder in an iframe panel within the lead detail page, pre-filled with the Lead's X-ID; any quote created in the builder is automatically logged as an activity on that lead
+A "Quote linked" entry appears in the activity timeline with the quote value and a direct link to review it
+The exact estimated project value field on the lead updates automatically when a quote is created via the embedded builder
+After any meeting where a discount is discussed, the Designer can raise a Discount Request directly on the lead: they enter the original quoted amount, requested discount amount, and justification notes
+The Business Lead receives an in-app notification for pending discount requests and can approve or reject them with a comment from within the CRM
+Approved/rejected discount decisions are logged in the activity timeline with the BL's name, decision, and timestamp
+Auto-calculated metrics update on the lead: Days from Lead to DQL, Days from DQL to PP Meeting, Days from Lead to PP Meeting, Days from DQL to Onboarded, Days from PP to Onboarded, Total Days Lead to Onboarded
+Out of scope
+Sending meeting confirmation messages via WhatsApp or email (Task 4)
+The quote builder itself (it is an existing external app, only embedded here)
+Reports aggregating meeting metrics (Task 6)
+Tasks
+Meeting scheduling UI and API — Build the meeting scheduling panel within the lead detail page for both DQL and PP meeting types. Support all meeting fields, status updates, and meeting notes. Expose full CRUD API endpoints for meetings.
+
+DynamicQuoteBuilder embed — Embed the existing DynamicQuoteBuilder (proposals.interiorsbydex.com) via an iframe panel in the lead detail page, passing the Lead X-ID as a parameter. Implement a webhook or polling mechanism so that when a quote is generated with that Lead ID, it is automatically logged as an activity on the CRM lead record.
+
+Discount approval workflow — Build the discount request form (amount, discount, justification), the BL approval interface (approve/reject with comment), in-app notification badge for pending approvals, and API endpoints for the full approval flow.
+
+Auto-calculated timeline metrics — Implement server-side calculation of all six day-count metrics based on meeting and onboarding dates; surface them on the lead detail page and store them for reporting use.
+
+Relevant files
+artifacts/api-server/src/routes/
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+Dependencies
+Lead Management Core

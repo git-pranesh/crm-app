@@ -1,0 +1,32 @@
+#1 - Foundation: Database, Auth & User Management
+What & Why
+Establish the complete database schema, authentication system, and user role management that every other module depends on. This is the backbone of the entire CRM — without it, nothing else can be built.
+
+Done looks like
+Users can log in with email/password credentials
+Four roles exist with enforced access control: Designer (can view/edit their own leads only), Business Lead / BL (can view all leads, assign, approve), CRE (can create leads and do initial qualification), Branch Head (read-only view of everything, no direct lead editing)
+Admins can create, deactivate and manage user accounts from an admin panel
+The full database schema is in place covering: users, roles, leads, contacts, meetings, quotes, activities, discounts, notes, SLA rules, and pipeline stages
+Lead IDs auto-generate in the X#### format (continuing from the last known ID in the imported data)
+Database migrations run cleanly via Drizzle push
+Out of scope
+The actual lead management UI (next task)
+WhatsApp, email, and third-party integrations
+Reports and analytics
+Tasks
+Database schema — Define all Drizzle ORM tables: users, roles, leads (with X-prefix ID), lead_contacts (multiple per lead), lead_stages, meetings, quotes, activities, notes, discount_requests, sla_rules.
+
+Authentication API — Implement email/password login with JWT session tokens; include refresh token rotation and secure cookie handling.
+
+Role-based access middleware — Build middleware that enforces per-role permissions on every API route; Designer sees only their assigned leads, BL sees all, CRE can create and qualify, Branch Head reads everything.
+
+User management API — CRUD endpoints for admin: create user, assign role, deactivate user, list users.
+
+Frontend auth shell — Create the main CRM React web app artifact with a login page, persistent session handling, and a role-aware navigation shell (sidebar differs per role). After login, the user lands on a placeholder dashboard.
+
+Relevant files
+artifacts/api-server/src/app.ts
+artifacts/api-server/src/routes/health.ts
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+replit.md

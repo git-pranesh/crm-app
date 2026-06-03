@@ -1,0 +1,40 @@
+#2 - Lead Management Core
+What & Why
+Build the primary lead management interface — the day-to-day working surface for the entire team. This includes creating and editing leads, tracking them through the 8-stage pipeline (Effective Lead → Onboarding), managing contacts, notes, activity timelines, and all filtering and search functionality. This replaces the Google Sheets master tracker.
+
+Done looks like
+Any authorised user can create a new lead; the system auto-generates a unique Lead ID in the X#### format continuing from existing data
+Each lead record captures all fields from the master tracker: Lead ID, date, lead name, primary + secondary contacts, email, assigned Designer, assigned BL, lead source, lead source origin, project status, lead stage (pipeline position), lead stage sub-statuses (contacted, RNR 1-5, callback scheduled, etc.), project type, project type secondary, location, possession timeline, scope (Full Home Design / Renovation / Only Kitchen), estimated project value (exact number + range bucket), intent (High / Medium / Low), next milestone, next plan of action, general notes
+The pipeline shows 8 stages as a visual kanban or list with colour-coded status: Effective Lead, MQL, DQL, Proposal Ready, Proposal Presented, Onboarding, Inactive, On Hold
+Moving a lead to a new stage is a single action that logs the stage change with timestamp in the activity timeline
+Each lead has a live activity timeline showing every change: lead created, stage moved, call logged, meeting scheduled/completed, note added, quote linked, discount requested/approved
+CRE and Designers can log calls and RNR attempts directly on a lead (choosing from RNR 1 through RNR 5 with timestamps); this updates Lead Stage 2 automatically
+Inactivation requires selecting a reason from a dropdown (budget mismatch, client postponed, selected another vendor, MRS — minimum requirement not met, no contact after 5 attempts, etc.) and optionally a follow-up classification (future prospect, not interested)
+Filtering works by: designer, BL, lead source, project status, lead stage, project type, location, date range, intent level
+Search works by lead name, contact number, email, and Lead ID
+Designers see only their own leads; BL, CRE, and Branch Head see all leads
+Out of scope
+Meeting scheduling UI (next task)
+Quote builder embedding (next task)
+WhatsApp and email sending (Task 4)
+Reports and analytics (Task 6)
+Tasks
+Lead list and kanban view — Build the main leads page with a list view (sortable, filterable table) and a kanban board view grouped by pipeline stage. Include search and all filter controls.
+
+Lead detail page — Build the full lead record page showing all fields, the activity timeline, and tabbed sections for contact info, project details, meetings, quotes, and notes.
+
+Create and edit lead form — Build the create/edit form with all required fields, auto-generated X-prefix Lead ID, multiple contact support (primary + secondary), and all dropdown options matching the master tracker values.
+
+Stage progression and inactivation — Implement the stage-change action (with confirmation for inactivation including reason selection) and auto-log every transition in the activity timeline.
+
+Call and RNR logging — Build a quick "Log Call" action on each lead that records outcome (answered, RNR 1-5, callback scheduled), timestamps it, and updates the lead stage sub-status accordingly.
+
+Lead API endpoints — Implement all REST endpoints for leads (CRUD, stage change, call log, note add) with role-based access enforcement and full input validation via Zod.
+
+Relevant files
+artifacts/api-server/src/app.ts
+artifacts/api-server/src/routes/
+lib/db/src/schema/index.ts
+lib/api-spec/openapi.yaml
+Dependencies
+Foundation: Database, Auth & User Management
