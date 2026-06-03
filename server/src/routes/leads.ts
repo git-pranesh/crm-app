@@ -144,6 +144,127 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
   }
 });
 
+// ── POST /api/leads/manual — create lead manually (CRE / BL / BRANCH_HEAD) ────
+leadsRouter.post(
+  '/manual',
+  verifyToken,
+  requireRole('CRE', 'BL', 'BRANCH_HEAD'),
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const { name, phone, phone2, email, source, designerId } = req.body as {
+        name?: string;
+        phone?: string;
+        phone2?: string;
+        email?: string;
+        source?: string;
+        designerId?: string;
+      };
+
+      if (!name?.trim()) {
+        res.status(400).json({ error: 'name is required' });
+        return;
+      }
+      if (!phone?.trim()) {
+        res.status(400).json({ error: 'phone is required' });
+        return;
+      }
+
+      const ALLOWED_SOURCES = ['Walk-in', 'Referral', 'Manual'] as const;
+      if (!source || !(ALLOWED_SOURCES as readonly string[]).includes(source)) {
+        res.status(400).json({ error: `source must be one of: ${ALLOWED_SOURCES.join(' | ')}` });
+        return;
+      }
+
+      // Duplicate check — phone
+      const phoneMatch = await prisma.lead.findFirst({ where: { phone: phone.trim() } });
+      if (phoneMatch) {
+        res.status(409).json({
+          isDuplicate: true,
+          error: 'A lead with this phone number already exists',
+          existingLeadId: phoneMatch.leadId,
+          warning: `Phone ${phone.trim()} is already registered as lead ${phoneMatch.leadId}`,
+        });
+        return;
+      }
+
+      // Duplicate check — email (if provided)
+      if (email?.trim()) {
+        const emailMatch = await prisma.lead.findFirst({ where: { email: email.trim() } });
+        if (emailMatch) {
+          res.status(409).json({
+            isDuplicate: true,
+            error: 'A lead with this email already exists',
+            existingLeadId: emailMatch.leadId,
+            warning: `Email ${email.trim()} is already registered as lead ${emailMatch.leadId}`,
+          });
+          return;
+        }
+      }
+
+      // Assignment logic
+      let assignedDesignerId: string | undefined;
+      let assignedBLId: string | undefined;
+
+      if (user.role === 'CRE') {
+        assignedDesignerId = user.id;
+      } else if (user.role === 'BL') {
+        assignedBLId = user.id;
+        if (designerId) {
+          const designer = await prisma.user.findUnique({
+            where: { id: designerId },
+            select: { id: true, blId: true },
+          });
+          if (!designer) { res.status(404).json({ error: 'Designer not found' }); return; }
+          if (designer.blId !== user.id) {
+            res.status(403).json({ error: 'Designer is not on your team' });
+            return;
+          }
+          assignedDesignerId = designerId;
+        }
+      } else if (user.role === 'BRANCH_HEAD' && designerId) {
+        const designer = await prisma.user.findUnique({
+          where: { id: designerId },
+          select: { id: true, blId: true },
+        });
+        if (!designer) { res.status(404).json({ error: 'Designer not found' }); return; }
+        assignedDesignerId = designerId;
+        if (designer.blId) assignedBLId = designer.blId;
+      }
+
+      const leadId = await generateLeadId();
+
+      const lead = await prisma.lead.create({
+        data: {
+          leadId,
+          name: name.trim(),
+          phone: phone.trim(),
+          ...(phone2?.trim() && { phone2: phone2.trim() }),
+          ...(email?.trim() && { email: email.trim() }),
+          source,
+          stage: 'EFFECTIVE_LEAD',
+          assignmentPath: 'DIRECT',
+          ...(assignedDesignerId && { assignedDesignerId }),
+          ...(assignedBLId && { assignedBLId }),
+        },
+        include: LEAD_INCLUDE,
+      });
+
+      await logActivity(user.id, 'LEAD_CREATED_MANUAL', lead.id, {
+        leadId,
+        source,
+        createdByRole: user.role,
+        ...(assignedDesignerId && { assignedDesignerId }),
+      });
+
+      res.status(201).json({ lead });
+    } catch (err: any) {
+      console.error('[leads:manual]', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
 // ── GET /api/leads/:id — get lead detail ──────────────────────────────────────
 leadsRouter.get('/:id', verifyToken, async (req, res) => {
   try {
