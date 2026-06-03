@@ -19,6 +19,12 @@ async function request<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('crm_token');
+      localStorage.removeItem('crm_user');
+      window.location.href = '/login';
+      throw new Error('Session expired — please sign in again');
+    }
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `HTTP ${res.status}`);
   }

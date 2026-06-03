@@ -45,7 +45,15 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         where: { blId: user.id, isActive: true },
         select: { id: true },
       });
-      where.assignedDesignerId = { in: [user.id, ...members.map((m) => m.id)] };
+      // BL sees leads assigned to their team OR directly assigned to them as BL
+      where.AND = [
+        {
+          OR: [
+            { assignedDesignerId: { in: [user.id, ...members.map((m) => m.id)] } },
+            { assignedBLId: user.id },
+          ],
+        },
+      ];
     }
 
     if (stage) where.stage = stage;
@@ -440,6 +448,14 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (r
       },
       include: LEAD_INCLUDE,
     });
+
+    // Notify the assigned designer
+    await createNotification(
+      designerId,
+      'DESIGNER_ASSIGNED',
+      `You have been assigned lead ${lead.leadId} by ${user.name}`,
+      id,
+    );
 
     await logActivity(user.id, 'DIRECT_ASSIGNMENT', id, {
       designerName: designer.name,

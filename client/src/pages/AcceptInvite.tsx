@@ -40,8 +40,9 @@ export default function AcceptInvite() {
     setSubmitting(true);
     setError(null);
     try {
-      const data = await api.post<{ token: string }>(`/accept-invite/${token}`, form);
+      const data = await api.post<{ token: string; user?: unknown }>(`/accept-invite/${token}`, form);
       localStorage.setItem('crm_token', data.token);
+      if (data.user) localStorage.setItem('crm_user', JSON.stringify(data.user));
       navigate('/dashboard');
     } catch (e: any) {
       setError(e.message);

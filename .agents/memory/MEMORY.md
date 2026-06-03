@@ -5,3 +5,7 @@
 - [CRE lead scoping + auto-assign](cre-lead-scoping.md) — CRE/DESIGNER leads list is scoped to assignedDesignerId=user.id; manually-created leads must auto-assign creator
 - [BL assignment notification](bl-assignment-notification.md) — PATCH /api/leads/:id must fire BL_ASSIGNED notification when assignedBLId changes to a new non-null value
 - [Notifications route path](notifications-route.md) — notifications endpoint is /api/notifications/my, not /api/notifications (returns 404 at root)
+- [BL lead scoping](bl-lead-scoping.md) — BL must see leads where assignedBLId=user.id OR assignedDesignerId is on their team; use AND+OR Prisma clause
+- [Tasks routes](tasks-routes.md) — myTasksRouter at /api/tasks/my (mine) and /api/tasks/team (BL team); NOT /api/tasks
+- [Testing token expiry](testing-token-expiry.md) — pre-fetched tokens stale in runTest; use browser console fetch('/api/...') with localStorage.getItem('crm_token') instead
+- [Login page added](login-page.md) — app now has /login page; RequireAuth guard redirects to /login on 401; logout clears crm_token+crm_user
