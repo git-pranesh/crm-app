@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
+import { sendEmail, inactivationEmail } from '../lib/email.js';
 
 export const leadsRouter = Router();
 
@@ -136,9 +138,9 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         possessionTimeline: possessionTimeline?.trim() || undefined,
         estimatedValue: estimatedValue ? parseFloat(estimatedValue) : undefined,
         intentRating: intentRating ? parseInt(intentRating) : undefined,
-        // Auto-assign to creator if they are CRE or DESIGNER and no explicit assignment given
+        // Auto-assign to creator based on role
         assignedDesignerId: assignedDesignerId || (['CRE', 'DESIGNER'].includes(user.role) ? user.id : undefined),
-        assignedBLId: assignedBLId || (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined),
+        assignedBLId: assignedBLId || (user.role === 'BL' ? user.id : (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined)),
         stage: 'EFFECTIVE_LEAD',
       },
       include: LEAD_INCLUDE,
@@ -292,6 +294,8 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
         },
         slaBreaches: { where: { resolvedAt: null } },
         leadOffers: { include: { offer: { select: { id: true, name: true } } }, orderBy: { appliedAt: 'desc' } },
+        emailLogs: { orderBy: { sentAt: 'desc' }, take: 50 },
+        smsLogs: { orderBy: { createdAt: 'desc' }, take: 50 },
       },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
@@ -312,6 +316,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       estimatedValue, intentRating, possessionTimeline,
       assignedDesignerId, assignedBLId,
       onHoldRevivalDate, customFields,
+      inactivationReason,
     } = req.body as Record<string, any>;
 
     const existing = await prisma.lead.findUnique({ where: { id } });
@@ -397,14 +402,55 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ).catch((e) => console.warn('[leads:sms:on_hold]', e.message));
       }
 
-      // SMS: INACTIVE — send feedback form link
-      if (stage === 'INACTIVE' && existing.phone) {
+      // INACTIVE — create feedback record, send email + SMS
+      if (stage === 'INACTIVE') {
+        const formToken = randomUUID();
         const baseUrl = process.env.BASE_URL ?? '';
-        sendSms(
-          existing.phone,
-          `Hi ${existing.name}, a quick note about your Interiors by DeX project. Please share your feedback: ${baseUrl}/feedback/${existing.leadId} - Interiors by DeX`,
-          id,
-        ).catch((e) => console.warn('[leads:sms:inactive]', e.message));
+        const feedbackUrl = `${baseUrl}/feedback/${formToken}`;
+
+        await prisma.inactivationFeedback.upsert({
+          where: { leadId: id },
+          create: {
+            leadId: id,
+            reason: inactivationReason ?? 'Not specified',
+            formToken,
+            feedbackFormSentAt: new Date(),
+          },
+          update: {
+            reason: inactivationReason ?? 'Not specified',
+            formToken,
+            feedbackFormSentAt: new Date(),
+            respondedAt: null,
+            clientResponse: null,
+          },
+        });
+
+        if (existing.email) {
+          const emailPayload = inactivationEmail({
+            clientName: existing.name,
+            feedbackUrl,
+            reason: inactivationReason,
+          });
+          emailPayload.to = existing.email;
+          sendEmail(emailPayload).catch((e) => console.warn('[leads:email:inactive]', e.message));
+
+          await prisma.emailLog.create({
+            data: {
+              leadId: id,
+              type: 'INACTIVATION_FEEDBACK',
+              sentTo: existing.email,
+              subject: emailPayload.subject,
+            },
+          });
+        }
+
+        if (existing.phone) {
+          sendSms(
+            existing.phone,
+            `Hi ${existing.name}, thank you for your interest in Interiors by DeX. We'd love your feedback: ${feedbackUrl} - Interiors by DeX`,
+            id,
+          ).catch((e) => console.warn('[leads:sms:inactive]', e.message));
+        }
       }
     }
 

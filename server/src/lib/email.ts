@@ -82,3 +82,20 @@ export function rescheduleEmail(opts: {
 <p>Our team will reach out shortly to confirm the new time.<br/><em>Team Interiors by DeX</em></p>`,
   };
 }
+
+export function inactivationEmail(opts: {
+  clientName: string;
+  feedbackUrl: string;
+  reason?: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `We'd love your feedback — Interiors by DeX`,
+    html: `<p>Dear ${opts.clientName},</p>
+<p>Thank you for your interest in Interiors by DeX.</p>
+${opts.reason ? `<p>We understand that the project may not have moved forward at this time.</p>` : ''}
+<p>We'd really appreciate a minute of your time to share your thoughts — it helps us improve:</p>
+<p><a href="${opts.feedbackUrl}" style="background:#d95f32;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Share Feedback</a></p>
+<p>Thank you!<br/><em>Team Interiors by DeX</em></p>`,
+  };
+}
