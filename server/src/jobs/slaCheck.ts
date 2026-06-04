@@ -10,6 +10,12 @@ export const slaQueue = new Queue(QUEUE_NAME, { connection });
 
 const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
 
+async function resolveSystemUserId(): Promise<string> {
+  if (SYSTEM_USER_ID !== 'system') return SYSTEM_USER_ID;
+  const bh = await prisma.user.findFirst({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } });
+  return bh?.id ?? SYSTEM_USER_ID;
+}
+
 // ── SLA rules ─────────────────────────────────────────────────────────────────
 const SLA_RULES = [
   {
@@ -77,6 +83,55 @@ const SLA_RULES = [
   },
 ];
 
+// ── Core logic — callable directly for on-demand triggers ─────────────────────
+export async function runSLACheck(): Promise<{ totalBreaches: number; details: string[] }> {
+  console.log('[sla] Running SLA check…');
+  let totalBreaches = 0;
+  const details: string[] = [];
+  const systemUserId = await resolveSystemUserId();
+
+  for (const { rule, label, check } of SLA_RULES) {
+    const breachedLeads = await check();
+
+    for (const lead of breachedLeads) {
+      const existing = await prisma.sLABreach.findFirst({
+        where: { leadId: lead.id, rule, resolvedAt: null },
+      });
+      if (existing) continue;
+
+      await prisma.sLABreach.create({
+        data: { leadId: lead.id, rule },
+      });
+
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { isSLABreached: true },
+      });
+
+      const message = `SLA breach: "${label}" for lead ${lead.leadId}`;
+
+      if (lead.assignedBLId) {
+        await createNotification(lead.assignedBLId, 'SLA_BREACH', message, lead.id);
+      }
+
+      const branchHeads = await prisma.user.findMany({
+        where: { role: 'BRANCH_HEAD', isActive: true },
+        select: { id: true },
+      });
+      for (const bh of branchHeads) {
+        await createNotification(bh.id, 'SLA_BREACH', message, lead.id);
+      }
+
+      await logActivity(systemUserId, 'SLA_BREACH', lead.id, { rule, label });
+      details.push(`${lead.leadId}: ${rule}`);
+      totalBreaches++;
+    }
+  }
+
+  console.log(`[sla] Done. ${totalBreaches} new breach(es) created.`);
+  return { totalBreaches, details };
+}
+
 // ── Schedule hourly job ───────────────────────────────────────────────────────
 export async function scheduleSLACheck() {
   await slaQueue.add(
@@ -93,51 +148,6 @@ export async function scheduleSLACheck() {
 // ── SLA worker ────────────────────────────────────────────────────────────────
 export const slaWorker = new Worker(
   QUEUE_NAME,
-  async () => {
-    console.log('[sla] Running SLA check…');
-    let totalBreaches = 0;
-
-    for (const { rule, label, check } of SLA_RULES) {
-      const breachedLeads = await check();
-
-      for (const lead of breachedLeads) {
-        // Avoid duplicate breaches for the same rule+lead
-        const existing = await prisma.sLABreach.findFirst({
-          where: { leadId: lead.id, rule, resolvedAt: null },
-        });
-        if (existing) continue;
-
-        await prisma.sLABreach.create({
-          data: { leadId: lead.id, rule },
-        });
-
-        await prisma.lead.update({
-          where: { id: lead.id },
-          data: { isSLABreached: true },
-        });
-
-        const message = `SLA breach: "${label}" for lead ${lead.leadId}`;
-
-        // Notify BL
-        if (lead.assignedBLId) {
-          await createNotification(lead.assignedBLId, 'SLA_BREACH', message, lead.id);
-        }
-
-        // Notify all Branch Heads
-        const branchHeads = await prisma.user.findMany({
-          where: { role: 'BRANCH_HEAD', isActive: true },
-          select: { id: true },
-        });
-        for (const bh of branchHeads) {
-          await createNotification(bh.id, 'SLA_BREACH', message, lead.id);
-        }
-
-        await logActivity(SYSTEM_USER_ID, 'SLA_BREACH', lead.id, { rule, label });
-        totalBreaches++;
-      }
-    }
-
-    console.log(`[sla] Done. ${totalBreaches} new breach(es) created.`);
-  },
+  async () => { await runSLACheck(); },
   { connection },
 );

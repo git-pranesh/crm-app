@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { runSLACheck } from '../jobs/slaCheck.js';
+import { runMidnightCheck } from '../jobs/midnightOverdueTask.js';
 
 export const adminRouter = Router();
 
@@ -513,6 +515,29 @@ adminRouter.get('/health', async (_req, res) => {
       metaConfigured: !!process.env.META_PAGE_ACCESS_TOKEN,
       baseUrl: process.env.BASE_URL ?? 'http://localhost:3001',
     });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/admin/jobs/trigger — run a background job immediately ────────────
+adminRouter.post('/jobs/trigger', async (req, res) => {
+  try {
+    const { job } = req.body as { job?: string };
+
+    if (job === 'sla-check') {
+      const result = await runSLACheck();
+      res.json({ job: 'sla-check', ...result });
+      return;
+    }
+
+    if (job === 'midnight-overdue') {
+      const result = await runMidnightCheck();
+      res.json({ job: 'midnight-overdue', ...result });
+      return;
+    }
+
+    res.status(400).json({ error: `Unknown job "${job}". Valid: sla-check, midnight-overdue` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
