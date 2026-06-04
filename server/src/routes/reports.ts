@@ -125,7 +125,7 @@ async function designerPerformance(q: Record<string, string>) {
     const [leads, dqls, pps, onboardings, slaBreaches] = await Promise.all([
       prisma.lead.count({ where: dWhere }),
       prisma.meeting.count({ where: { lead: dWhere, type: 'DQL', status: 'COMPLETED' } }),
-      prisma.meeting.count({ where: { lead: dWhere, type: 'PP', status: 'COMPLETED' } }),
+      prisma.meeting.count({ where: { lead: dWhere, type: 'PP', status: { in: ['COMPLETED', 'NO_SHOW'] } } }),
       prisma.lead.count({ where: { ...dWhere, stage: 'ONBOARDING' } }),
       prisma.lead.count({ where: { ...dWhere, isSLABreached: true } }),
     ]);

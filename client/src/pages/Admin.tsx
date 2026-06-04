@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
-import ConfirmDialog from '../components/ui/ConfirmDialog';
 import EmptyState from '../components/ui/EmptyState';
 
 interface User {
@@ -18,6 +17,10 @@ interface Health {
   reportSchedules: { type: string; lastSentAt?: string }[];
 }
 interface Schedule { id: string; type: string; recipients: string[]; lastSentAt?: string }
+interface DeactivatePreview {
+  activeLeads: number;
+  leads: { id: string; leadId: string; name: string; stage: string }[];
+}
 
 const ROLE_COLORS: Record<string, string> = {
   DESIGNER: 'bg-blue-100 text-blue-700',
@@ -37,10 +40,15 @@ export default function Admin() {
   const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'DESIGNER', blId: '' });
   const [inviting, setInviting] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ type: 'WEEKLY', recipientIds: '' });
+
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
+  const [deactivatePreview, setDeactivatePreview] = useState<DeactivatePreview | null>(null);
+  const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [reassignDesignerId, setReassignDesignerId] = useState('');
+  const [deactivating, setDeactivating] = useState(false);
 
   const bls = users.filter((u) => u.role === 'BL' && u.isActive);
+  const activeDesigners = users.filter((u) => u.role === 'DESIGNER' && u.isActive);
 
   const loadAll = async () => {
     setLoading(true);
@@ -62,6 +70,49 @@ export default function Admin() {
 
   useEffect(() => { loadAll(); }, []);
 
+  const openDeactivate = async (u: User) => {
+    setDeactivateTarget(u);
+    setReassignDesignerId('');
+    setDeactivatePreview(null);
+    setDeactivateLoading(true);
+    try {
+      const preview = await api.get<DeactivatePreview>(`/admin/users/${u.id}/deactivation-preview`);
+      setDeactivatePreview(preview);
+    } catch (e: any) {
+      toast.error('Could not load preview: ' + e.message);
+    } finally {
+      setDeactivateLoading(false);
+    }
+  };
+
+  const closeDeactivate = () => {
+    setDeactivateTarget(null);
+    setDeactivatePreview(null);
+    setReassignDesignerId('');
+  };
+
+  const handleDeactivate = async () => {
+    if (!deactivateTarget) return;
+    const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
+    if (hasLeads && !reassignDesignerId) {
+      toast.error('Please select a designer to reassign leads to first');
+      return;
+    }
+    setDeactivating(true);
+    try {
+      await api.patch(`/admin/users/${deactivateTarget.id}/deactivate`, {
+        reassignDesignerId: reassignDesignerId || undefined,
+      });
+      toast.success(`${deactivateTarget.name} deactivated`);
+      closeDeactivate();
+      await loadAll();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteForm.name || !inviteForm.email) { toast.error('Name and email required'); return; }
@@ -75,21 +126,6 @@ export default function Admin() {
       toast.error(e.message);
     } finally {
       setInviting(false);
-    }
-  };
-
-  const handleDeactivate = async () => {
-    if (!deactivateTarget) return;
-    try {
-      await api.patch(`/admin/users/${deactivateTarget.id}/deactivate`, {
-        reassignDesignerId: reassignDesignerId || undefined,
-      });
-      toast.success(`${deactivateTarget.name} deactivated`);
-      setDeactivateTarget(null);
-      setReassignDesignerId('');
-      await loadAll();
-    } catch (e: any) {
-      toast.error(e.message);
     }
   };
 
@@ -123,17 +159,88 @@ export default function Admin() {
     { id: 'health', label: 'System Health', icon: '🩺' },
   ];
 
+  const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
+  const canDeactivate = !hasLeads || !!reassignDesignerId;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <ConfirmDialog
-        open={!!deactivateTarget}
-        title="Deactivate User?"
-        message={`${deactivateTarget?.name}'s account will be disabled. Their leads will remain unless you choose to reassign.`}
-        confirmLabel="Deactivate"
-        destructive
-        onConfirm={handleDeactivate}
-        onCancel={() => { setDeactivateTarget(null); setReassignDesignerId(''); }}
-      />
+
+      {/* ── Deactivation modal ──────────────────────────────────────────── */}
+      {deactivateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDeactivate} />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-base font-semibold text-gray-900 text-center mb-1">
+              Deactivate {deactivateTarget.name}?
+            </h2>
+            <p className="text-sm text-gray-500 text-center mb-4">
+              Their account will be disabled immediately.
+            </p>
+
+            {deactivateLoading ? (
+              <div className="text-center py-4 text-gray-400 animate-pulse text-sm">Loading active leads…</div>
+            ) : deactivatePreview ? (
+              <>
+                {hasLeads ? (
+                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-medium text-amber-800 mb-2">
+                      ⚠️ {deactivatePreview.activeLeads} active lead{deactivatePreview.activeLeads !== 1 ? 's' : ''} must be reassigned before deactivating.
+                    </p>
+                    <ul className="text-xs text-amber-700 space-y-1 mb-3">
+                      {deactivatePreview.leads.slice(0, 5).map((l) => (
+                        <li key={l.id} className="flex justify-between">
+                          <span className="font-medium">{l.leadId}</span>
+                          <span>{l.name}</span>
+                          <span className="text-amber-500">{l.stage}</span>
+                        </li>
+                      ))}
+                      {deactivatePreview.leads.length > 5 && (
+                        <li className="text-amber-500">…and {deactivatePreview.leads.length - 5} more</li>
+                      )}
+                    </ul>
+                    <label className="block text-xs font-medium text-amber-800 mb-1">Reassign leads to:</label>
+                    <select
+                      value={reassignDesignerId}
+                      onChange={(e) => setReassignDesignerId(e.target.value)}
+                      className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                    >
+                      <option value="">— Select a designer —</option>
+                      {activeDesigners
+                        .filter((d) => d.id !== deactivateTarget.id)
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-center">
+                    <p className="text-sm text-green-700">✅ No active leads — safe to deactivate immediately.</p>
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            <div className="flex gap-3 mt-2">
+              <button
+                onClick={closeDeactivate}
+                className="flex-1 border border-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeactivate}
+                disabled={deactivateLoading || deactivating || !canDeactivate}
+                className="flex-1 py-2 rounded-xl text-sm font-medium text-white bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {deactivating ? 'Deactivating…' : hasLeads && !reassignDesignerId ? 'Select designer first' : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4">
@@ -236,8 +343,8 @@ export default function Admin() {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            {u.isActive && (
-                              <button onClick={() => setDeactivateTarget(u)}
+                            {u.isActive && u.role !== 'BRANCH_HEAD' && (
+                              <button onClick={() => openDeactivate(u)}
                                 className="text-xs text-red-500 hover:text-red-700 hover:underline">
                                 Deactivate
                               </button>

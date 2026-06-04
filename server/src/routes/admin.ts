@@ -82,42 +82,43 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-    // Two-step deactivation: require zero active leads before deactivating
-    const activeLeadCount = await prisma.lead.count({
+    // Step 1 — reassign leads if targets provided
+    const reassignOps: Promise<any>[] = [];
+    if (reassignDesignerId) {
+      reassignOps.push(prisma.lead.updateMany({
+        where: { assignedDesignerId: id },
+        data: { assignedDesignerId: reassignDesignerId },
+      }));
+    }
+    if (reassignBLId) {
+      reassignOps.push(prisma.lead.updateMany({
+        where: { assignedBLId: id },
+        data: { assignedBLId: reassignBLId },
+      }));
+    }
+    if (reassignOps.length) await Promise.all(reassignOps);
+
+    // Step 2 — block if active leads still remain after reassignment
+    const remainingLeads = await prisma.lead.count({
       where: {
         OR: [{ assignedDesignerId: id }, { assignedBLId: id }],
         stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
       },
     });
 
-    if (activeLeadCount > 0) {
+    if (remainingLeads > 0) {
       res.status(409).json({
-        message: `Reassign ${activeLeadCount} leads before deactivating`,
-        count: activeLeadCount,
+        message: `Reassign all ${remainingLeads} remaining lead(s) before deactivating`,
+        count: remainingLeads,
       });
       return;
     }
 
-    // Existing reassignment + deactivation logic
-    const ops: Promise<any>[] = [
-      prisma.user.update({ where: { id }, data: { isActive: false } }),
-    ];
-    if (reassignDesignerId) {
-      ops.push(prisma.lead.updateMany({
-        where: { assignedDesignerId: id },
-        data: { assignedDesignerId: reassignDesignerId },
-      }));
-    }
-    if (reassignBLId) {
-      ops.push(prisma.lead.updateMany({
-        where: { assignedBLId: id },
-        data: { assignedBLId: reassignBLId },
-      }));
-    }
-    await Promise.all(ops);
+    // Step 3 — deactivate
+    await prisma.user.update({ where: { id }, data: { isActive: false } });
 
-    const affected = reassignDesignerId || reassignBLId
-      ? await prisma.lead.count({ where: { assignedDesignerId: reassignDesignerId ?? id } })
+    const affected = (reassignDesignerId || reassignBLId)
+      ? await prisma.lead.count({ where: { assignedDesignerId: reassignDesignerId ?? undefined } })
       : 0;
     res.json({ message: `User deactivated. ${affected} leads reassigned.` });
   } catch (err: any) {
