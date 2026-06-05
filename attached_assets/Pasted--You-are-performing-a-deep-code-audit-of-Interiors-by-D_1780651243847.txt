@@ -1,0 +1,314 @@
+```
+You are performing a deep code audit of Interiors by DeX CRM.
+Do NOT run the server. Do NOT make any changes.
+Read source files only. Report exactly what you find.
+
+For every item below: quote the exact file + line number as evidence.
+If code not found: say MISSING — do not guess or assume.
+
+Output format per item:
+✅ FOUND — file:line — one line description of what code does
+❌ MISSING — no implementation found
+⚠️ PARTIAL — file:line — what exists, what's absent
+
+---
+
+## AUDIT BLOCK 1 — PRISMA SCHEMA (prisma/schema.prisma)
+
+Read the full schema file. Report:
+
+1A. List every model name and field count
+1B. List every enum and its values
+1C. Confirm these specific fields exist:
+    - Lead.leadId (String, unique)
+    - Lead.stage (enum LeadStage)
+    - Lead.customFields (Json, default {})
+    - Lead.assignmentPath (enum)
+    - Lead.isSLABreached (Boolean)
+    - Lead.onHoldRevivalDate (DateTime, nullable)
+    - Lead.utmCampaign, utmSource, utmAdSet (all String nullable)
+    - Lead.daysLeadToDQL, daysDQLToPP, daysPPToOnboarding (all nullable)
+    - Call.recordingUrl (String, nullable)
+    - Call.outcome (enum CallOutcome)
+    - User.conversionRate, avgProjectValue, performanceTier
+    - User.blId (self-relation, nullable)
+    - DIPChecklist model with all 5 boolean fields
+    - UserInvite model with token + expiresAt
+    - CustomFieldDefinition model with fieldType enum
+    - IntentRatingConfig model
+    - SLABreach model with rule field
+    - InactivationFeedback model
+    - DQLQuestionnaire model
+    - SmsLog model
+    - Offer + LeadOffer models
+1D. Confirm LeadStage enum contains exactly:
+    EFFECTIVE_LEAD, MQL, DQL, PROPOSAL_READY, 
+    PROPOSAL_PRESENTED, ONBOARDING, INACTIVE, 
+    ON_HOLD, HANDED_OVER (9 values)
+1E. Confirm all foreign keys have correct onDelete behavior
+    (no accidental CASCADE deletes on leads)
+
+---
+
+## AUDIT BLOCK 2 — ROUTES REGISTERED (server/src/index.ts)
+
+Read index.ts. List every router mounted with its base path.
+Then confirm each of these paths is registered:
+    /api/health
+    /api/auth
+    /api/leads
+    /api/leads/webhook/meta
+    /api/leads/webhook/google
+    /api/leads/import
+    /api/leads/manual
+    /api/meetings
+    /api/calls
+    /api/calls/webhook/exotel
+    /api/whatsapp
+    /api/whatsapp/webhook
+    /api/quotes
+    /api/discounts
+    /api/dashboard
+    /api/reports
+    /api/sla
+    /api/tasks
+    /api/notifications
+    /api/offers
+    /api/admin/users
+    /api/admin/custom-fields
+    /api/admin/intent-ratings
+    /api/admin/jobs/trigger
+    /api/admin/report-schedules
+    /api/admin/assignment-config
+    /feedback
+    /api/accept-invite
+
+---
+
+## AUDIT BLOCK 3 — LEAD MANAGEMENT (server/src/routes/leads.ts)
+
+3A. POST /manual — read the full handler. Confirm:
+    - leadId auto-generated in X#### format (show the generation logic)
+    - duplicate check runs on phone AND email
+    - allowed roles: CRE, BL, BRANCH_HEAD
+    - ActivityLog entry created on success
+    - assignedBLId auto-set when creator is BL
+
+3B. PATCH /:id/stage — read the full handler. Confirm:
+    - HANDED_OVER blocked unless DIPChecklist.completedAt is set
+    - ON_HOLD requires onHoldRevivalDate in body
+    - INACTIVE triggers InactivationFeedback record creation
+    - INACTIVE triggers SMS + email + WhatsApp (on_hold_notification for ON_HOLD)
+    - ONBOARDING triggers DIPChecklist auto-creation
+    - ActivityLog entry on every stage change
+    - isSLABreached not cleared on stage move (persists until resolved)
+
+3C. Duplicate detection — show exact query used to detect duplicates
+
+3D. Round-robin assignment — show exact logic in assignmentService.ts:
+    - How CREs are selected for Meta/Google leads
+    - How BLs are selected when CRE assigns up
+    - How Designers are selected when BL assigns down
+
+3E. GET / (lead list) — confirm these filters exist as query params:
+    designerId, blId, source, stage, projectType, 
+    location, dateRange, intent, search (name/phone/email/leadId)
+
+3F. Role scoping on GET / — show exact where clause per role:
+    DESIGNER: only own leads
+    CRE: leads they created or are assigned to
+    BL: only their team's leads
+    BRANCH_HEAD: all leads
+
+---
+
+## AUDIT BLOCK 4 — CALLS & FOLLOW-UPS (server/src/routes/calls.ts)
+
+4A. POST /:leadId/calls — confirm:
+    - Blocks save if no followUp in body (show exact check + error message)
+    - Call + FollowUpTask created in single Prisma transaction
+    - RNR counter logic: counts RNR_1 through RNR_5, returns escalationRequired flag after 5th
+    - recordingUrl accepted as nullable field
+    - ActivityLog entry created
+
+4B. Job: server/src/jobs/midnightOverdueTask.ts — confirm:
+    - Finds tasks where dueDate < today AND isCompleted = false
+    - Sets isOverdue = true
+    - Creates Notification for the lead's BL (not the designer)
+    - Does NOT auto-complete or delete tasks
+
+---
+
+## AUDIT BLOCK 5 — MEETINGS (server/src/routes/meetings.ts)
+
+5A. POST / — confirm:
+    - PP meeting: ppNumber auto-incremented (show query)
+    - EmailLog + SmsLog created on schedule (not just email)
+    - confirmationSent set to true automatically
+
+5B. PATCH /:id/status — confirm:
+    - COMPLETED: blocks if mom field empty (show exact check)
+    - COMPLETED: triggers MOM email + SMS (show both)
+    - RESCHEDULED: blocks if rescheduledReason empty
+    - RESCHEDULED: triggers email + SMS
+    - NO_SHOW: triggers email + SMS + BL notification
+    - All status changes: ActivityLog entry
+
+5C. Milestone calc — show exact call to milestones.ts and when it fires
+
+---
+
+## AUDIT BLOCK 6 — SLA ENGINE (server/src/jobs/slaCheck.ts)
+
+Read full file. Confirm:
+6A. All 4 rules implemented with exact thresholds:
+    - FIRST_CONTACT_24H: no call within 24h of lead creation
+    - MQL_5_DAYS: in EFFECTIVE_LEAD > 5 days
+    - DQL_5_DAYS: in MQL > 5 days without DQL meeting scheduled
+    - PP_2_DAYS: in PROPOSAL_READY > 2 days without PP meeting scheduled
+6B. HANDED_OVER and INACTIVE and ON_HOLD excluded from checks
+6C. On breach: SLABreach record created, isSLABreached set true on Lead,
+    Notification created for BL + BRANCH_HEAD
+6D. No duplicate breach records for same rule on same lead
+
+---
+
+## AUDIT BLOCK 7 — WHATSAPP + SMS + EMAIL
+
+7A. server/src/lib/whatsapp.ts — confirm:
+    - Sends via Twilio WhatsApp API
+    - Saves to WhatsAppMessage table (direction: OUTBOUND)
+    - Gracefully handles missing Twilio creds (no crash)
+
+7B. server/src/services/smsService.ts — confirm:
+    - Uses Twilio SMS (not WhatsApp)
+    - Formats phone to E.164 (+91XXXXXXXXXX)
+    - Saves to SmsLog table
+    - Gracefully handles missing creds
+
+7C. ON_HOLD trigger — in leads.ts stage change handler, confirm:
+    - Email triggered
+    - SMS triggered  
+    - WhatsApp triggered (template: on_hold_notification)
+    - All 3 fire independently (one failure doesn't block others)
+
+7D. INACTIVE trigger — confirm:
+    - Email triggered (inactivation_feedback template)
+    - SMS triggered
+    - InactivationFeedback.feedbackFormSentAt set
+    - Public token generated for feedback form URL
+
+7E. server/src/lib/email.ts — list all email template types supported
+
+7F. WhatsApp inbox scoping (server/src/routes/whatsapp.ts):
+    - DESIGNER: own leads only (show where clause)
+    - BL: team leads only
+    - BRANCH_HEAD: all leads
+
+---
+
+## AUDIT BLOCK 8 — DISCOUNT WORKFLOW
+
+8A. server/src/routes/discounts.ts — confirm:
+    - POST /: creates DiscountRequest, notifies BL
+    - PATCH /:id: rejects without reviewerComment → 400 (show exact check)
+    - PATCH /:id: approval sets reviewedById + reviewedAt
+    - Both approve + reject: notify designer, log to ActivityLog
+
+8B. server/src/routes/quotes.ts — confirm:
+    - GET /users/:id/discount-authority returns maxDiscountPct
+    - POST /callback: updates lead.estimatedValue, creates Quote, logs activity
+
+---
+
+## AUDIT BLOCK 9 — DASHBOARD + REPORTS
+
+9A. server/src/routes/dashboard.ts — list every panel in the response object.
+    Confirm role scoping: BL sees team only, DESIGNER sees self only.
+
+9B. server/src/routes/reports.ts — list every report type handler.
+    For inactive_leads specifically: confirm these fields in response:
+    feedbackFormSentAt, clientResponded, feedbackResponse, responseRate
+
+9C. CSV export — confirm Content-Type: text/csv set on export endpoint
+
+---
+
+## AUDIT BLOCK 10 — GAP PATCH FEATURES
+
+10A. DIP Checklist (server/src/routes/dipChecklist.ts):
+    - PATCH: BL only (show role check)
+    - When all 4 booleans true: completedAt set, Branch Head notified
+    - Show exact 4 fields checked
+
+10B. User deactivation guard (server/src/routes/admin.ts):
+    - GET /:id/deactivation-preview returns activeLeads count
+    - PATCH /:id/deactivate returns 409 if activeLeads > 0
+    - POST /:id/reassign-leads bulk-updates leads
+    - Show the fix: reassign happens BEFORE deactivation check
+
+10C. Exotel webhook (server/src/routes/callWebhook.ts):
+    - Phone match logic: show exact query (phone + timestamp window)
+    - recordingUrl update on matched call
+    - New Call created if no match (source: 'exotel_auto')
+
+10D. Smart assignment (server/src/services/assignmentService.ts):
+    - Feature flag check: SMART_ASSIGNMENT_ENABLED
+    - When false: pure round-robin
+    - When true: tier-based filtering before round-robin
+    - Show performanceTier filter logic
+
+10E. Invite flow (server/src/routes/admin.ts + server/src/routes/acceptInvite.ts):
+    - Token expiry check (48h)
+    - Password set creates Supabase Auth user
+    - User record created with correct role from invite
+
+10F. Performance recalc job (server/src/jobs/performanceRecalc.ts):
+    - Runs nightly 2am
+    - Updates conversionRate, avgProjectValue per designer
+    - Updates performanceTier thresholds: BASIC/STANDARD/PREMIUM
+
+---
+
+## AUDIT BLOCK 11 — SECURITY + MIDDLEWARE
+
+11A. server/src/middleware/auth.ts:
+    - JWT verified via Supabase (not just decoded)
+    - User fetched from DB on every request (not just from token)
+    - requireRole([]) helper checks array of allowed roles
+
+11B. server/src/index.ts:
+    - Helmet.js applied globally
+    - Rate limiter on webhook routes (max 30/min)
+    - express.json() body parser present
+    - CORS configured
+
+11C. Input sanitization:
+    - Search params in lead list: confirm Prisma parameterized query 
+      (no string concatenation into raw SQL)
+    - Any use of prisma.$queryRaw — if found, show exact usage
+
+---
+
+## REQUIRED OUTPUT FORMAT
+
+After all 11 blocks, produce exactly this:
+
+BLOCK SUMMARY:
+| Block | Items Checked | ✅ Found | ❌ Missing | ⚠️ Partial |
+(one row per block)
+
+MISSING LIST:
+Every ❌ item with block ID, what was expected, what was found instead.
+
+PARTIAL LIST:
+Every ⚠️ item with block ID, what works, what's incomplete.
+
+CRITICAL GAPS (if any):
+Any missing item that would cause a feature to be completely non-functional.
+
+CLEAN BLOCKS:
+List blocks where every single item is ✅ FOUND.
+
+Do not summarize or paraphrase code. Quote file + line for every finding.
+```
