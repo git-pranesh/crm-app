@@ -5,7 +5,9 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
-import { sendEmail, inactivationEmail } from '../lib/email.js';
+import { sendEmail, inactivationEmail, onHoldEmail } from '../lib/email.js';
+import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
+import { selectBLForLead } from '../services/assignmentService.js';
 
 export const leadsRouter = Router();
 
@@ -34,14 +36,20 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     const {
       stage, source, designerId, blId, search,
       isSLABreached, page = '1', limit = '50',
+      projectType, location, dateRange, intent,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
     const where: any = {};
 
-    // Role-scope
-    if (user.role === 'DESIGNER' || user.role === 'CRE') {
+    // Role-scope — G3: DESIGNER and CRE have separate clauses
+    if (user.role === 'DESIGNER') {
       where.assignedDesignerId = user.id;
+    } else if (user.role === 'CRE') {
+      where.OR = [
+        { assignedDesignerId: user.id },
+        { createdById: user.id },
+      ];
     } else if (user.role === 'BL') {
       const members = await prisma.user.findMany({
         where: { blId: user.id, isActive: true },
@@ -63,6 +71,14 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     if (designerId) where.assignedDesignerId = designerId;
     if (blId) where.assignedBLId = blId;
     if (isSLABreached === 'true') where.isSLABreached = true;
+    // G2: new filter params
+    if (projectType) where.projectType = projectType;
+    if (location) where.location = { contains: location, mode: 'insensitive' };
+    if (intent) where.intentRating = parseInt(intent);
+    if (dateRange) {
+      const [from, to] = (dateRange as string).split(',');
+      where.createdAt = { gte: new Date(from), lte: new Date(to) };
+    }
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -141,6 +157,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         // Auto-assign to creator based on role
         assignedDesignerId: assignedDesignerId || (['CRE', 'DESIGNER'].includes(user.role) ? user.id : undefined),
         assignedBLId: assignedBLId || (user.role === 'BL' ? user.id : (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined)),
+        createdById: user.id,
         stage: 'EFFECTIVE_LEAD',
       },
       include: LEAD_INCLUDE,
@@ -255,6 +272,7 @@ leadsRouter.post(
           source,
           stage: 'EFFECTIVE_LEAD',
           assignmentPath: 'DIRECT',
+          createdById: user.id,
           ...(assignedDesignerId && { assignedDesignerId }),
           ...(assignedBLId && { assignedBLId }),
         },
@@ -317,6 +335,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       assignedDesignerId, assignedBLId,
       onHoldRevivalDate, customFields,
       inactivationReason,
+      reason,
     } = req.body as Record<string, any>;
 
     const existing = await prisma.lead.findUnique({ where: { id } });
@@ -390,16 +409,84 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
-      // SMS: ON_HOLD notification
+      // G5: Auto-assign BL when CRE moves lead to MQL and no BL is set
+      if (stage === 'MQL' && !lead.assignedBLId) {
+        const bl = await selectBLForLead();
+        if (bl) {
+          await prisma.lead.update({
+            where: { id },
+            data: { assignedBLId: bl.id },
+          });
+          await prisma.user.update({
+            where: { id: bl.id },
+            data: { totalLeadsAssigned: { increment: 1 } },
+          });
+          await createNotification(
+            bl.id,
+            'BL_ASSIGNED',
+            `You have been assigned as BL for lead ${existing.leadId} — ${existing.name}`,
+            id,
+          );
+          await logActivity(user.id, 'BL_ASSIGNED', id, { blId: bl.id });
+        }
+      }
+
+      // ON_HOLD notifications — SMS, Email, WhatsApp (all independent)
       if (stage === 'ON_HOLD' && existing.phone) {
         const revivalStr = onHoldRevivalDate
           ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
           : 'a future date';
+        const holdReason = reason ?? 'To be confirmed';
+
         sendSms(
           existing.phone,
           `Hi ${existing.name}, your Interiors by DeX project has been put on hold until ${revivalStr}. We'll be in touch. - Interiors by DeX`,
           id,
         ).catch((e) => console.warn('[leads:sms:on_hold]', e.message));
+
+        // G1: Email
+        if (existing.email) {
+          try {
+            const emailPayload = onHoldEmail({
+              clientName: existing.name,
+              revivalDate: revivalStr,
+              reason: holdReason,
+            });
+            emailPayload.to = existing.email;
+            await sendEmail(emailPayload);
+            await prisma.emailLog.create({
+              data: {
+                leadId: id,
+                type: 'ON_HOLD',
+                sentTo: existing.email,
+                subject: emailPayload.subject,
+              },
+            });
+          } catch (e) {
+            console.error('[ON_HOLD email failed]', e);
+          }
+        }
+
+        // G1: WhatsApp
+        try {
+          const waBody = fillTemplate('on_hold_notification', {
+            clientName: existing.name,
+            revivalDate: revivalStr,
+            reason: holdReason,
+          });
+          const twilioSid = await sendWhatsAppMessage(existing.phone, waBody);
+          await prisma.whatsAppMessage.create({
+            data: {
+              leadId: id,
+              direction: 'OUTBOUND',
+              body: waBody,
+              templateId: 'on_hold_notification',
+              twilioSid: twilioSid ?? undefined,
+            },
+          });
+        } catch (e) {
+          console.error('[ON_HOLD whatsapp failed]', e);
+        }
       }
 
       // INACTIVE — create feedback record, send email + SMS

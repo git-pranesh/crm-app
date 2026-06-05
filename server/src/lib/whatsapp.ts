@@ -13,7 +13,7 @@ export const WA_TEMPLATES: Record<string, string> = {
   onboarding_welcome:
     'Welcome aboard, {{clientName}}! 🎉 We are thrilled to start your interior design journey with Interiors by DeX. Your designer {{designerName}} will be your primary point of contact.',
   on_hold_notification:
-    'Hi {{clientName}}, we noticed your project with Interiors by DeX is currently on hold. If you are ready to resume or would like to discuss, please reach out. We are here to help!',
+    'Hi {{clientName}}, your interior design project with Interiors by DeX is on hold until {{revivalDate}}. Reason: {{reason}}. Please reach out if you have any questions — Team Interiors by DeX',
 };
 
 // ── Fill template placeholders ────────────────────────────────────────────────

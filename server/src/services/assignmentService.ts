@@ -71,6 +71,19 @@ export async function assignLeadToDesigner(
 }
 
 /**
+ * Returns the BL with the fewest assigned leads (round-robin across BLs).
+ * Used when a CRE moves a lead to MQL and no BL is yet assigned.
+ */
+export async function selectBLForLead(): Promise<{ id: string } | null> {
+  const bls = await prisma.user.findMany({
+    where: { role: 'BL', isActive: true },
+    select: { id: true, totalLeadsAssigned: true },
+    orderBy: { totalLeadsAssigned: 'asc' },
+  });
+  return bls[0] ?? null;
+}
+
+/**
  * Increment totalLeadsAssigned for a user atomically.
  * Call after assigning a lead to a designer.
  */

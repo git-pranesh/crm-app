@@ -16,7 +16,7 @@ export const dipChecklistRouter = Router({ mergeParams: true });
 // ── GET /api/leads/:id/dip-checklist ─────────────────────────────────────────
 dipChecklistRouter.get('/', verifyToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { leadId: id } = req.params;
     const checklist = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
     res.json({ checklist: checklist ?? null });
   } catch (err: any) {
@@ -27,19 +27,21 @@ dipChecklistRouter.get('/', verifyToken, async (req, res) => {
 // ── PATCH /api/leads/:id/dip-checklist ───────────────────────────────────────
 dipChecklistRouter.patch('/', verifyToken, requireRole('BL'), async (req, res) => {
   try {
-    const { id } = req.params;
+    const { leadId: id } = req.params;
     const user = req.user!;
     const {
       welcomeMailSent,
       discountApprovalFormSent,
       npsTriggered,
       cxApprovalReceived,
+      internalMailThreadCompleted,
       internalMailThreadUrl,
     } = req.body as {
       welcomeMailSent?: boolean;
       discountApprovalFormSent?: boolean;
       npsTriggered?: boolean;
       cxApprovalReceived?: boolean;
+      internalMailThreadCompleted?: boolean;
       internalMailThreadUrl?: string;
     };
 
@@ -54,15 +56,17 @@ dipChecklistRouter.patch('/', verifyToken, requireRole('BL'), async (req, res) =
     if (discountApprovalFormSent !== undefined) updateData.discountApprovalFormSent = discountApprovalFormSent;
     if (npsTriggered !== undefined) updateData.npsTriggered = npsTriggered;
     if (cxApprovalReceived !== undefined) updateData.cxApprovalReceived = cxApprovalReceived;
+    if (internalMailThreadCompleted !== undefined) updateData.internalMailThreadCompleted = internalMailThreadCompleted;
     if (internalMailThreadUrl !== undefined) updateData.internalMailThreadUrl = internalMailThreadUrl;
 
-    // Check if all 4 booleans will be true after update
+    // Check if all 5 booleans will be true after update
     const merged = { ...current, ...updateData };
     const allComplete =
       merged.welcomeMailSent &&
       merged.discountApprovalFormSent &&
       merged.npsTriggered &&
-      merged.cxApprovalReceived;
+      merged.cxApprovalReceived &&
+      merged.internalMailThreadCompleted;
 
     if (allComplete && !current.completedAt) {
       updateData.completedAt = new Date();

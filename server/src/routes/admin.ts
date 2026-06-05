@@ -4,6 +4,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { runSLACheck } from '../jobs/slaCheck.js';
 import { runMidnightCheck } from '../jobs/midnightOverdueTask.js';
+import { runPerformanceRecalc } from '../jobs/performanceRecalc.js';
 
 export const adminRouter = Router();
 
@@ -537,7 +538,13 @@ adminRouter.post('/jobs/trigger', async (req, res) => {
       return;
     }
 
-    res.status(400).json({ error: `Unknown job "${job}". Valid: sla-check, midnight-overdue` });
+    if (job === 'performance-recalc') {
+      const result = await runPerformanceRecalc();
+      res.json({ job: 'performance-recalc', ...result });
+      return;
+    }
+
+    res.status(400).json({ error: `Unknown job "${job}". Valid: sla-check, midnight-overdue, performance-recalc` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

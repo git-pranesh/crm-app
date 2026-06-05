@@ -1,0 +1,246 @@
+Surgical fixes only. Do NOT rewrite any existing logic.
+Patch exactly what's listed. No other changes.
+All schema additions must be nullable or have defaults.
+After all fixes: run npx prisma generate.
+List every file + line modified.
+
+---
+
+FIX G1 — ON_HOLD missing Email + WhatsApp
+File: server/src/routes/leads.ts
+Location: ON_HOLD branch of PATCH /:id/stage handler (around line 398)
+
+Currently only SMS fires. Add Email and WhatsApp alongside it.
+All 3 must fire inside independent try/catch blocks so one 
+failure does not block the others.
+
+Add after existing SMS call:
+
+try {
+  await sendEmail('on_hold', lead.email, {
+    clientName: lead.name,
+    revivalDate: onHoldRevivalDate,
+    reason: body.reason ?? 'To be confirmed'
+  })
+} catch (e) {
+  console.error('[ON_HOLD email failed]', e)
+}
+
+try {
+  await sendWhatsApp(lead.phone, 'on_hold_notification', {
+    clientName: lead.name,
+    revivalDate: onHoldRevivalDate,
+    reason: body.reason ?? 'To be confirmed'
+  })
+} catch (e) {
+  console.error('[ON_HOLD whatsapp failed]', e)
+}
+
+Also add 'on_hold' template to server/src/lib/email.ts if not present.
+Template content: inform client their project is on hold, 
+revival date, reason, and to reach out for any queries.
+
+Test: PATCH any lead to ON_HOLD → confirm EmailLog + 
+WhatsAppMessage + SmsLog all created in DB.
+
+---
+
+FIX G2 — Lead list missing 4 filters
+File: server/src/routes/leads.ts
+Location: GET / handler, where clause builder (around line 35)
+
+Add these 4 filter params alongside existing ones:
+
+const { 
+  designerId, blId, source, stage, isSLABreached, search,
+  projectType,    // ADD
+  location,       // ADD  
+  dateRange,      // ADD — format: "2025-01-01,2025-12-31"
+  intent          // ADD — intentRating 1-5
+} = req.query
+
+Add to Prisma where clause:
+
+if (projectType) where.projectType = projectType
+if (location) where.location = { contains: location, mode: 'insensitive' }
+if (intent) where.intentRating = parseInt(intent)
+if (dateRange) {
+  const [from, to] = dateRange.split(',')
+  where.createdAt = { gte: new Date(from), lte: new Date(to) }
+}
+
+Test: 
+GET /api/leads?projectType=3BHK → only 3BHK leads
+GET /api/leads?intent=4 → only 4-star leads
+GET /api/leads?dateRange=2026-01-01,2026-12-31 → date-filtered
+GET /api/leads?location=Bangalore → location-matched
+
+---
+
+FIX G3 — CRE role scoping
+File: server/src/routes/leads.ts
+Location: GET / role-scoping block (around line 44)
+
+Currently CRE shares DESIGNER's where clause:
+  where.assignedDesignerId = user.id
+This hides leads that CRE created but assigned to a designer.
+
+Replace CRE clause with OR condition:
+
+if (user.role === 'DESIGNER') {
+  where.assignedDesignerId = user.id
+}
+if (user.role === 'CRE') {
+  where.OR = [
+    { assignedDesignerId: user.id },
+    { createdById: user.id }         // leads CRE created
+  ]
+}
+
+Note: Lead model must have createdById field.
+Check schema — if missing, add:
+  createdById  String?
+  createdBy    User?   @relation("CreatedLeads", fields: [createdById], references: [id])
+Also add inverse relation on User: createdLeads Lead[] @relation("CreatedLeads")
+
+In POST /manual and webhook handlers: set createdById = req.user.id
+on lead creation (already sets assignedBLId — add createdById same way).
+
+Run npx prisma migrate dev --name add_created_by_to_lead after schema change.
+
+Test:
+Login as CRE → create lead → assign to designer
+GET /api/leads with CRE token → lead must appear in list
+
+---
+
+FIX G4 — conversionRate field mismatch
+File: prisma/schema.prisma + server/src/jobs/performanceRecalc.ts
+
+Schema has: totalLeadsConverted Int
+Spec needs: conversionRate Float (e.g. 0.42 = 42%)
+
+Add conversionRate to User model (keep totalLeadsConverted — it's used 
+to calculate the rate):
+  conversionRate  Float  @default(0)
+
+In performanceRecalc.ts: after calculating totalLeadsConverted, 
+compute and store the rate:
+
+const conversionRate = totalLeadsAssigned > 0 
+  ? totalLeadsConverted / totalLeadsAssigned 
+  : 0
+
+prisma.user.update({ 
+  data: { 
+    totalLeadsConverted,
+    conversionRate,           // ADD THIS
+    avgProjectValue,
+    performanceTier 
+  } 
+})
+
+Run npx prisma migrate dev --name add_conversion_rate_to_user
+
+Test: trigger POST /api/admin/jobs/trigger { job: "performance-recalc" }
+→ confirm conversionRate field populated on designer user records
+
+---
+
+FIX G5 — CRE→BL round-robin logic
+File: server/src/services/assignmentService.ts
+
+Currently: no logic for which BL receives a lead when CRE escalates.
+
+Add function selectBLForLead(excludeBLIds?: string[]):
+
+async function selectBLForLead() {
+  const bls = await prisma.user.findMany({
+    where: { role: 'BL', isActive: true },
+    orderBy: { totalLeadsAssigned: 'asc' }
+  })
+  if (!bls.length) return null
+  return bls[0]  // fewest assigned = next in rotation
+}
+
+In PATCH /:id/stage handler (leads.ts) — when CRE moves 
+lead to MQL and no assignedBLId is set:
+
+if (newStage === 'MQL' && !lead.assignedBLId) {
+  const bl = await selectBLForLead()
+  if (bl) {
+    await prisma.lead.update({ 
+      data: { assignedBLId: bl.id },
+      where: { id: lead.id }
+    })
+    await prisma.user.update({
+      data: { totalLeadsAssigned: { increment: 1 } },
+      where: { id: bl.id }
+    })
+    await createNotification(bl.id, 'New lead assigned', lead.id)
+    await logActivity(lead.id, req.user.id, 'BL_ASSIGNED', { blId: bl.id })
+  }
+}
+
+Export selectBLForLead from assignmentService.ts so it can be 
+imported in leads.ts.
+
+Test:
+Login as CRE → create lead → move to MQL
+→ confirm assignedBLId populated on lead
+→ confirm BL receives notification
+
+---
+
+FIX G6 — DIP checklist 5th boolean
+Spec called for 5 fields. Current 4: 
+  welcomeMailSent, discountApprovalFormSent, 
+  npsTriggered, cxApprovalReceived
+
+The original spec (feature 2.1) lists: 
+  welcome mail, CX approval, discount approval form, 
+  NPS, internal mail thread URL
+
+internalMailThreadUrl already exists as a text field (not boolean).
+The 5th boolean in spec = internalMailThreadCompleted 
+(confirming the thread was sent, separate from storing the URL).
+
+Add to DIPChecklist model in schema:
+  internalMailThreadCompleted  Boolean  @default(false)
+
+Add to dipChecklist.ts handler — include in the completedAt check:
+  const allDone = 
+    welcomeMailSent && 
+    discountApprovalFormSent && 
+    npsTriggered && 
+    cxApprovalReceived && 
+    internalMailThreadCompleted   // ADD
+
+Run npx prisma migrate dev --name add_dip_fifth_boolean
+
+Test:
+PATCH DIP checklist with all 4 original booleans true 
+but internalMailThreadCompleted false
+→ completedAt must NOT be set
+Set all 5 true → completedAt set, BH notified
+
+---
+
+AFTER ALL 6 FIXES:
+
+1. Run npx prisma generate
+2. Restart server
+3. Confirm GET /api/health → 200
+4. Run these quick checks:
+   - PATCH lead to ON_HOLD → check DB: EmailLog + SmsLog + 
+     WhatsAppMessage all have records
+   - GET /api/leads?intent=4 → returns filtered results
+   - CRE login → create lead → GET /api/leads → lead visible
+   - GET /api/admin/users (designer) → conversionRate field 
+     present and not null after job trigger
+   - Move lead to MQL as CRE → assignedBLId auto-populated
+   - PATCH DIP with 4/5 booleans → completedAt null; 
+     5/5 → completedAt set
+
+Report back: for each fix, state ✅ PASS or ❌ FAIL 
+with evidence (file:line or API response).

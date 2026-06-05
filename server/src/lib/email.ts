@@ -99,3 +99,20 @@ ${opts.reason ? `<p>We understand that the project may not have moved forward at
 <p>Thank you!<br/><em>Team Interiors by DeX</em></p>`,
   };
 }
+
+export function onHoldEmail(opts: {
+  clientName: string;
+  revivalDate: string;
+  reason: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Your Project is On Hold — Interiors by DeX`,
+    html: `<p>Dear ${opts.clientName},</p>
+<p>We wanted to let you know that your interior design project with <strong>Interiors by DeX</strong> has been placed on hold.</p>
+<p><strong>Revival Date:</strong> ${opts.revivalDate}<br/>
+<strong>Reason:</strong> ${opts.reason}</p>
+<p>We will reach out to you on or before the revival date to resume the project. In the meantime, feel free to contact us with any questions.</p>
+<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
+  };
+}

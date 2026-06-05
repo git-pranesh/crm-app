@@ -109,6 +109,7 @@ model User {
   // Performance metrics (recalculated nightly by performanceRecalc job)
   totalLeadsAssigned  Int             @default(0)
   totalLeadsConverted Int             @default(0)
+  conversionRate      Float           @default(0)
   avgProjectValue     Decimal         @default(0) @db.Decimal(12, 2)
   performanceTier     PerformanceTier @default(BASIC)
 
@@ -117,6 +118,7 @@ model User {
 
   designerLeads Lead[] @relation("DesignerLeads")
   blLeads       Lead[] @relation("BLLeads")
+  createdLeads  Lead[] @relation("CreatedLeads")
 
   callsLogged              Call[]
   followUpTasksAssigned    FollowUpTask[]
@@ -163,6 +165,7 @@ model Lead {
   isDuplicate        Boolean        @default(false)
   assignedDesignerId String?
   assignedBLId       String?
+  createdById        String?
   currentOfferId     String?
   /// STANDARD = normal CRE→BL→Designer flow; DIRECT = BL manually assigned
   assignmentPath     AssignmentPath @default(STANDARD)
@@ -173,6 +176,7 @@ model Lead {
 
   assignedDesigner User?  @relation("DesignerLeads", fields: [assignedDesignerId], references: [id])
   assignedBL       User?  @relation("BLLeads", fields: [assignedBLId], references: [id])
+  createdBy        User?  @relation("CreatedLeads", fields: [createdById], references: [id])
   currentOffer     Offer? @relation("CurrentOffer", fields: [currentOfferId], references: [id])
 
   /// Auto-calculated milestone durations in days
@@ -516,8 +520,9 @@ model DIPChecklist {
   welcomeMailSent          Boolean   @default(false)
   discountApprovalFormSent Boolean   @default(false)
   npsTriggered             Boolean   @default(false)
-  cxApprovalReceived       Boolean   @default(false)
-  internalMailThreadUrl    String?
+  cxApprovalReceived          Boolean   @default(false)
+  internalMailThreadCompleted Boolean   @default(false)
+  internalMailThreadUrl       String?
   completedAt              DateTime?
   createdAt                DateTime  @default(now())
 
