@@ -1,0 +1,22 @@
+Based on the meeting, the following action items were identified for the development of the new CRM platform:General System & Dashboard Features
+Add Personal Calendars: Incorporate a personal calendar for every user login so they can review their individual schedules.1
+Implement Dashboard Filters: Create filters for the admin dashboard (e.g., this month, this quarter, last financial year, custom date range) that automatically update displayed metrics.2
+Define NPS Tracking: Set up a system to track and average Net Promoter Scores (NPS) across different project stages, such as sale, design, and execution.3
+Categorize Reports: Organize dashboard reports into specific categories like marketing, sales, and design to provide a complete business overview.4
+Develop Toggle for Offers: Implement an on/off toggle button for promotional offers in the settings to allow admins to control when specific discounts can be applied.5
+Lead & Pipeline Management
+Develop Intent Algorithm: Create an algorithm that automatically assigns a star rating (intent level) to leads based on specific criteria and inputs.6
+Mandate Stage Requirements: Restrict users from changing a lead's stage until mandatory tasks are completed, such as scheduling a meeting, providing a budget, or uploading a floor plan.7
+Establish Intent Change Logs: Require a mandatory reason to be logged if a user manually changes the system-generated star rating for a lead.8
+Create Kanban View: Implement a Kanban-style pipeline view for the admin portal to show lead stages like active, on-hold, inactive, and onboarded.9
+Communication & Integration
+Automate Call Logging: Integrate the system with phones so calls can be made directly from the CRM, with automatic logging and call recording.10
+Fix WhatsApp Integration: Address current API or software integration issues to ensure messages sent from the CRM are properly received on the client's WhatsApp.11
+Integrate Proposals (P-Platform): Improve the integration with the proposal platform so the system can automatically fetch all quotes related to a specific project (P).12
+Meeting & Discount Approvals
+Automate Meeting Follow-ups: Ensure that when a meeting is marked complete, mandatory minutes of meeting (MOM) and outcomes are entered and automatically sent to the client via email and WhatsApp.13
+Mandate Reschedule/No-Show Reasons: Require users to log a specific reason and a follow-up action for any meeting that is rescheduled or marked as a "no-show".14
+Establish Discount Authority: Feed specific discount approval limits for different roles (e.g., designer, business lead, branch head) into the system to manage approval workflows.15
+Future Documentation & Phases
+Complete Detailed Documentation: Draft a full document to provide clarity on the split and organization of the meeting displays and other system features.16
+Identify Phase Two Features: Defer technical backend items like procurement, finance, service, and warranty to a later phase.17

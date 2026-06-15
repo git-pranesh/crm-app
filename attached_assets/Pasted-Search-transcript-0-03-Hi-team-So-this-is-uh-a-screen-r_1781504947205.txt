@@ -1,0 +1,563 @@
+Search transcript
+0:03
+Hi team. So this is uh a screen recording of something that we tried out
+0:10
+in Claude. I mean with just giving some prompts and things like that. The claude
+0:16
+just gave us you know some kind of uh visuals of UX of how UIUIX of how the
+0:23
+entire platform is going to look like. And this if you look at is a super admin
+0:28
+login right. So basically uh I'll explain the super admin login
+0:33
+thoroughly. From this we can jot down to uh the uh managers login and then the uh
+0:41
+users login and things like that. Uh so I'll just start with the dashboard. So
+0:47
+on your left if you see you will have the dashboard pipeline leads WhatsApp is
+0:51
+the chat bot uh chat box where we'll have all the messages discount approvals
+0:55
+disapprovals meetings and one more thing if we could add here is a calendar like
+1:01
+for every personal uh login if there is a calendar over here they can review
+1:07
+their own um you know schedule so let's say if I uh enter in a meeting like I I
+1:13
+schedule a meeting it should automatically uh a track to my calendar.
+1:18
+Okay, I'll explain that in detail. And then comes the projects, procurement,
+1:22
+finance, service and warranty reports. So in this we can you know leave
+1:26
+procurement, finance, service and warranty and all for now. We'll only
+1:30
+concentrate on the customer relationship management. These are all backend
+1:34
+things. We'll leave this as of now in this first phase. And then reports.
+1:39
+Yeah. uh generally like how we have and if you look at the uh dashboard the
+1:45
+agenda of the dashboard should be especially the admin's dashboard the
+1:49
+agenda should be it should clearly show us the business health
+1:55
+let's say for example what is the overall uh okay over here it has not
+2:00
+given it perfectly but if I have to uh ask for a perfect dashboard how it will
+2:06
+look like is what is the overall uh leads that has come into the system and
+2:11
+over here I should be able to uh filter it like in these bank statements we'll
+2:17
+have right this month and then this quarter last financial year or custom
+2:23
+date range like that if I filter it the numbers should change automatically over
+2:29
+here and in this let's say if I have kept it this month the number of leads
+2:34
+that came in this month number of sales that happened this month cash collected
+2:39
+this month number of sign out happened this month and uh let's say for example
+2:46
+anything any uh SLA issues or any support tickets probably on the second
+2:52
+phase if we have support tickets raised that can be shown in this dashboard and
+2:56
+the average NPS so NPS average of averages we can take from all the stages
+3:03
+like whatever NPS uh the clients are giving on all the stages let's say for
+3:08
+example During the sale phase the client will
+3:11
+give let's say out of 10 they're giving eight and then out of uh 10 during the
+3:17
+design phase the client is giving 10 and then again out of 10 during the
+3:22
+execution phase the client is giving another eight we should have an average
+3:26
+of these three put together and then we'll have we should have our NPS track
+3:31
+this will show the overall health of the business that's the primary agenda of
+3:37
+this area of the dashboard and then when it comes to the uh breakup let's say for
+3:43
+example if we are talking about we we must have categories over here I'll just
+3:49
+play this video we must have categories over here in that let's say over here
+3:56
+this is shown like uh phase load right like in design how many projects are
+4:00
+there in production how many projects are there execution how many projects
+4:04
+are there that can be shown this needs attention I think in uh admin dashboard
+4:10
+we don't need it. We can probably have it in the um manager's dashboard.
+4:17
+And then collection due, how much amount is uh pending. All these things we can
+4:23
+have and we can even have it categorized like for example in marketing we will
+4:27
+have we can have breakup of reports like this and then in sales we can have and
+4:32
+then in design we can have. So like this if we can have break up of this um that
+4:38
+is the main purpose of this dashboard to understand the complete like say for
+4:43
+example over here if you see sales and then pipeline funnel source mix source
+4:48
+mix and all will probably come in pre-sales or marketing right so like
+4:52
+this we can uh split it SLA breaches I don't think we need in the admin portal
+4:57
+we can probably have it in the managers dashboard
+5:01
+so from here we are moving to pipeline So uh the pipeline will show uh over
+5:10
+here because it's an admin login it will show the entire pipeline like what are
+5:15
+the what are all the you know lead stages let's say for example all the
+5:20
+leads in the system in that active leads onhold leads inactive leads onboarded
+5:25
+leads and then design and progress execution in progress all these things
+5:31
+will be here and uh stage page wise we will have this uh canvan view like uh
+5:37
+you know it'll be split let's say for example if in case effective leads are
+5:41
+over here it'll have all the effective leads and in one lead if you look at
+5:47
+first the lead name will be there and then the property type uh duplex full
+5:52
+home interiors the the one that they register with us that will be there and
+5:57
+then p will be shown here location will be shown here the budget value will be
+6:03
+shown here. Uh when did we receive like 13 hours ago,
+6:08
+13 days ago? Uh and what source did we receive this? And who is this being
+6:14
+assigned to? Who is the owner of this lead? That will be displayed over here.
+6:19
+And what are these stars? What are what do we mean by these stars is this is the
+6:25
+intent. For example, over here like both the intent is written as well as the
+6:30
+stars are star rating is there right? So how we could we could change this is
+6:35
+let's say if it's in one star it'll be low intent two star. So for each star
+6:41
+we'll have a criteria defined and how we can have this is um the the we can set
+6:49
+up an algorithm where uh as soon as if it's a digital lead or a new lead that
+6:54
+is being created as soon as people uh uh enter the lead will come and fall in the
+7:01
+CRA's uh dashboard and CR will speak to the customer right so from effective
+7:06
+lead so effective and new lead are the same it has given given it wrongly.
+7:10
+Effective and new lead are the same. So let's say this is one single card as
+7:13
+effective lead. In effective lead if they are done speaking the C before
+7:19
+moving to the MQL lead I'll explain it when it comes to leads before moving to
+7:24
+the MQL lead the CR should give certain level of inputs which the system will
+7:29
+automatically uh ask and the system will gauge the star rating based on the
+7:35
+inputs. If the star rating is um uh if the system has gauged a one star rating
+7:42
+and uh the respective uh owner of the lead is uh reducing or increasing that
+7:49
+intent that star rating right then they will have to have a reason to why they
+7:54
+reducing it and the system gauged it to five star but then they reduced it to
+7:59
+four star is something that we need to have it logged on the system. So
+8:03
+tomorrow when someone else is questioning they should they should not
+8:07
+randomly put everything in one star and inactivate that is the whole agenda.
+8:11
+Someone will be able to question them if they reduce it is what uh the whole
+8:15
+purpose of this thing. Anyways we will have all the you know split like this in
+8:21
+case if there is an SLA breach uh in any of the stages that will be there. So an
+8:27
+overall view of all the leads that we currently have and uh we are moving to
+8:35
+leads. So the leads section like I said inside this is uh an admin portal. I'm
+8:43
+not very sure if we need individual uh breakup of leads like this but we can
+8:48
+think about it because we'll have as the volume increases hundreds will become
+8:53
+thousands and a few thousands right? If we cannot have all the leads are here or
+8:58
+probably we can if we can choose to have and it can still be there it can be
+9:02
+there but in a user portal uh let's say a lead is like this and they are opening
+9:08
+inside a lead. This is how we want the uh lead display to be like
+9:16
+the lead um dashboard to be like in that the first thing that it will show over
+9:22
+here is what stage is that lead in and we'll be able to press and change the
+9:27
+stage. When we are changing the stage the system should not allow to uh change
+9:33
+the stage if someone has not done what he's supposed to do for that particular
+9:37
+stage. For example, if someone is moving from effective lead
+9:41
+to MQL stage, they should mandatorily fill a certain level of details like
+9:47
+when is the next meeting scheduled and what are their budget, they should
+9:51
+upload the floor plan. All these things if we give a mandatory checkin for the
+9:56
+system and without that the system doesn't allow to change the stages.
+10:02
+uh it'll be easy for us to track in volume and it'll show the intent here,
+10:07
+location here, the budget and then the contact number, the mail id, all the
+10:11
+basic details will be shown on this card and from here we should be able to make
+10:17
+a call to the client. So the most important things are over here. Make a
+10:21
+call, schedule a meeting, request for a discount and chat with the client on the
+10:27
+WhatsApp. So the most important things are over here. And um one important
+10:32
+thing that's uh missing in our CRM currently is we are not able to uh log a
+10:39
+call like manually someone let's say for example in an Excel sheet what I'll do
+10:44
+I'll call the customer and then I'll do a manual entry that I called the
+10:48
+customer and I'll um you know attach the details of what I spoke with the
+10:53
+customer. very similar to that is what our CRM is also right now being uh
+10:58
+created. But then how we wanted it to be is like uh if I click log call over
+11:04
+here, the call should automatically go from the system through my phone. So the
+11:10
+call should be logged here and the recording of the call should be
+11:13
+available in the system. That is when we'll truly know if they spoke or not
+11:19
+because if otherwise right uh the way that is there in our current CRM what
+11:24
+people will do is they'll simply enter that I spoke with this client from this
+11:29
+time to this time and then they will log the call but then we might never know if
+11:33
+they really spoke or not. So this is one thing and once again I'll
+11:40
+play the video. Yeah, this just explains. So when they when they're
+11:44
+changing when there's a drop-down to change the lead status, they need to
+11:48
+change it. And then the complete activity history is available in the uh
+11:54
+bottommost area of the uh dashboard for the inside the leads like what happened
+12:00
+from the starting like whenever the lead got uh into their you know that
+12:06
+particular person's portal like from whom the lead got transferred from there
+12:10
+on we need to track it completely for example vial is a C and that C assigns
+12:17
+the or you know vial is a BL and that BL assigns the lead to a designer uh named
+12:25
+Nanda then in Nanda's portal va assigned you this lead from there on we need all
+12:32
+the logs of how you know what is happening the complete track history of
+12:36
+the lead with the actual calls that is being recorded if we have all these
+12:41
+things it'll be great and yeah this is a full timeline
+12:46
+activity that's an overview this is a full activity and inside calls only
+12:50
+calls like what happened uh you know answered 1 minute they spoke 2 minutes
+12:56
+they spoke 7 minutes they spoke and then m of that particular call also they they
+13:02
+can you know probably record it there itself
+13:05
+and inside meetings uh like you know what is the uh if we create a meeting
+13:11
+okay I'll show you how meeting creation happens if we create a meeting uh it
+13:16
+should automatically ask for the date, time and it should not be able to give
+13:20
+the meetings in the past date and if after uh you know creating the meeting
+13:25
+if they are they want to reschedule the meeting they should mandatorily log a
+13:31
+reason to why the meeting is being rescheduled all those things and in
+13:35
+WhatsApp yeah the client's actual portal should be WhatsApp should be you know
+13:40
+displayed over here right now with our CRM we tried adding a few numbers but
+13:46
+then uh it is not I'm not sure if the uh API integration or the software you know
+13:52
+integration something is not done but then we're not uh we tried adding a
+13:56
+phone number and then testing it we are not receiving that message to our
+14:00
+WhatsApp. So how this WhatsApp portal should work is when we send message from
+14:05
+here the client should receive it on their WhatsApp platform.
+14:10
+This is this is to keep a this having this WhatsApp conversation here is to
+14:14
+keep a clear track of uh what is the conversation happening and inside quotes
+14:20
+right now what is happening with our CRM is the entire um proposals by DEX
+14:26
+platform is opening but inside a particular uh you know P if someone
+14:32
+enters a P and create a quote how we can probably integrate this is we can uh Um
+14:40
+actually the system can fetch the P and uh the system can automatically track
+14:47
+you know that Somian is the Somian client and then with the P the system
+14:52
+can automatically fetch all the codes that have been created for this
+14:56
+particular P. If this is the case it will be easy. Right now the full you
+15:01
+know platform is being uh displayed. This is one thing and then this count
+15:07
+race request is all common. Yeah, this is a different uh that is
+15:14
+like within each client. This for example um you know all the clients that
+15:20
+they have like my actual WhatsApp chat box in case if I am speaking uh you know
+15:25
+whichever client I have texted what all I've texted oh an overview of the
+15:29
+complete uh WhatsApp messaging I have done for the clients if that that is
+15:35
+coming up here it'll be great and then discount uh this again comes back to the
+15:41
+admin portal um admin or the manager portal where discount account pending is
+15:47
+like you know uh shown over here and then pending value approved rejected and
+15:52
+if someone is um we also show the authority explicitly over here this is
+15:59
+something that we'll have to feed into the system so what is the discount
+16:03
+approval authority we will give for each and let's say I am logged in through a
+16:09
+designer um um portal I should not be able to give
+16:15
+more than 10% % I'll have to request discount to my BL and if it's a if it's
+16:21
+a 20 let's say I'm uh requesting 20% discount to my BL my BL also have only
+16:28
+authority to 50 15% right he should just review it and directly pass on the
+16:35
+request to the branch head in a single click and if the branch head approves
+16:39
+the discount both of them will immediately get it as you know approval
+16:43
+notification because again if the branch head approves and then comes back to
+16:46
+business lead and then business lead approves to designer. It will not be
+16:49
+good. Let the designer raise it to the BL and BL raise it to the branch header
+16:53
+and branch header if they approve it will come it'll automatically be
+16:56
+notified to these two people and if they are u reject if they are approving they
+17:02
+can only approve within their limit. If they are rejecting they should log a
+17:06
+reason of why they are uh rejecting. they should be able to uh review over
+17:17
+here and reject or approve with the even if it's an approval they should log a
+17:22
+reason even if it's a rejection they will have to uh log a reason and what is
+17:29
+the discount percentage reason like reason they will uh fill and share so
+17:34
+all these things uh will be inside again going back to meetings uh we will have
+17:42
+again let's say if we if it is a user portal or designer's portal. We will
+17:47
+have it completely like uh split on day wise. Um no not even day wise basis. Um
+17:56
+okay I'll just give you a better clarity on how this can be split. We just spoke
+18:00
+something and I'll probably give it a clarity on the document but this should
+18:04
+be split um you know on some basis instead of yeah one is it should be in
+18:10
+the order of the next upcoming dates like today's 10th June means I have I
+18:14
+need to you know it need to display me all the 10th June meetings and uh it
+18:20
+need to dis it has to uh split in the basis of the uh stages as well. If let's
+18:26
+say I have onboarding two meetings, first is PP2 meetings, onboarding two
+18:31
+meetings, um DIP3 meetings, stages as well should be split over here into
+18:37
+three and then uh it should be shown in the order of date and time. This is how
+18:43
+the meeting should be like and when someone is marking a meeting as complete
+18:48
+mandatory they must type the MO and they must type the outcome of the meeting.
+18:52
+The M should directly be sent to the client via email and uh WhatsApp and uh
+18:58
+the outcome of the meeting uh that can probably be for internal purpose like
+19:03
+what the client is uh doing next or what we are doing next for the client and if
+19:08
+someone is clicking no show over here they must mandatory give a reason to why
+19:14
+it is no show and if it's rescheduled or what is it that they are doing next or
+19:18
+the meeting is not going to happen at all. Someone cannot simply click no show
+19:22
+over here. They should give a reason towards it and they should do an action
+19:26
+against it as well. And if it is it is being clicked as no show, it will also
+19:30
+be notified to the uh client. And uh
+19:38
+this is with respect to the uh project management. We'll ignore all these
+19:43
+technical production site execution all these as of now. We'll only look into
+19:47
+the design because we are only building a designer's portal. Now in designers
+19:52
+portal uh we have let's say 17 active projects and so all these while leads
+19:57
+are uh done and it is converting to projects 17 active projects in designer
+20:02
+portal and need attention yeah could be you know any SLA breach or delayed or
+20:08
+all those things average progress for the uh you know whole pipeline uh he can
+20:14
+system can itself gauge and then value and delivery outstanding and one more
+20:19
+thing it can show is bases his uh target commitment. it can show to you know
+20:24
+monthly uh target based on your u not based on the target commitment let's say
+20:31
+you would have marked right by uh by let's say we are on 11th June by 15th
+20:37
+June your sign off will happen means that particular project's value will
+20:41
+automatically go and sit into the target for the month again same for sale as
+20:47
+well so an overall dashboard of whatever he's going to do and with an outcome of
+20:52
+of Whatever we are expecting from him or what is possible uh from his pipeline
+20:57
+should be shown over here and we'll only show this uh uh design phase as of now
+21:03
+like what is the progress that we can feed the system to gauge the progress
+21:07
+based on certain things and it can uh you know have the progress shown over
+21:11
+here and how many days to hand over can either be shown here or what is the date
+21:16
+of handover that we have planned to while onboarding this project that can
+21:20
+be shown over here. the rest are all the basic uh details.
+21:28
+I will skip this procurement part as of now.
+21:34
+And finance is also the something that I'm no finance is also something that I
+21:41
+would like to skip at the moment. Service warranty I'm skipping. Yeah.
+21:46
+Coming to reports. So again same first if it's a designer
+21:52
+portal different set of reports should be shown and designer in designer portal
+21:58
+like we should be able to track the amount of inputs that we give for um uh
+22:05
+reports will be a lot because we should be able to track him in each and every
+22:10
+aspect effort metrics input metrics output consistency quality of
+22:16
+deliverables that that he's giving monthly ly trends like this. So monthly
+22:21
+trend can also be for designer and we can even if it's an admin portal we can
+22:27
+have you know people wise trend who has done best who has done bad those things
+22:32
+and then uh we can have even monthly trends for the number of leads that is
+22:37
+coming and which ones we have got high which means we have got low and then the
+22:40
+sale that came in. So all these things we can track and then offer performance
+22:45
+the all important for the marketing team right um and then delivery life cycle.
+22:51
+Okay I think this we will be able to get only if we um
+22:56
+uh draft the full platform. So we will ignore these things that are below. So
+23:03
+yeah in designer portal and in admin portal we should be able to track each
+23:07
+and everything that that will actually make difference for the uh system and
+23:13
+team and roles over here it's very normal like what is the role each and
+23:18
+every person is doing and then settings these these we can keep let's say for
+23:22
+example in the offers and games we schemes we have you know a number of
+23:27
+offers happening we can the admin can able to add and then uh they should als
+23:32
+also be an on and off toggle button. For example, if for a particular client who
+23:37
+came 15 days after the pongal and still we have to give the uh pungal offer, we
+23:42
+can probably turn it on only for that uh until that client is being uh handled
+23:48
+and given with an offer and then once we are turning it off, that person should
+23:53
+not be able to apply this particular offer. This will control a lot of leaks
+23:57
+in the system and uh
+24:06
+yeah these are all just uh how the user interface looks like.
+24:15
+Yeah, this is how the so all these while it was on the admin dashboard now it has
+24:20
+changed to the business lead dashboard how it will look like what are the
+24:24
+details that they have to have in their uh particular forum um and then how
+24:29
+their pipeline will look like how their leads will look like so pretty similar
+24:39
+and how it will look like in a CR dashboard
+24:43
+how in case if it's The designers dashboard only like you know these these
+24:48
+many uh things will be and in design if there are no projects it'll be shown as
+24:53
+no projects over here. Technical production and all we leave as of now
+25:04
+procurement and all. Yeah we'll probably leave I think this will give a good
+25:10
+picture. I mean um there still has to be a good amount of documentation done for
+25:16
+this uh but this is the overall picture.
