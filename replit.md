@@ -59,6 +59,37 @@ Key vars:
 - `REDIS_URL`
 - `JWT_SECRET`
 
+## WhatsApp (Twilio) setup
+
+WhatsApp delivery uses Twilio. **Without these three secrets, the CRM cannot send WhatsApp
+messages** — the `/api/whatsapp/send` endpoint returns `503` and surfaces a clear error in the
+UI (it never pretends a message was sent).
+
+Required secrets:
+- `TWILIO_ACCOUNT_SID` — from the Twilio Console dashboard
+- `TWILIO_AUTH_TOKEN` — from the Twilio Console dashboard
+- `TWILIO_WHATSAPP_NUMBER` — the WhatsApp-enabled sender in E.164, e.g. `+14155238886`
+  (Twilio Sandbox) or the approved business sender. Stored without the `whatsapp:` prefix.
+
+Optional:
+- `DEFAULT_COUNTRY_CODE` — digits only, defaults to `91` (India). Lead numbers saved without a
+  country code are normalised to E.164 against this before sending.
+- `TWILIO_SMS_NUMBER` — separate sender used by SMS automations (shares the same Twilio account).
+
+Setup steps:
+1. **Sandbox (testing):** in Twilio Console → Messaging → Try it out → WhatsApp Sandbox, follow
+   the join instructions from each test phone. Sandbox can only message numbers that have joined,
+   and only with approved sandbox templates. Use the sandbox sender as `TWILIO_WHATSAPP_NUMBER`.
+2. **Production:** register a WhatsApp Business sender and get message templates approved by Meta.
+   Free-form (non-template) replies are only allowed inside the 24-hour customer service window;
+   outside it, only approved templates send. A number that is not on WhatsApp, or a blocked
+   template/session, causes Twilio to reject the send — the error is returned to the user as a
+   `502` with Twilio's message (no silent fake).
+3. **Inbound replies:** in the sender/sandbox config set "When a message comes in" to
+   `POST {BASE_URL}/api/whatsapp/webhook` (e.g. `https://<your-domain>/api/whatsapp/webhook`).
+   Inbound messages are matched to leads by the last 10 digits of the sender's number (checks both
+   `phone` and `phone2`), so stored numbers with or without a country code still match.
+
 ## Product
 
 8-stage lead pipeline (Effective Lead → MQL → DQL → Proposal Ready → Proposal Presented → Onboarding → Inactive → On Hold) with:

@@ -9,3 +9,4 @@
 - [Tasks routes](tasks-routes.md) — myTasksRouter at /api/tasks/my (mine) and /api/tasks/team (BL team); NOT /api/tasks
 - [Testing token expiry](testing-token-expiry.md) — pre-fetched tokens stale in runTest; use browser console fetch('/api/...') with localStorage.getItem('crm_token') instead
 - [Login page added](login-page.md) — app now has /login page; RequireAuth guard redirects to /login on 401; logout clears crm_token+crm_user
+- [WhatsApp/Twilio delivery](whatsapp-delivery.md) — never fake-send; needs TWILIO_* env vars; E.164 normalize on send; inbound matches last-10 digits via endsWith

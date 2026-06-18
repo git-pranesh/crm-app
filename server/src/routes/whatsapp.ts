@@ -34,15 +34,30 @@ whatsappRouter.post('/send', verifyToken, async (req, res) => {
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
   if (!lead.phone) { res.status(400).json({ error: 'Lead has no phone number' }); return; }
 
+  if (!isTwilioConfigured()) {
+    res.status(503).json({
+      error:
+        'WhatsApp is not connected. An administrator must add the Twilio WhatsApp credentials (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER) before messages can be delivered.',
+    });
+    return;
+  }
+
   let messageBody = rawBody ?? '';
   if (templateId) {
     messageBody = fillTemplate(templateId, { clientName: lead.name, ...templateVars });
   }
 
-  const twilioSid = await sendWhatsAppMessage(lead.phone, messageBody).catch((e) => {
-    console.error('[whatsapp] Send failed:', e.message);
-    return null;
-  });
+  let twilioSid: string;
+  try {
+    const sid = await sendWhatsAppMessage(lead.phone, messageBody);
+    if (!sid) throw new Error('The WhatsApp provider did not accept the message.');
+    twilioSid = sid;
+  } catch (e: any) {
+    const detail = e?.message || 'Unknown error';
+    console.error('[whatsapp] Send failed:', detail);
+    res.status(502).json({ error: `WhatsApp delivery failed: ${detail}` });
+    return;
+  }
 
   const message = await prisma.whatsAppMessage.create({
     data: {
@@ -58,7 +73,7 @@ whatsappRouter.post('/send', verifyToken, async (req, res) => {
 
   await logActivity(user.id, 'WHATSAPP_SENT', leadId, { templateId, twilioSid });
 
-  res.status(201).json({ message, sent: !!twilioSid || !isTwilioConfigured() });
+  res.status(201).json({ message, sent: true });
 });
 
 // ── POST /api/whatsapp/webhook — Twilio inbound ───────────────────────────────
@@ -74,11 +89,24 @@ whatsappRouter.post('/webhook', async (req, res) => {
     return;
   }
 
-  // Strip "whatsapp:" prefix from Twilio's From field
-  const phone = From.replace('whatsapp:', '');
+  // Twilio's From is like "whatsapp:+919876543210". Match on the last 10 digits
+  // (with endsWith, not contains) so it works regardless of whether the lead's
+  // stored number has a country code or formatting, and check phone2 too.
+  const digits = From.replace('whatsapp:', '').replace(/[^\d]/g, '');
+  if (digits.length < 10) {
+    console.log(`[whatsapp:webhook] Ignoring malformed sender "${From}"`);
+    res.status(200).send('<Response/>');
+    return;
+  }
+  const last10 = digits.slice(-10);
 
   const lead = await prisma.lead.findFirst({
-    where: { phone },
+    where: {
+      OR: [
+        { phone: { endsWith: last10 } },
+        { phone2: { endsWith: last10 } },
+      ],
+    },
     include: {
       assignedDesigner: { select: { id: true } },
       assignedBL: true,
@@ -86,7 +114,7 @@ whatsappRouter.post('/webhook', async (req, res) => {
   });
 
   if (!lead) {
-    console.log(`[whatsapp:webhook] Unmatched phone ${phone}`);
+    console.log(`[whatsapp:webhook] Unmatched phone ${digits}`);
     res.status(200).send('<Response/>');
     return;
   }

@@ -44,15 +44,34 @@ export function isTwilioConfigured() {
   );
 }
 
+// ── Normalise a phone number to E.164 (e.g. +919876543210) ───────────────────
+// Twilio rejects numbers that are not in E.164. Leads are often stored without a
+// country code (e.g. "9876543210") or with spaces/dashes, which silently fails to
+// deliver. Default country code is configurable via DEFAULT_COUNTRY_CODE (India: 91).
+export function normalizePhoneE164(raw: string): string {
+  let p = (raw || '').trim().replace(/[\s\-()]/g, '');
+  if (!p) return p;
+  if (p.startsWith('whatsapp:')) p = p.slice('whatsapp:'.length);
+  if (p.startsWith('+')) return p;
+  if (p.startsWith('00')) return '+' + p.slice(2);
+  p = p.replace(/^0+/, '');
+  const cc = (process.env.DEFAULT_COUNTRY_CODE || '91').replace(/^\+/, '');
+  // Already includes the country code (e.g. 919876543210)
+  if (p.length > 10 && p.startsWith(cc)) return '+' + p;
+  return '+' + cc + p;
+}
+
 // ── Send a WhatsApp message via Twilio ────────────────────────────────────────
+// Returns the Twilio message SID on success. Returns null ONLY in dev when Twilio
+// is not configured. Throws on real send failures so callers can surface them.
 export async function sendWhatsAppMessage(to: string, body: string): Promise<string | null> {
   if (!isTwilioConfigured()) {
-    console.log(`[whatsapp:dev] Would send to ${to}: ${body}`);
+    console.log(`[whatsapp:dev] Twilio not configured — would send to ${to}: ${body}`);
     return null; // No real SID in dev
   }
 
   const from = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`;
-  const toWa = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+  const toWa = `whatsapp:${normalizePhoneE164(to)}`;
 
   const message = await getTwilioClient().messages.create({ from, to: toWa, body });
   return message.sid;

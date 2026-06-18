@@ -467,7 +467,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           }
         }
 
-        // G1: WhatsApp
+        // G1: WhatsApp — only persist the message if it was actually delivered.
+        // sendWhatsAppMessage returns null when Twilio is unconfigured (dev) and
+        // throws on real failures; in neither case do we store a phantom "sent" bubble.
         try {
           const waBody = fillTemplate('on_hold_notification', {
             clientName: existing.name,
@@ -475,15 +477,17 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             reason: holdReason,
           });
           const twilioSid = await sendWhatsAppMessage(existing.phone, waBody);
-          await prisma.whatsAppMessage.create({
-            data: {
-              leadId: id,
-              direction: 'OUTBOUND',
-              body: waBody,
-              templateId: 'on_hold_notification',
-              twilioSid: twilioSid ?? undefined,
-            },
-          });
+          if (twilioSid) {
+            await prisma.whatsAppMessage.create({
+              data: {
+                leadId: id,
+                direction: 'OUTBOUND',
+                body: waBody,
+                templateId: 'on_hold_notification',
+                twilioSid,
+              },
+            });
+          }
         } catch (e) {
           console.error('[ON_HOLD whatsapp failed]', e);
         }
