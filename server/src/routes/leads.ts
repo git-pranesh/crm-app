@@ -731,6 +731,12 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
 
     const systemRating = computeSystemRating(lead);
 
+    // Reason required when manually overriding the system-computed rating
+    if (rating !== systemRating && !reason?.trim()) {
+      res.status(400).json({ error: 'reason is required when overriding the system-computed rating' });
+      return;
+    }
+
     await prisma.lead.update({ where: { id }, data: { intentRating: rating } });
 
     const log = await prisma.intentRatingLog.create({

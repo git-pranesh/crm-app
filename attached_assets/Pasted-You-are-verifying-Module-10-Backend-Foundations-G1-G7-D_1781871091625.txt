@@ -1,0 +1,179 @@
+You are verifying Module 10 (Backend Foundations: G1-G7). 
+Do NOT fix anything found broken. Report only.
+
+For each test: state ✅ PASS or ❌ FAIL with raw evidence 
+(exact API response, exact DB query result, or exact error). 
+No summarizing, no guessing.
+
+---
+
+## G1 — STAGE-GATE + EMAIL DUPLICATE
+
+1.1 PATCH a lead from EFFECTIVE_LEAD to MQL with intentRating 
+    and nextMeetingDate BOTH unset:
+    → expect 400 with missing field list. Paste exact response.
+
+1.2 Same lead, now set intentRating=3 and nextMeetingDate, retry:
+    → expect 200, stage now MQL. Paste exact response.
+
+1.3 Create a lead with an email that already exists on another lead, 
+    different phone:
+    → expect isDuplicate: true tagged in response. Paste it.
+
+1.4 Try moving a lead through a transition NOT in STAGE_REQUIREMENTS 
+    config (pick one not listed, e.g. INACTIVE → ON_HOLD if undefined):
+    → expect it to succeed (no gate defined = allowed). Confirm.
+
+---
+
+## G2 — DASHBOARD METRICS + DATE RANGE
+
+2.1 GET /api/dashboard (no date params) → paste full JSON. 
+    Confirm pipelineValue, avgNPS, collectedThisMonth, outstanding 
+    all present (even if 0/null for empty data).
+
+2.2 GET /api/dashboard?from=2026-01-01&to=2026-03-31 
+    → confirm numbers differ from 2.1 (or explain why identical if 
+    test data has no Jan-Mar records).
+
+2.3 Mark a DQL meeting as COMPLETED → check DB: 
+    SELECT * FROM "NPSResponse" WHERE stage='SALE' ORDER BY "createdAt" DESC LIMIT 1
+    → paste the row. Confirm formToken populated.
+
+2.4 GET /feedback/nps/<that formToken> → paste response (should 
+    return form data, not error).
+
+---
+
+## G3 — CALENDAR
+
+3.1 GET /api/calendar?from=2026-06-01&to=2026-06-30&scope=mine 
+    with a DESIGNER token → paste response array.
+
+3.2 GET /api/calendar?scope=team with DESIGNER token 
+    → expect 403. Paste exact error.
+
+3.3 GET /api/calendar?scope=team with BL token 
+    → expect 200 with team's meetings across multiple designers. 
+    Paste response, confirm more than 1 designer's meetings present 
+    (if team has >1 designer).
+
+---
+
+## G4 — SLA CONFIG + OFFERS TOGGLE
+
+4.1 GET /api/admin/sla-config → paste all 4 rules with current 
+    threshold values.
+
+4.2 PATCH /api/admin/sla-config/DQL_5_DAYS { thresholdHours: 72 } 
+    → paste response. Then GET again to confirm persisted.
+
+4.3 Manually trigger SLA job: 
+    POST /api/admin/jobs/trigger { job: "sla-check" }
+    → check job actually used 72 (not the old 120) — find a lead 
+    sitting in MQL between 72-120 hours old, confirm it NOW breaches 
+    that didn't before. If no such test lead exists, state that 
+    clearly and explain how you'd verify it.
+
+4.4 PATCH /api/offers/<id>/toggle { isActive: false } 
+    → paste response. Confirm offer no longer appears in whatever 
+    "active offers" list/selector exists.
+
+4.5 GET /api/admin/whatsapp-templates → paste full response 
+    (should be read-only list, no edit endpoint should exist — 
+    confirm PATCH/PUT on this route returns 404 or 405).
+
+---
+
+## G5 — INTENT RATING ALGORITHM
+
+5.1 Move a lead EFFECTIVE_LEAD → MQL → check DB:
+    SELECT * FROM "IntentRatingLog" WHERE "leadId" = '<that lead id>'
+    → paste the row. Confirm systemRating populated.
+
+5.2 PATCH /:id/intent-rating { rating: <different from systemRating> } 
+    WITHOUT reason → expect 400. Paste exact error.
+
+5.3 Same PATCH WITH reason → expect 200. Check DB again, confirm 
+    new IntentRatingLog row with overriddenById and reason populated.
+
+5.4 GET /:id/intent-rating-history → paste full history array 
+    (should show both the system-computed entry and the override entry).
+
+---
+
+## G6 — PROJECTS / DELIVERY
+
+6.1 Move a lead to HANDED_OVER (must have DIP checklist already 
+    complete from Module 9) → check DB:
+    SELECT * FROM "Project" WHERE "leadId" = '<that lead id>'
+    → paste the row. Confirm projectCode format is P-2026-####.
+
+6.2 PATCH /api/projects/<id> { phase: "TECHNICAL" } → paste response.
+
+6.3 GET /api/dashboard → confirm phaseLoad array now shows the 
+    TECHNICAL phase with count ≥1. Paste that section of the response.
+
+6.4 POST /api/projects/<id>/attention-flag 
+    { category: "Delayed", description: "test flag" } → paste response.
+
+6.5 GET /api/dashboard → confirm needsAttention array includes 
+    this project with the flag description. Paste that section.
+
+6.6 GET /api/projects with DESIGNER token → confirm only their 
+    own projects returned, not all projects.
+
+---
+
+## G7 — DISCOUNT AUTHORITY TIERS
+
+7.1 As DESIGNER, raise a discount request at 8% 
+    → as BL, PATCH approve directly (within BL's 15% ceiling) 
+    → expect 200, no forwarding needed. Paste both requests/responses.
+
+7.2 As DESIGNER, raise a discount request at 20% 
+    → as BL, try direct PATCH approve 
+    → expect this to be blocked (BL has no authority above 15%) 
+    OR check if it auto-requires forward first. Paste exact behavior.
+
+7.3 As BL, PATCH /api/discount-requests/:id/forward on that 20% request 
+    → paste response. Confirm forwardedToRole='BRANCH_HEAD' set.
+
+7.4 GET /api/discount-requests/pending with BRANCH_HEAD token 
+    → confirm the forwarded request appears in this list. Paste it.
+
+7.5 As BRANCH_HEAD, approve it → check notifications table:
+    SELECT * FROM "NotificationLog" WHERE "leadId" = '<lead id>' 
+    ORDER BY "createdAt" DESC LIMIT 5
+    → confirm BOTH designer and the forwarding BL got notified. 
+    Paste both notification rows.
+
+---
+
+## REGRESSION CHECK — confirm Module 9 fixes still work
+
+R1. PATCH a lead to ON_HOLD → confirm EmailLog + SmsLog + 
+    WhatsAppMessage all still created (G1 from Module 9).
+
+R2. GET /api/leads?intent=4 → confirm filter still works (G2 
+    from Module 9).
+
+R3. As CRE, create a lead → GET /api/leads as that CRE → confirm 
+    lead still visible (G3 from Module 9).
+
+R4. Move a lead to ONBOARDING → PATCH dip-checklist with all 5 
+    booleans true → confirm completedAt set, then PATCH stage to 
+    HANDED_OVER → confirm succeeds AND now also creates a Project 
+    record (new G6 behavior layered on top of old G6 from Module 9 
+    — these must work together, not conflict).
+
+---
+
+## REQUIRED OUTPUT
+
+1. Per-test ✅/❌ as shown above, raw evidence only.
+2. SUMMARY TABLE: section | tests run | pass | fail
+3. Any test you could NOT run (e.g. missing test data) — say so 
+   explicitly, don't skip silently.
+4. List every file modified in Module 10.
+5. Confirm: npx prisma migrate status → no pending migrations.

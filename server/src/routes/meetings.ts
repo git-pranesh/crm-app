@@ -93,7 +93,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     });
     emailPayload.to = lead.email;
 
-    await queues.emails.add('meeting-confirmation', { emailPayload, leadId, meetingId: meeting.id });
+    queues.emails.add('meeting-confirmation', { emailPayload, leadId, meetingId: meeting.id }).catch(() => {});
 
     await prisma.emailLog.create({
       data: {
@@ -212,11 +212,11 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
     if (emailPayload) {
       emailPayload.to = lead.email;
-      await queues.emails.add(`meeting-${status.toLowerCase()}`, {
+      queues.emails.add(`meeting-${status.toLowerCase()}`, {
         emailPayload,
         leadId: lead.id,
         meetingId: id,
-      });
+      }).catch(() => {});
 
       await prisma.emailLog.create({
         data: {
