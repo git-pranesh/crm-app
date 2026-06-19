@@ -13,6 +13,7 @@ interface Lead {
   estimatedValue?: string | number | null;
   intentRating?: number | null;
   isSLABreached: boolean;
+  followUpTasks?: { id: string }[];
   createdAt: string;
   location?: string;
   projectType?: string;
@@ -138,6 +139,11 @@ function LeadCard({
         {lead.isSLABreached && (
           <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
             SLA breach
+          </span>
+        )}
+        {lead.followUpTasks && lead.followUpTasks.length > 0 && (
+          <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+            Follow-up overdue
           </span>
         )}
       </div>

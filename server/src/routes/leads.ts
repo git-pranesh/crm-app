@@ -30,6 +30,11 @@ const LEAD_INCLUDE = {
   assignedBL: { select: { id: true, name: true } },
   currentOffer: { select: { id: true, name: true } },
   _count: { select: { calls: true, meetings: true, followUpTasks: true } },
+  followUpTasks: {
+    where: { isOverdue: true, isCompleted: false },
+    select: { id: true },
+    take: 1,
+  },
 } as const;
 
 // ── GET /api/leads — list with filters + pagination ───────────────────────────

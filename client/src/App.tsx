@@ -15,7 +15,6 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
-import { DevBHPage, DevBLPage, DevPipelinePage } from './DevPages';
 import FeedbackForm from './pages/FeedbackForm';
 import AcceptInvite from './pages/AcceptInvite';
 
@@ -102,9 +101,6 @@ export default function App() {
         />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/dev/bh" element={<DevBHPage />} />
-          <Route path="/dev/bl" element={<DevBLPage />} />
-          <Route path="/dev/pipeline" element={<DevPipelinePage />} />
           <Route path="/feedback/:token" element={<FeedbackForm />} />
           <Route path="/accept-invite/:token" element={<AcceptInvite />} />
           <Route
