@@ -4,9 +4,9 @@ description: Which Postgres the CRM actually uses at runtime vs what CLI tools s
 ---
 
 The active database is the **Replit-managed Postgres**: host `helium`, db `heliumdb`,
-user `postgres`, exposed via the injected **process-env** `DATABASE_URL`
-(`postgresql://postgres:***@helium/heliumdb?sslmode=disable`) and the `PG*` env vars.
-It holds all 26 CRM tables and the seeded data.
+exposed via the injected **process-env** `DATABASE_URL` and the standard `PG*` env
+vars (use `printenv DATABASE_URL` / `psql` with the injected vars — never hardcode
+credentials). It holds all 26 CRM tables and the seeded data.
 
 The root `.env` `DATABASE_URL`/`DIRECT_URL` point at a stale, unreachable
 `localhost:5432/dex_crm` (leftover from an earlier local-PG setup).
@@ -21,8 +21,8 @@ The root `.env` `DATABASE_URL`/`DIRECT_URL` point at a stale, unreachable
 then run `pnpm --filter @workspace/crm-server run db:push` (= `prisma db push`).
 This is the project's reconciliation mechanism (`scripts/post-merge.sh` runs
 `pnpm --filter db push`). Do NOT use `prisma migrate dev` — its shadow DB / DIRECT_URL
-resolves to the dead localhost. Verify with
-`psql "postgresql://postgres:password@helium:5432/heliumdb" -c "\d <table>"`.
+resolves to the dead localhost. Verify with `psql` (build the URL from the injected
+`PG*` env vars, e.g. `psql "$DATABASE_URL" -c "\d <table>"`).
 
 **Note:** earlier memory called the stack "Supabase" — the current environment is the
 Replit-managed local-network Postgres, not Supabase.
