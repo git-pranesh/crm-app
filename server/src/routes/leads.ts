@@ -8,6 +8,7 @@ import { sendSms } from '../services/smsService.js';
 import { sendEmail, inactivationEmail, onHoldEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
+import { checkStageRequirements } from '../config/stageRequirements.js';
 
 export const leadsRouter = Router();
 
@@ -132,6 +133,15 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
     if (existing) {
       res.status(409).json({ error: 'A lead with this phone number already exists', existingLeadId: existing.id });
       return;
+    }
+
+    // Check duplicate email
+    if (email?.trim()) {
+      const emailExisting = await prisma.lead.findFirst({ where: { email: email.trim() } });
+      if (emailExisting) {
+        res.status(409).json({ error: 'A lead with this email already exists', existingLeadId: emailExisting.id });
+        return;
+      }
     }
 
     const leadId = await generateLeadId();
@@ -332,6 +342,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       name, phone, phone2, email, source,
       stage, projectType, scope, location,
       estimatedValue, intentRating, possessionTimeline,
+      nextMeetingDate, floorPlanUrl,
       assignedDesignerId, assignedBLId,
       onHoldRevivalDate, customFields,
       inactivationReason,
@@ -343,11 +354,23 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
 
     const prevStage = existing.stage;
 
-    // ── DIP gate: block ONBOARDING → HANDED_OVER without complete DIP checklist ─
-    if (stage === 'HANDED_OVER' && prevStage === 'ONBOARDING') {
-      const dip = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
-      if (!dip?.completedAt) {
-        res.status(409).json({ error: 'Complete DIP checklist before closing the sales task.' });
+    // ── Stage-gate: every configured transition must satisfy its required
+    //    fields/actions (single source of truth in config/stageRequirements). ─
+    if (stage && stage !== prevStage) {
+      const prospective = {
+        ...existing,
+        ...(estimatedValue !== undefined && {
+          estimatedValue: estimatedValue === '' || estimatedValue === null ? null : parseFloat(estimatedValue),
+        }),
+        ...(intentRating !== undefined && {
+          intentRating: intentRating === '' || intentRating === null ? null : parseInt(intentRating),
+        }),
+        ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
+        ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
+      };
+      const gate = await checkStageRequirements(prospective, prevStage, stage);
+      if (!gate.ok) {
+        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing });
         return;
       }
     }
@@ -367,6 +390,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(estimatedValue && { estimatedValue: parseFloat(estimatedValue) }),
         ...(intentRating && { intentRating: parseInt(intentRating) }),
         ...(possessionTimeline && { possessionTimeline }),
+        ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
+        ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
         ...(assignedDesignerId !== undefined && { assignedDesignerId: assignedDesignerId || null }),
         ...(assignedBLId !== undefined && { assignedBLId: assignedBLId || null }),
         ...(onHoldRevivalDate && { onHoldRevivalDate: new Date(onHoldRevivalDate) }),

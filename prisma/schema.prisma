@@ -160,6 +160,10 @@ model Lead {
   estimatedValue     Decimal?       @db.Decimal(12, 2)
   /// 1 (lowest intent) – 5 (highest intent)
   intentRating       Int?
+  /// Scheduled next meeting date — required before moving to MQL
+  nextMeetingDate    DateTime?
+  /// Floor plan reference/URL — required before moving to PROPOSAL_READY
+  floorPlanUrl       String?
   stage              LeadStage      @default(EFFECTIVE_LEAD)
   onHoldRevivalDate  DateTime?
   isDuplicate        Boolean        @default(false)

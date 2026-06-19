@@ -85,14 +85,19 @@ importRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), upload.sin
       return norm;
     }).filter((r) => r.name && r.phone);
 
-    // Pre-load existing phones + designers + BLs
+    // Pre-load existing phones + emails + designers + BLs
     const phones = rows.map((r) => r.phone).filter(Boolean);
+    const emails = rows.map((r) => r.email).filter(Boolean);
     const [existingLeads, designers, bls] = await Promise.all([
-      prisma.lead.findMany({ where: { phone: { in: phones } }, select: { phone: true, leadId: true } }),
+      prisma.lead.findMany({
+        where: { OR: [{ phone: { in: phones } }, { email: { in: emails } }] },
+        select: { phone: true, email: true, leadId: true },
+      }),
       prisma.user.findMany({ where: { role: { in: ['DESIGNER', 'CRE'] } }, select: { id: true, name: true } }),
       prisma.user.findMany({ where: { role: 'BL' }, select: { id: true, name: true } }),
     ]);
     const existingPhoneSet = new Set(existingLeads.map((l) => l.phone));
+    const existingEmailSet = new Set(existingLeads.map((l) => l.email).filter((e): e is string => !!e));
     const designerMap = new Map(designers.map((d) => [d.name.toLowerCase(), d.id]));
     const blMap = new Map(bls.map((b) => [b.name.toLowerCase(), b.id]));
 
@@ -114,11 +119,15 @@ importRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), upload.sin
         continue;
       }
 
-      if (existingPhoneSet.has(r.phone)) {
+      if (existingPhoneSet.has(r.phone) || (r.email && existingEmailSet.has(r.email))) {
         skippedCount++;
         preview.push({ row: rowNum, status: 'DUPLICATE', phone: r.phone, name: r.name });
         continue;
       }
+
+      // Guard against duplicates within the same file (same phone/email twice).
+      existingPhoneSet.add(r.phone);
+      if (r.email) existingEmailSet.add(r.email);
 
       const stage = r.stage && VALID_STAGES.includes(r.stage.toUpperCase())
         ? r.stage.toUpperCase()
