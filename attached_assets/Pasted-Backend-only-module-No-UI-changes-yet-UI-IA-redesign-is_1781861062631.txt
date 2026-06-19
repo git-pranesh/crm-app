@@ -1,0 +1,341 @@
+Backend-only module. No UI changes yet — UI/IA redesign is Module 11.
+Additive only — do not rewrite existing functions, extend them.
+All new Prisma fields nullable or defaulted. Run prisma migrate dev
+after schema changes. List every file modified at the end.
+
+---
+
+G1 — STAGE-GATE ACROSS ALL TRANSITIONS + EMAIL DUPLICATE CHECK
+
+Currently only HANDED_OVER is gated (via DIP checklist). Generalize.
+
+Create server/src/config/stageRequirements.ts — single config object,
+easy to edit later:
+
+export const STAGE_REQUIREMENTS: Record<string, string[]> = {
+  'EFFECTIVE_LEAD->MQL': ['intentRating', 'nextMeetingDate'],
+  'MQL->DQL': ['estimatedValue', 'meetingScheduled:DQL'],
+  'DQL->PROPOSAL_READY': ['floorPlanUrl'],
+  'PROPOSAL_READY->PROPOSAL_PRESENTED': ['meetingScheduled:PP'],
+  'PROPOSAL_PRESENTED->ONBOARDING': ['quoteId'],
+  'ONBOARDING->HANDED_OVER': ['dipChecklistComplete'],  // existing gate, keep
+}
+
+In PATCH /:id/stage (leads.ts) — before existing stage-change logic,
+look up `${currentStage}->${newStage}` in STAGE_REQUIREMENTS. For each
+required field, validate it exists on the lead (or check related table
+for meetingScheduled:X / dipChecklistComplete). If any missing, return
+400 with: { error: "Cannot move to <stage>", missing: [...] }.
+
+If the transition isn't in the config, allow it (no gate defined yet).
+
+Email duplicate check — extend existing phone-only duplicate detection
+in POST /manual and POST /leads/import to also check email:
+  const dupe = await prisma.lead.findFirst({
+    where: { OR: [{ phone: phone.trim() }, { email: email?.trim() }] }
+  })
+Same isDuplicate tagging behavior as phone match.
+
+Test: PATCH a lead from EFFECTIVE_LEAD to MQL without intentRating set
+→ 400 with missing field. Set intentRating + nextMeetingDate → succeeds.
+Create lead with email matching existing lead, different phone → tagged duplicate.
+
+---
+
+G2 — DASHBOARD: PIPELINE VALUE, AVG NPS, COLLECTED, DATE RANGE
+
+Add to prisma/schema.prisma:
+
+model NPSResponse {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id])
+  stage       String    // "SALE" | "DESIGN" | "EXECUTION"
+  score       Int?      // 0-10, null until responded
+  formToken   String    @unique
+  sentAt      DateTime  @default(now())
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+Auto-send NPS request (reuse existing inactivation-feedback pattern):
+- On meeting COMPLETED with type DQL/PP → send NPS link, stage: 'SALE'
+- On Project.phase changing to HANDOVER → send NPS link, stage: 'DESIGN'
+- (EXECUTION stage NPS deferred — no execution tracking built yet)
+
+GET /feedback/nps/:token (public) → returns form
+POST /feedback/nps/:token { score } → saves score, sets respondedAt
+
+Dashboard aggregation additions (dashboard.ts), role-scoped same as existing:
+- pipelineValue: sum(Lead.estimatedValue) where stage not in 
+  [INACTIVE, HANDED_OVER] and lead matches role scope
+- avgNPS: average of NPSResponse.score where respondedAt not null,
+  grouped by stage first then averaged across stage-averages
+  (average of averages, not flat average)
+- collectedThisMonth: sum(Collection.amount) where status='COLLECTED' 
+  and collectedAt in current month (Collection model defined in G6)
+- outstanding: sum(Project.outstandingAmount) for active projects
+
+Date range filter: accept ?from=&to= query params on GET /api/dashboard.
+Apply to all underlying queries (leads.createdAt, collections.collectedAt
+etc). Default to current month if not provided.
+
+Test: GET /api/dashboard?from=2026-01-01&to=2026-06-30 → all metrics
+recalculate for that range. Trigger a DQL meeting completion → confirm
+NPSResponse record created with formToken.
+
+---
+
+G3 — CALENDAR DATA ENDPOINT
+
+GET /api/calendar?from=&to=&scope=mine|team
+
+- scope=mine (default): meetings where lead.assignedDesignerId = user.id
+  OR meetings created by user.id
+- scope=team (BL/BRANCH_HEAD only): meetings across team member's leads
+- Returns: [{ id, leadId, leadName, type, ppNumber, mode, status, 
+  scheduledAt, location }]
+- Reject scope=team for DESIGNER/CRE roles with 403
+
+Test: GET /api/calendar?from=2026-06-01&to=2026-06-30&scope=mine as 
+designer → only their meetings. BL with scope=team → whole team's.
+
+---
+
+G4 — SETTINGS BACKEND: SLA THRESHOLDS + OFFERS TOGGLE
+
+Add to schema:
+
+model SLAConfig {
+  rule           String  @id  // 'FIRST_CONTACT_24H' | 'MQL_5_DAYS' | etc
+  thresholdHours Int
+  updatedAt      DateTime @updatedAt
+}
+
+Seed with current hardcoded values: FIRST_CONTACT_24H=24, MQL_5_DAYS=120,
+DQL_5_DAYS=120, PP_2_DAYS=48
+
+GET /api/admin/sla-config (BRANCH_HEAD only) → list all 4
+PATCH /api/admin/sla-config/:rule { thresholdHours } → update
+
+Modify server/src/jobs/slaCheck.ts — read thresholds from SLAConfig 
+table instead of hardcoded numbers. Cache in memory, refresh every 
+job run (cheap query, runs hourly anyway).
+
+Offers toggle — Offer model already has isActive. Add:
+PATCH /api/offers/:id/toggle { isActive: boolean } (BRANCH_HEAD only)
+Already-built POST /api/offers create stays as is.
+
+WhatsApp templates: confirmed READ-ONLY in mockup ("Pre-approved... 
+read-only here"). No edit endpoint needed. Just confirm 
+GET /api/admin/whatsapp-templates exists returning the hardcoded list 
+from whatsapp.ts for display purposes. If it doesn't exist, add it 
+(simple array return, no DB needed).
+
+Test: PATCH SLA config DQL_5_DAYS to 72 hours → trigger SLA job → 
+breach now fires at 72h not 120h. Toggle an offer off → confirm 
+inactive offers don't appear in active-offer selector elsewhere.
+
+---
+
+G5 — AUTO STAR-RATING ALGORITHM + OVERRIDE AUDIT (PLACEHOLDER LOGIC)
+
+⚠️ Placeholder scoring — founder has not defined real criteria yet.
+Wire the mechanism now, swap the formula later without touching 
+the audit/override plumbing.
+
+Add to schema:
+
+model IntentRatingLog {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id])
+  systemRating   Int
+  finalRating    Int
+  overriddenById String?
+  overriddenBy   User?    @relation(fields: [overriddenById], references: [id])
+  reason         String?
+  createdAt      DateTime @default(now())
+}
+
+server/src/services/intentScoring.ts:
+
+export function computeSystemRating(lead: Lead): number {
+  // PLACEHOLDER — replace with founder's actual criteria when defined
+  let score = 1
+  if (lead.estimatedValue && lead.estimatedValue > 0) score++
+  if (lead.possessionTimeline) score++
+  if (lead.calls?.length > 0) score++
+  if (lead.meetings?.some(m => m.status === 'SCHEDULED')) score++
+  return Math.min(score, 5)
+}
+
+Call computeSystemRating() when lead moves EFFECTIVE_LEAD → MQL (the 
+point founder described — "before moving to MQL the CR should give 
+certain inputs ... system will gauge the star rating").
+
+PATCH /:id/intent-rating { rating, reason }:
+- Compute systemRating via computeSystemRating(lead)
+- If rating !== systemRating: reason is mandatory (400 if missing)
+- Create IntentRatingLog with systemRating, finalRating=rating, 
+  overriddenById=user.id, reason
+- Update lead.intentRating = rating
+
+GET /:id/intent-rating-history → returns IntentRatingLog entries for 
+that lead (so "someone else can question them" per founder's requirement)
+
+Test: Move lead to MQL → system computes rating, stored. Try PATCH 
+intent-rating to a different value without reason → 400. With reason 
+→ succeeds, logged.
+
+---
+
+G6 — PROJECTS / DELIVERY BACKEND (DESIGN-PHASE SCOPE ONLY)
+
+Add to schema:
+
+enum ProjectPhase {
+  DESIGN
+  TECHNICAL
+  PRODUCTION
+  SITE_EXECUTION
+  HANDOVER
+  COMPLETED
+}
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  DELAYED
+}
+
+enum CollectionStatus {
+  DUE
+  INVOICED
+  COLLECTED
+}
+
+model Project {
+  id                String   @id @default(cuid())
+  projectCode       String   @unique  // P-2026-XXX, same counter pattern as leadId
+  leadId            String   @unique
+  lead              Lead     @relation(fields: [leadId], references: [id])
+  designerId        String?
+  designer          User?    @relation(fields: [designerId], references: [id])
+  phase             ProjectPhase  @default(DESIGN)
+  health            ProjectHealth @default(ON_TRACK)
+  progressPercent   Int      @default(0)
+  contractValue     Float
+  outstandingAmount Float    @default(0)
+  location          String?
+  handoverTargetDate DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  npsResponses      NPSResponse[]
+  collections       Collection[]
+  attentionFlags    ProjectAttentionFlag[]
+}
+
+model Collection {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  milestone   String
+  amount      Float
+  status      CollectionStatus @default(DUE)
+  dueDate     DateTime?
+  collectedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model ProjectAttentionFlag {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  category    String   // 'Delayed' | 'At Risk' | 'Blocked' | 'Urgent service'
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+}
+
+Auto-create Project when Lead.stage → HANDED_OVER (extend existing 
+HANDED_OVER branch in leads.ts stage handler):
+- projectCode auto-generated P-2026-#### (same counter pattern as leadId)
+- contractValue = lead.estimatedValue
+- designerId = lead.assignedDesignerId
+- location = lead.location
+- phase defaults DESIGN
+
+CRUD:
+GET /api/projects — role-scoped same pattern as leads (DESIGNER own, 
+BL team, BRANCH_HEAD all), filters: phase, health
+PATCH /api/projects/:id — update phase, health, progressPercent, 
+handoverTargetDate (DESIGNER/BL/BRANCH_HEAD)
+POST /api/projects/:id/attention-flag — flag an issue (category, description)
+PATCH /api/projects/:id/attention-flag/:flagId/resolve
+
+Dashboard delivery widgets (add to dashboard.ts response, only for 
+BL/BRANCH_HEAD/DESIGNER roles, role-scoped to their projects):
+- inDelivery: { count, contractValueSum } where phase not in 
+  [HANDOVER, COMPLETED]
+- phaseLoad: group by phase → [{ phase, count, valueSum }]
+- needsAttention: projects with unresolved attentionFlags, 
+  return [{ projectId, clientName, category, description, daysOverdue }]
+- collectionsDue: Collection where status != COLLECTED, ordered by 
+  dueDate, return [{ projectId, clientName, milestone, amount, 
+  daysWaiting }]
+
+Test: Move a lead to HANDED_OVER → Project auto-created with correct 
+projectCode format. PATCH project phase to TECHNICAL → reflects in 
+phaseLoad aggregation. POST attention-flag → appears in needsAttention.
+
+---
+
+G7 — DISCOUNT AUTHORITY TIERS (MATCH MOCKUP EXACTLY)
+
+Founder's exact tiers from the mockup: ≤10% Designer authority, 
+10-15% Business Lead authority, >15% requires Branch Head.
+
+Update discount authority config (wherever maxDiscountPct currently 
+lives — likely a role-based constant) to:
+  DESIGNER: 10
+  BL: 15
+  BRANCH_HEAD: 100  (effectively unlimited)
+
+Single-click forward logic — when a DiscountRequest exceeds the 
+reviewing BL's authority (>15%), do NOT make BL reject-and-resubmit. 
+Instead:
+
+PATCH /api/discount-requests/:id/forward (BL only):
+- Only allowed if request.discountPct > 15
+- Sets a forwardedToRole: 'BRANCH_HEAD' flag (add this field to 
+  DiscountRequest model if not present)
+- Notifies all BRANCH_HEAD users
+- Does NOT change status (stays PENDING, now visible to Branch Head queue)
+
+GET /api/discount-requests/pending for BRANCH_HEAD role — must include 
+requests with forwardedToRole='BRANCH_HEAD' OR discountPct > 15 directly
+
+On final APPROVE/REJECT by whoever has authority — notify BOTH the 
+original requester (designer) AND the BL who forwarded it (if forwarded), 
+in a single notification batch, not sequential.
+
+Test: Designer requests 8% → BL reviews, approves directly (within 
+their 15% ceiling). Designer requests 20% → BL forwards to Branch Head 
+single-click → Branch Head approves → both designer and BL notified 
+simultaneously.
+
+---
+
+AFTER ALL 7 FIXES:
+
+1. npx prisma migrate dev --name module10_backend_foundations
+2. npx prisma generate
+3. Restart server, confirm GET /api/health → 200
+4. Run each test listed above, report ✅/❌ per item
+5. List every file modified
+6. Confirm no existing endpoint broke — re-run G1-G6 fix tests from 
+   Module 9 (stage moves, dip checklist, discount approve/reject base 
+   flow) to confirm nothing regressed
