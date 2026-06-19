@@ -778,3 +778,19 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── POST /api/leads/:id/notes ─────────────────────────────────────────────────
+leadsRouter.post('/:id/notes', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    const { note } = req.body as { note?: string };
+    if (!note?.trim()) { res.status(400).json({ error: 'note is required' }); return; }
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    await logActivity(user.id, 'NOTE_ADDED', id, { note: note.trim() });
+    res.status(201).json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});

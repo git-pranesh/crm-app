@@ -1,0 +1,133 @@
+STANDING RULE (apply to all code in this and every future session):
+Never hardcode credentials, tokens, or API keys in any file, including 
+dev/test helper pages. Use real login flow or gitignored env-based 
+fixtures. Any violation blocks sign-off regardless of other progress.
+
+---
+
+UI/IA redesign continuation. Backend from Module 10 (G1-G7) is fully 
+built and verified — use real endpoints only. Before writing any code, 
+curl each endpoint listed below and confirm it returns real data. If 
+any are missing, STOP and report — do not stub fake data.
+
+Endpoints to confirm exist and work:
+  GET  /api/leads (with filters: stage, source, designerId, search)
+  GET  /api/leads/:id (full detail incl. UTM fields, customFields)
+  PATCH /api/leads/:id (general field updates incl. floorPlanUrl)
+  PATCH /api/leads/:id/assign-direct (reassign designer/BL)
+  GET  /api/leads/:id/intent-rating-history
+  GET  /api/leads/:id/activity (or however ActivityLog is exposed)
+  GET  /api/leads/:id/calls, /meetings, /whatsapp, /quotes (or 
+       /discount-requests)
+  GET  /api/reports/lead_summary/export (for CSV)
+
+---
+
+PART 1 — LEAD LIST REDESIGN (client/src/pages/LeadList.tsx)
+
+Table columns, exact order: LEAD ID, NAME, STAGE, STATUS, VALUE, 
+DESIGNER, SOURCE, INTENT, RATING, UPDATED.
+- STAGE = colored pill (reuse Pipeline's stage colors)
+- STATUS = Active/On Hold/Inactive pill (derive from stage + 
+  onHoldRevivalDate presence)
+- INTENT = text label (Low/Medium/High) from intentRating mapping
+- RATING = filled/outline stars (visual, same star component as Pipeline)
+- DESIGNER = avatar initial + name
+
+Top bar: search input ("Search name, ID, phone, location..."), 
+3 dropdown filters (All stages / All statuses / All sources), 
+"Export CSV" button top right (wire to existing export endpoint, 
+trigger file download).
+
+Row count summary: "N of N leads" above table, left-aligned.
+
+Row click → navigate to /leads/:leadId.
+
+Pagination or virtualized scroll if list >100 rows — check current 
+lead count in DB and use whichever performs better; state which you chose.
+
+---
+
+PART 2 — LEAD DETAIL REDESIGN (client/src/pages/LeadDetail.tsx)
+
+### Header bar (sticky top):
+- Lead name (large) + "LeadID · ProjectType · Configuration" subtitle
+- Right-aligned action buttons: Log Call (stub — see Part 3 note), 
+  Meeting, Discount, WhatsApp — each opens existing modal/flow already 
+  built in prior modules, just relocate the trigger buttons here
+- Status row below header: current stage pill, stage dropdown selector 
+  (same gated PATCH /stage logic as Pipeline — reuse, don't reimplement), 
+  intent stars (clickable to open intent-rating override flow from 
+  Module 10 G5, reason-required modal if overriding system rating)
+
+### Tabs: Overview, Activity, Calls, Meetings, WhatsApp, Quotes, Discounts
+Each tab reuses existing components already built in prior modules 
+(CallLogTab, MeetingsTab, WhatsAppTab, QuoteTab, DiscountTab) — just 
+restyle to match mockup card style, do not rebuild logic.
+
+### Overview tab specifically:
+- "Key facts" card: Project type, Configuration, Location, Estimated 
+  value, Possession, Source, Stage entered date, Created date, Offer 
+  (if any)
+- "Add a note" textarea + submit button (existing notes endpoint)
+- "Recent activity" feed below — last 10 ActivityLog entries, each 
+  row: icon by action type, description, actor avatar, relative time
+
+### Right sidebar (persistent across all tabs):
+- Assignment panel: Designer, Business Lead, CRE — each with avatar 
+  + name, and a reassign dropdown (wire to PATCH /assign-direct, 
+  enforce same role permissions as before: BL/BRANCH_HEAD can reassign)
+- Project details panel: mirrors Key facts but condensed (Project type, 
+  Configuration, Location, Possession, Est. value, Lead rating)
+- Source & campaign panel: Source, Ad/campaign, UTM campaign, UTM adset, 
+  UTM source, Created date, Offer badge
+- Quote panel: Quote no., Value, Status (pulls from existing Quote 
+  model/endpoint — if lead has no quote yet, show "No quote yet" empty state)
+- Follow-up panel: next follow-up date/time, or "No follow-up scheduled"
+
+---
+
+PART 3 — GATE-SATISFYING ACTIONS (unblocks Pipeline drag-drop from Batch A)
+
+Floor plan upload — add to Overview tab or a dedicated field in Key 
+facts panel:
+- Simple file input or URL input wired to PATCH /api/leads/:id 
+  { floorPlanUrl }
+- If using actual file upload (not just URL paste), check if Supabase 
+  Storage is already configured from earlier modules — if yes, use it; 
+  if not, ship URL-paste version now and flag file-upload as a follow-up
+
+Meeting scheduling from Lead Detail — confirm the existing "Schedule" 
+button (visible in Meetings tab, already built) is reachable and 
+functional here, not just from a separate Meetings page. This is what 
+satisfies the "Scheduled DQL meeting" gate requirement.
+
+Confirm: once floorPlanUrl + meeting both settable through the UI 
+(not just API), the Pipeline drag-drop gates from Batch A become 
+satisfiable by an actual user, not just curl.
+
+---
+
+AFTER IMPLEMENTATION:
+
+1. Screenshot /leads (list view) — confirm real data, all 10 columns 
+   render, filters visible.
+2. Screenshot /leads/:id for a lead with NO quote, NO floor plan, 
+   NO meetings — confirm empty states render cleanly (not blank/broken).
+3. Screenshot /leads/:id for X0011 (has floor plan, meeting, quote 
+   from earlier test session) — confirm all panels populate with real data.
+4. Using the UI (not curl): set a floor plan URL on a different test 
+   lead via the new upload/URL field, screenshot it saving successfully.
+5. Using the UI: schedule a DQL meeting from Lead Detail's Meetings 
+   tab on that same lead, screenshot it appearing.
+6. Go to /pipeline, drag that lead's card from MQL to DQL (now that 
+   prerequisites are UI-settable) — screenshot successful move.
+7. Click the intent stars on any lead, attempt to set a rating 
+   different from system-computed — screenshot the reason-required 
+   modal, submit it, screenshot the updated rating + confirm it logs 
+   to intent-rating-history.
+8. List every file created/modified.
+9. Confirm zero console errors across /leads, /leads/:id (both empty 
+   and populated lead), and /pipeline after these changes.
+10. Re-confirm: grep -rn "eyJ" client/src/ → paste output, must be 
+    empty (standing rule check, every batch from now on).
