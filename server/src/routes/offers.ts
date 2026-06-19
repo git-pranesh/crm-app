@@ -53,6 +53,20 @@ offersRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async 
   res.json({ offer });
 });
 
+// ── PATCH /api/offers/:id/toggle { isActive: boolean } (BRANCH_HEAD only) ────
+offersRouter.patch('/:id/toggle', verifyToken, requireRole('BRANCH_HEAD'), async (req, res) => {
+  const { isActive } = req.body as { isActive?: boolean };
+  if (typeof isActive !== 'boolean') {
+    res.status(400).json({ error: 'isActive (boolean) is required' });
+    return;
+  }
+  const offer = await prisma.offer.update({
+    where: { id: req.params.id },
+    data: { isActive },
+  });
+  res.json({ offer });
+});
+
 // ── DELETE /api/offers/:id (soft delete) ──────────────────────────────────────
 offersRouter.delete('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
   await prisma.offer.update({ where: { id: req.params.id }, data: { isActive: false } });

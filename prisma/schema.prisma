@@ -92,6 +92,27 @@ enum FieldType {
   SELECT
 }
 
+enum ProjectPhase {
+  DESIGN
+  TECHNICAL
+  PRODUCTION
+  SITE_EXECUTION
+  HANDOVER
+  COMPLETED
+}
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  DELAYED
+}
+
+enum CollectionStatus {
+  DUE
+  INVOICED
+  COLLECTED
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model User {
@@ -124,11 +145,14 @@ model User {
   followUpTasksAssigned    FollowUpTask[]
   discountRequestsRaised   DiscountRequest[] @relation("RequesterDiscounts")
   discountRequestsReviewed DiscountRequest[] @relation("ReviewerDiscounts")
+  discountRequestsForwarded DiscountRequest[] @relation("ForwarderDiscounts")
   whatsappMessagesSent     WhatsAppMessage[]
   emailsPreviewed          EmailLog[]
   activityLogs             ActivityLog[]
   notifications            NotificationLog[]
   sentInvites              UserInvite[]      @relation("InvitedBy")
+  intentRatingOverrides    IntentRatingLog[]
+  designerProjects         Project[]
 
   @@map("users")
 }
@@ -138,6 +162,13 @@ model LeadCounter {
   lastNum Int @default(0)
 
   @@map("lead_counter")
+}
+
+model ProjectCounter {
+  id      Int @id @default(1)
+  lastNum Int @default(0)
+
+  @@map("project_counter")
 }
 
 model Lead {
@@ -205,6 +236,9 @@ model Lead {
   smsLogs              SmsLog[]
   dqlQuestionnaire     DQLQuestionnaire?
   dipChecklist         DIPChecklist?
+  intentRatingLogs     IntentRatingLog[]
+  npsResponses         NPSResponse[]
+  project              Project?
 
   @@map("leads")
 }
@@ -309,6 +343,10 @@ model DiscountRequest {
   reviewedById    String?
   /// Mandatory on rejection
   reviewerComment String?
+  /// Set when BL forwards a >15% request to BRANCH_HEAD
+  forwardedToRole String?
+  /// The BL who forwarded the request
+  forwardedById   String?
   createdAt       DateTime       @default(now())
   reviewedAt      DateTime?
 
@@ -316,6 +354,7 @@ model DiscountRequest {
   quote       Quote? @relation(fields: [quoteId], references: [id])
   requestedBy User   @relation("RequesterDiscounts", fields: [requestedById], references: [id])
   reviewedBy  User?  @relation("ReviewerDiscounts", fields: [reviewedById], references: [id])
+  forwardedBy User?  @relation("ForwarderDiscounts", fields: [forwardedById], references: [id])
 
   @@map("discount_requests")
 }
@@ -543,4 +582,98 @@ model AssignmentConfig {
   updatedAt DateTime @updatedAt
 
   @@map("assignment_config")
+}
+
+// ─── Module 10 models ─────────────────────────────────────────────────────────
+
+model SLAConfig {
+  /// Rule key: FIRST_CONTACT_24H | LEAD_TO_MQL_5D | MQL_TO_DQL_5D | PROPOSAL_TO_PP_2D
+  rule           String   @id
+  thresholdHours Int
+  updatedAt      DateTime @updatedAt
+
+  @@map("sla_config")
+}
+
+model IntentRatingLog {
+  id             String   @id @default(cuid())
+  leadId         String
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  systemRating   Int
+  finalRating    Int
+  overriddenById String?
+  overriddenBy   User?    @relation(fields: [overriddenById], references: [id])
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  @@map("intent_rating_logs")
+}
+
+model NPSResponse {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id])
+  /// SALE | DESIGN | EXECUTION
+  stage       String
+  /// 0-10, null until responded
+  score       Int?
+  formToken   String    @unique
+  sentAt      DateTime  @default(now())
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("nps_responses")
+}
+
+model Project {
+  id                 String        @id @default(cuid())
+  projectCode        String        @unique
+  leadId             String        @unique
+  lead               Lead          @relation(fields: [leadId], references: [id])
+  designerId         String?
+  designer           User?         @relation(fields: [designerId], references: [id])
+  phase              ProjectPhase  @default(DESIGN)
+  health             ProjectHealth @default(ON_TRACK)
+  progressPercent    Int           @default(0)
+  contractValue      Float
+  outstandingAmount  Float         @default(0)
+  location           String?
+  handoverTargetDate DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  npsResponses  NPSResponse[]
+  collections   Collection[]
+  attentionFlags ProjectAttentionFlag[]
+
+  @@map("projects")
+}
+
+model Collection {
+  id          String           @id @default(cuid())
+  projectId   String
+  project     Project          @relation(fields: [projectId], references: [id])
+  milestone   String
+  amount      Float
+  status      CollectionStatus @default(DUE)
+  dueDate     DateTime?
+  collectedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@map("collections")
+}
+
+model ProjectAttentionFlag {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  /// Delayed | At Risk | Blocked | Urgent service
+  category    String
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("project_attention_flags")
 }

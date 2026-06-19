@@ -16,72 +16,32 @@ async function resolveSystemUserId(): Promise<string> {
   return bh?.id ?? SYSTEM_USER_ID;
 }
 
-// ── SLA rules ─────────────────────────────────────────────────────────────────
-const SLA_RULES = [
-  {
-    rule: 'FIRST_CONTACT',
-    label: 'First call within 24 hours',
-    check: async () => {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      return prisma.lead.findMany({
-        where: {
-          createdAt: { lt: cutoff },
-          calls: { none: {} },
-          stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
-          isSLABreached: false,
-        },
-        select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
-      });
-    },
-  },
-  {
-    rule: 'LEAD_TO_MQL',
-    label: 'Move to MQL within 5 days',
-    check: async () => {
-      const cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-      return prisma.lead.findMany({
-        where: {
-          stage: 'EFFECTIVE_LEAD',
-          updatedAt: { lt: cutoff },
-          isSLABreached: false,
-        },
-        select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
-      });
-    },
-  },
-  {
-    rule: 'MQL_TO_DQL',
-    label: 'Schedule DQL within 5 days of MQL',
-    check: async () => {
-      const cutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-      return prisma.lead.findMany({
-        where: {
-          stage: 'MQL',
-          updatedAt: { lt: cutoff },
-          meetings: { none: { type: 'DQL' } },
-          isSLABreached: false,
-        },
-        select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
-      });
-    },
-  },
-  {
-    rule: 'PROPOSAL_TO_PP',
-    label: 'Schedule PP within 2 days of Proposal Ready',
-    check: async () => {
-      const cutoff = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-      return prisma.lead.findMany({
-        where: {
-          stage: 'PROPOSAL_READY',
-          updatedAt: { lt: cutoff },
-          meetings: { none: { type: 'PP' } },
-          isSLABreached: false,
-        },
-        select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
-      });
-    },
-  },
-];
+// ── Default thresholds (used when SLAConfig row is missing) ───────────────────
+const DEFAULT_THRESHOLDS: Record<string, number> = {
+  FIRST_CONTACT_24H: 24,
+  LEAD_TO_MQL_5D: 120,
+  MQL_TO_DQL_5D: 120,
+  PROPOSAL_TO_PP_2D: 48,
+};
+
+// ── Load thresholds from DB (auto-seed defaults if missing) ───────────────────
+async function loadThresholds(): Promise<Record<string, number>> {
+  const configs = await prisma.sLAConfig.findMany();
+  // Seed any missing defaults
+  const missing = Object.entries(DEFAULT_THRESHOLDS).filter(
+    ([rule]) => !configs.some((c) => c.rule === rule),
+  );
+  if (missing.length > 0) {
+    await prisma.sLAConfig.createMany({
+      data: missing.map(([rule, thresholdHours]) => ({ rule, thresholdHours })),
+      skipDuplicates: true,
+    });
+  }
+  const all = await prisma.sLAConfig.findMany();
+  const map: Record<string, number> = {};
+  for (const c of all) map[c.rule] = c.thresholdHours;
+  return { ...DEFAULT_THRESHOLDS, ...map };
+}
 
 // ── Core logic — callable directly for on-demand triggers ─────────────────────
 export async function runSLACheck(): Promise<{ totalBreaches: number; details: string[] }> {
@@ -89,6 +49,75 @@ export async function runSLACheck(): Promise<{ totalBreaches: number; details: s
   let totalBreaches = 0;
   const details: string[] = [];
   const systemUserId = await resolveSystemUserId();
+
+  // Load configurable thresholds from DB
+  const thresholds = await loadThresholds();
+
+  const SLA_RULES = [
+    {
+      rule: 'FIRST_CONTACT',
+      label: 'First call within 24 hours',
+      check: async () => {
+        const cutoff = new Date(Date.now() - thresholds.FIRST_CONTACT_24H * 60 * 60 * 1000);
+        return prisma.lead.findMany({
+          where: {
+            createdAt: { lt: cutoff },
+            calls: { none: {} },
+            stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
+            isSLABreached: false,
+          },
+          select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
+        });
+      },
+    },
+    {
+      rule: 'LEAD_TO_MQL',
+      label: 'Move to MQL within 5 days',
+      check: async () => {
+        const cutoff = new Date(Date.now() - thresholds.LEAD_TO_MQL_5D * 60 * 60 * 1000);
+        return prisma.lead.findMany({
+          where: {
+            stage: 'EFFECTIVE_LEAD',
+            updatedAt: { lt: cutoff },
+            isSLABreached: false,
+          },
+          select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
+        });
+      },
+    },
+    {
+      rule: 'MQL_TO_DQL',
+      label: 'Schedule DQL within 5 days of MQL',
+      check: async () => {
+        const cutoff = new Date(Date.now() - thresholds.MQL_TO_DQL_5D * 60 * 60 * 1000);
+        return prisma.lead.findMany({
+          where: {
+            stage: 'MQL',
+            updatedAt: { lt: cutoff },
+            meetings: { none: { type: 'DQL' } },
+            isSLABreached: false,
+          },
+          select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
+        });
+      },
+    },
+    {
+      rule: 'PROPOSAL_TO_PP',
+      label: 'Schedule PP within 2 days of Proposal Ready',
+      check: async () => {
+        const cutoff = new Date(Date.now() - thresholds.PROPOSAL_TO_PP_2D * 60 * 60 * 1000);
+        return prisma.lead.findMany({
+          where: {
+            stage: 'PROPOSAL_READY',
+            updatedAt: { lt: cutoff },
+            meetings: { none: { type: 'PP' } },
+            isSLABreached: false,
+          },
+          select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
+        });
+      },
+    },
+  ];
 
   for (const { rule, label, check } of SLA_RULES) {
     const breachedLeads = await check();

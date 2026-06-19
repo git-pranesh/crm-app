@@ -34,6 +34,8 @@ import { callsStandaloneRouter } from './routes/calls.js';
 import { googleFormWebhookRouter, questionnaireRouter } from './routes/questionnaire.js';
 import { acceptInviteRouter } from './routes/acceptInvite.js';
 import { dipChecklistRouter } from './routes/dipChecklist.js';
+import { calendarRouter } from './routes/calendar.js';
+import { projectsRouter } from './routes/projects.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
@@ -155,6 +157,12 @@ app.use('/api/users/:id/discount-authority', usersDiscountRouter);
 
 // Admin panel (Branch Head only)
 app.use('/api/admin', adminRouter);
+
+// Calendar
+app.use('/api/calendar', calendarRouter);
+
+// Projects (delivery)
+app.use('/api/projects', projectsRouter);
 
 // Public feedback form (no auth)
 app.use('/api/feedback', feedbackRouter);

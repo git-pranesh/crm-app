@@ -521,6 +521,98 @@ adminRouter.get('/health', async (_req, res) => {
   }
 });
 
+// ── GET /api/admin/sla-config — list all SLA thresholds ──────────────────────
+adminRouter.get('/sla-config', async (_req, res) => {
+  try {
+    const DEFAULT_THRESHOLDS = [
+      { rule: 'FIRST_CONTACT_24H', thresholdHours: 24, label: 'First call within N hours' },
+      { rule: 'LEAD_TO_MQL_5D', thresholdHours: 120, label: 'Move to MQL within N hours' },
+      { rule: 'MQL_TO_DQL_5D', thresholdHours: 120, label: 'Schedule DQL within N hours' },
+      { rule: 'PROPOSAL_TO_PP_2D', thresholdHours: 48, label: 'Schedule PP within N hours' },
+    ];
+
+    // Auto-seed defaults if missing
+    await prisma.sLAConfig.createMany({
+      data: DEFAULT_THRESHOLDS.map(({ rule, thresholdHours }) => ({ rule, thresholdHours })),
+      skipDuplicates: true,
+    });
+
+    const configs = await prisma.sLAConfig.findMany({ orderBy: { rule: 'asc' } });
+    const enriched = configs.map((c) => ({
+      ...c,
+      label: DEFAULT_THRESHOLDS.find((d) => d.rule === c.rule)?.label ?? c.rule,
+    }));
+    res.json({ configs: enriched });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/admin/sla-config/:rule { thresholdHours } ─────────────────────
+adminRouter.patch('/sla-config/:rule', async (req, res) => {
+  try {
+    const { rule } = req.params;
+    const { thresholdHours } = req.body as { thresholdHours?: number };
+
+    if (!thresholdHours || thresholdHours < 1) {
+      res.status(400).json({ error: 'thresholdHours must be a positive integer' });
+      return;
+    }
+
+    const config = await prisma.sLAConfig.upsert({
+      where: { rule },
+      create: { rule, thresholdHours },
+      update: { thresholdHours },
+    });
+    res.json({ config });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/admin/whatsapp-templates — read-only list (no DB needed) ─────────
+adminRouter.get('/whatsapp-templates', async (_req, res) => {
+  const templates = [
+    {
+      id: 'pre_call_intro',
+      label: 'Pre-call Introduction',
+      body: 'Hi {{clientName}}, this is {{designerName}} from Interiors by DeX. I would love to connect and understand your interior design requirements. When would be a good time to speak?',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+    {
+      id: 'rnr_followup',
+      label: 'RNR Follow-up',
+      body: 'Hi {{clientName}}, I tried reaching you but could not connect. I am here to help with your interior design journey. Please let me know a convenient time to talk!',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+    {
+      id: 'meeting_confirmation',
+      label: 'Meeting Confirmation',
+      body: 'Hi {{clientName}}, your {{meetingType}} meeting is confirmed for {{scheduledAt}}. Mode: {{mode}}. Looking forward to meeting you! — Team Interiors by DeX',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+    {
+      id: 'mom_sent',
+      label: 'MOM Sent',
+      body: 'Hi {{clientName}}, thank you for the meeting today! I have sent the meeting summary to your email. Please review and reach out if you have any questions.',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+    {
+      id: 'onboarding_welcome',
+      label: 'Onboarding Welcome',
+      body: 'Welcome aboard, {{clientName}}! We are thrilled to start your interior design journey with Interiors by DeX. Your designer {{designerName}} will be your primary point of contact.',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+    {
+      id: 'on_hold_notification',
+      label: 'On-Hold Notification',
+      body: 'Hi {{clientName}}, your interior design project with Interiors by DeX is on hold until {{revivalDate}}. Reason: {{reason}}. Please reach out if you have any questions.',
+      note: 'Pre-approved WhatsApp template — read-only',
+    },
+  ];
+  res.json({ templates, note: 'Templates are pre-approved and managed server-side. Contact Twilio BSP to modify.' });
+});
+
 // ── POST /api/admin/jobs/trigger — run a background job immediately ────────────
 adminRouter.post('/jobs/trigger', async (req, res) => {
   try {

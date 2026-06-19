@@ -9,6 +9,7 @@ import { sendEmail, inactivationEmail, onHoldEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements } from '../config/stageRequirements.js';
+import { computeSystemRating } from '../services/intentScoring.js';
 
 export const leadsRouter = Router();
 
@@ -131,7 +132,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
     // Check duplicate phone
     const existing = await prisma.lead.findFirst({ where: { phone } });
     if (existing) {
-      res.status(409).json({ error: 'A lead with this phone number already exists', existingLeadId: existing.id });
+      res.status(409).json({ isDuplicate: true, error: 'A lead with this phone number already exists', existingLeadId: existing.leadId });
       return;
     }
 
@@ -139,7 +140,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
     if (email?.trim()) {
       const emailExisting = await prisma.lead.findFirst({ where: { email: email.trim() } });
       if (emailExisting) {
-        res.status(409).json({ error: 'A lead with this email already exists', existingLeadId: emailExisting.id });
+        res.status(409).json({ isDuplicate: true, error: 'A lead with this email already exists', existingLeadId: emailExisting.leadId });
         return;
       }
     }
@@ -456,6 +457,66 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
+      // Intent rating log when moving into MQL (G1/G6)
+      if (stage === 'MQL' && prevStage === 'EFFECTIVE_LEAD') {
+        try {
+          const leadWithRels = await prisma.lead.findUnique({
+            where: { id },
+            include: {
+              calls: { select: { id: true } },
+              meetings: { select: { id: true, status: true } },
+            },
+          });
+          if (leadWithRels) {
+            const systemRating = computeSystemRating(leadWithRels);
+            const finalRating = lead.intentRating ?? systemRating;
+            const overridden = lead.intentRating !== null && lead.intentRating !== undefined
+              && lead.intentRating !== systemRating;
+            await prisma.intentRatingLog.create({
+              data: {
+                leadId: id,
+                systemRating,
+                finalRating,
+                overriddenById: overridden ? user.id : undefined,
+                reason: overridden ? 'Manual override on MQL' : undefined,
+              },
+            });
+          }
+        } catch (e) {
+          console.warn('[leads:intentRatingLog]', (e as Error).message);
+        }
+      }
+
+      // Auto-create Project when moving to HANDED_OVER (G3)
+      if (stage === 'HANDED_OVER') {
+        try {
+          const alreadyExists = await prisma.project.findUnique({ where: { leadId: id } });
+          if (!alreadyExists) {
+            const projCounter = await prisma.$transaction(async (tx) => {
+              return tx.projectCounter.upsert({
+                where: { id: 1 },
+                create: { id: 1, lastNum: 1 },
+                update: { lastNum: { increment: 1 } },
+              });
+            });
+            const year = new Date().getFullYear();
+            const projectCode = `P-${year}-${String(projCounter.lastNum).padStart(4, '0')}`;
+            await prisma.project.create({
+              data: {
+                projectCode,
+                leadId: id,
+                designerId: lead.assignedDesignerId ?? undefined,
+                contractValue: lead.estimatedValue ? Number(lead.estimatedValue) : 0,
+                location: lead.location ?? undefined,
+              },
+            });
+            await logActivity(user.id, 'PROJECT_CREATED', id, { projectCode });
+          }
+        } catch (e) {
+          console.warn('[leads:project:create]', (e as Error).message);
+        }
+      }
+
       // ON_HOLD notifications — SMS, Email, WhatsApp (all independent)
       if (stage === 'ON_HOLD' && existing.phone) {
         const revivalStr = onHoldRevivalDate
@@ -642,6 +703,66 @@ leadsRouter.get('/:id/activity', verifyToken, async (req, res) => {
       },
     });
     res.json({ activities });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/leads/:id/intent-rating { rating, reason } ────────────────────
+leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    const { rating, reason } = req.body as { rating?: number; reason?: string };
+
+    if (!rating || rating < 1 || rating > 5) {
+      res.status(400).json({ error: 'rating must be an integer from 1 to 5' });
+      return;
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      include: {
+        calls: { select: { id: true } },
+        meetings: { select: { id: true, status: true } },
+      },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    const systemRating = computeSystemRating(lead);
+
+    await prisma.lead.update({ where: { id }, data: { intentRating: rating } });
+
+    const log = await prisma.intentRatingLog.create({
+      data: {
+        leadId: id,
+        systemRating,
+        finalRating: rating,
+        overriddenById: rating !== systemRating ? user.id : undefined,
+        reason: reason?.trim() || undefined,
+      },
+    });
+
+    await logActivity(user.id, 'INTENT_RATING_UPDATED', id, { rating, systemRating, reason });
+
+    res.json({ rating, systemRating, log });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:id/intent-rating-history ──────────────────────────────────
+leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const logs = await prisma.intentRatingLog.findMany({
+      where: { leadId: id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        overriddenBy: { select: { id: true, name: true, role: true } },
+      },
+    });
+    res.json({ history: logs });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

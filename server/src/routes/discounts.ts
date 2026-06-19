@@ -7,10 +7,19 @@ import { createNotification } from '../lib/notifications.js';
 export const discountsRouter = Router();
 export const leadDiscountRouter = Router({ mergeParams: true });
 
+// Discount authority ceilings (G7)
+const AUTHORITY_CEILING: Record<string, number> = {
+  DESIGNER: 10,
+  CRE: 10,
+  BL: 15,
+  BRANCH_HEAD: 100,
+};
+
 const discountInclude = {
   lead: { select: { id: true, leadId: true, name: true } },
   requestedBy: { select: { id: true, name: true, role: true } },
   reviewedBy: { select: { id: true, name: true } },
+  forwardedBy: { select: { id: true, name: true } },
 } as const;
 
 // ── POST /api/leads/:leadId/discount-request ──────────────────────────────────
@@ -73,22 +82,28 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/discount-requests/pending — BL sees team requests ────────────────
+// ── GET /api/discount-requests/pending — BL sees team; BH sees forwarded + >15% ─
 discountsRouter.get('/pending', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
   try {
     const user = req.user!;
-    let leadFilter: any = {};
+    let where: any = { status: 'PENDING' };
 
     if (user.role === 'BL') {
       const members = await prisma.user.findMany({
         where: { blId: user.id },
         select: { id: true },
       });
-      leadFilter = { assignedDesignerId: { in: members.map((m) => m.id) } };
+      where.lead = { assignedDesignerId: { in: members.map((m) => m.id) } };
+    } else {
+      // BRANCH_HEAD: show all forwarded OR discountPct > 15
+      where.OR = [
+        { forwardedToRole: 'BRANCH_HEAD' },
+        { discountPct: { gt: 15 } },
+      ];
     }
 
     const requests = await prisma.discountRequest.findMany({
-      where: { status: 'PENDING', lead: leadFilter },
+      where,
       include: discountInclude,
       orderBy: { createdAt: 'desc' },
     });
@@ -120,7 +135,67 @@ discountsRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// ── PATCH /api/discount-requests/:id — BL approves or rejects ────────────────
+// ── PATCH /api/discount-requests/:id/forward — BL forwards >15% to BH ────────
+discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+
+    const existing = await prisma.discountRequest.findUnique({
+      where: { id },
+      include: {
+        lead: { select: { id: true, leadId: true, name: true } },
+        requestedBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!existing) { res.status(404).json({ error: 'Discount request not found' }); return; }
+    if (existing.status !== 'PENDING') {
+      res.status(409).json({ error: 'Request is no longer pending' });
+      return;
+    }
+    if (Number(existing.discountPct) <= 15) {
+      res.status(400).json({ error: 'Forward is only required for discount > 15%; you can approve this directly.' });
+      return;
+    }
+    if (existing.forwardedToRole) {
+      res.status(409).json({ error: 'Already forwarded to Branch Head' });
+      return;
+    }
+
+    const updated = await prisma.discountRequest.update({
+      where: { id },
+      data: {
+        forwardedToRole: 'BRANCH_HEAD',
+        forwardedById: user.id,
+      },
+      include: discountInclude,
+    });
+
+    await logActivity(user.id, 'DISCOUNT_FORWARDED', existing.lead.id, {
+      requestId: id, discountPct: Number(existing.discountPct),
+    });
+
+    // Notify all BRANCH_HEAD users
+    const branchHeads = await prisma.user.findMany({
+      where: { role: 'BRANCH_HEAD', isActive: true },
+      select: { id: true },
+    });
+    for (const bh of branchHeads) {
+      await createNotification(
+        bh.id,
+        'DISCOUNT_REQUEST',
+        `${user.name} forwarded a ${Number(existing.discountPct).toFixed(1)}% discount request for lead ${existing.lead.leadId} (${existing.lead.name}) — requires Branch Head approval`,
+        existing.lead.id,
+      );
+    }
+
+    res.json({ request: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/discount-requests/:id — approve or reject (with ceiling check) ─
 discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -151,6 +226,16 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
       return;
     }
 
+    // G7: Enforce discount ceiling per role
+    const discountPctNum = Number(existing.discountPct);
+    const ceiling = AUTHORITY_CEILING[user.role] ?? 0;
+    if (status === 'APPROVED' && discountPctNum > ceiling) {
+      res.status(403).json({
+        error: `Exceeds your approval authority (max ${ceiling}% for ${user.role}). Use /forward to escalate to Branch Head.`,
+      });
+      return;
+    }
+
     const updated = await prisma.discountRequest.update({
       where: { id },
       data: {
@@ -164,16 +249,25 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
 
     await logActivity(user.id, `DISCOUNT_${status}`, existing.lead.id, {
       requestId: id,
-      discountPct: Number(existing.discountPct),
+      discountPct: discountPctNum,
       reviewerComment,
     });
 
     // Notify the designer who raised the request
-    await createNotification(
-      existing.requestedById,
-      'DISCOUNT_REQUEST',
-      `Your discount request for lead ${existing.lead.leadId} (${existing.lead.name}) was ${status.toLowerCase()} by ${user.name}.${reviewerComment ? ` Note: ${reviewerComment}` : ''}`,
-      existing.lead.id,
+    const notifyMsg =
+      `Your discount request for lead ${existing.lead.leadId} (${existing.lead.name}) was ${status.toLowerCase()} by ${user.name}.${reviewerComment ? ` Note: ${reviewerComment}` : ''}`;
+
+    const notifyIds = new Set<string>([existing.requestedById]);
+
+    // Also notify forwarding BL if different from reviewer
+    if (existing.forwardedById && existing.forwardedById !== user.id) {
+      notifyIds.add(existing.forwardedById);
+    }
+
+    await Promise.all(
+      Array.from(notifyIds).map((uid) =>
+        createNotification(uid, 'DISCOUNT_REQUEST', notifyMsg, existing.lead.id),
+      ),
     );
 
     res.json({ request: updated });

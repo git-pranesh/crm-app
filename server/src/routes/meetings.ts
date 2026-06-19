@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -268,6 +269,22 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   });
 
   await recalculateMilestones(lead.id);
+
+  // Auto-create NPS request when DQL or PP meeting is COMPLETED (G2)
+  if (status === 'COMPLETED' && (meeting.type === 'DQL' || meeting.type === 'PP')) {
+    try {
+      const formToken = randomUUID();
+      await prisma.nPSResponse.create({
+        data: {
+          leadId: lead.id,
+          stage: 'SALE',
+          formToken,
+        },
+      });
+    } catch (e) {
+      console.warn('[meetings:nps:create]', (e as Error).message);
+    }
+  }
 
   res.json({ meeting: updated });
 });
