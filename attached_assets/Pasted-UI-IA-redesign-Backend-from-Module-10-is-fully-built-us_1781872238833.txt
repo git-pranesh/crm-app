@@ -1,0 +1,176 @@
+UI/IA redesign. Backend from Module 10 is fully built — use those 
+real endpoints, do not invent new ones. If a needed endpoint is 
+missing, STOP and report it — do not stub fake data to make the UI 
+look done.
+
+Before writing any code: confirm these Module 10 endpoints respond 
+correctly by curling each one. List which return real data vs empty/
+error. Only then proceed.
+
+---
+
+PART 1 — NAV SHELL (client/src/App.tsx + new Layout component)
+
+Replace flat sidebar with grouped sections, collapsible headers, 
+matching this exact structure:
+
+OVERVIEW
+  Dashboard
+
+SALES
+  Pipeline
+  Leads
+  WhatsApp
+  Discounts
+  Meetings
+
+DELIVERY
+  Projects
+
+INSIGHTS
+  Reports
+
+WORKSPACE
+  Team & Roles   (existing Admin user-management page, renamed)
+  Settings       (new — SLA config + offers + whatsapp templates, 
+                  backend already built in Module 10 G4)
+
+Bottom: user avatar + name + role label + logout icon (existing pattern)
+
+Top bar (all pages): 
+- Search box "Search name, phone, Lead ID..." — wire to existing 
+  lead search endpoint, debounced, navigates to lead on select
+- Role/name dropdown (existing user menu)
+- Notification bell with unread badge (existing notifications endpoint)
+- "+ New lead" button, top right, orange/terracotta accent — opens 
+  existing new-lead modal/form
+
+Do NOT build: Calendar nav item yet (Batch B), Procurement/Finance/
+Service & Warranty nav items (explicitly out of scope per founder), 
+"Design System" item (was a mockup-tool artifact, not a real page).
+
+Use existing Tailwind theme — check for existing terracotta/coral 
+color tokens from the Quote Builder brand identity (proposals.
+interiorsbydex.com) and reuse them for the accent color, orange CTA 
+buttons, and status badges. Do not introduce a new color palette.
+
+---
+
+PART 2 — DASHBOARD REDESIGN (client/src/pages/Dashboard.tsx)
+
+Two distinct layouts based on role. Fetch from GET /api/dashboard 
+(Module 10 G2 — already returns pipelineValue, avgNPS, 
+collectedThisMonth, outstanding, phaseLoad, needsAttention, 
+collectionsDue, inDelivery, plus existing stageFunnel, sourceBreakdown, 
+conversionRates, slaBreaches, teamActivity).
+
+### BRANCH_HEAD / Admin layout:
+Row 1 — 6 KPI cards (use existing dashboard.totalLeads etc + new 
+pipelineValue, avgNPS fields):
+  Sales Pipeline (₹ value, "N active leads, est. value")
+  In Delivery (count, "₹X contract value in flight")  
+  Collected This Month (₹, "Payments in last 30 days")
+  Outstanding (₹, "Yet to collect on projects in delivery")
+  Needs Attention (count, "N projects · N SLA leads")
+  NPS (score, "N responses across touchpoints")
+
+Row 2 — two charts side by side:
+  Pipeline funnel (horizontal bar chart, one bar per stage, use 
+  existing stageFunnel data)
+  Source mix (donut chart, use existing sourceBreakdown data, 
+  legend with count + %)
+
+Row 3 — two panels side by side:
+  Stage conversion (cumulative reach per stage from Effective onward, 
+  with % step-down between stages — derive from stageFunnel)
+  SLA breaches (list, use existing slaBreaches data, each row shows 
+  lead name + breach reason + hours overdue)
+
+Row 4 — Sales activity feed (latest moves across pipeline — use 
+existing teamActivity / ActivityLog data, show actor avatar + action 
++ lead + relative time)
+
+### BL / Designer layout:
+Row 1 — 6 KPI cards (same fields as above — these come from the 
+SAME /api/dashboard endpoint, just role-scoped server-side already 
+in Module 10)
+
+Row 2 — "Delivery" section header, then:
+  Phase load (vertical bar chart: Design/Technical/Production/
+  Execution/Handover/Completed, use phaseLoad data, hover tooltip 
+  shows count + value per phase)
+  Needs attention (list, use needsAttention data — client name, 
+  phase badge, risk badge (Delayed/At Risk/Blocked), description, 
+  "Nd past handover" or similar)
+
+Row 3:
+  Collections due (list, use collectionsDue data — client name, 
+  milestone, amount, "waiting Nd ago", Due/Invoiced badge)
+  Site & service pulse (deprioritize — Service & Warranty is out of 
+  scope. Render this card with a simple "Coming soon" placeholder, 
+  do not fetch fake data)
+
+Loading states: skeleton cards while fetching, not blank/spinner-only.
+Empty states: if no SLA breaches / no needs-attention, show a calm 
+"All clear" message, not an empty table.
+
+---
+
+PART 3 — PIPELINE KANBAN (new page: client/src/pages/Pipeline.tsx)
+
+Route: /pipeline. Uses existing GET /api/leads (already supports all 
+filters from Module 9 G2) + existing PATCH /api/leads/:id/stage 
+(now gated by Module 10 G1 stage-requirements).
+
+Top bar: 
+- Filter tabs: All (N) / Active (N) / On Hold (N) / Inactive (N) — 
+  derive counts from current loaded lead set, clicking applies a 
+  stage-group filter
+- "Filter this board..." search input (client-side filter on already-
+  loaded leads, or wire to GET /api/leads?search=)
+- Right-aligned: "N leads · Pipeline value ₹X.XXCr" summary
+
+Columns: one per stage (New/Effective Lead/MQL/DQL/Proposal Ready/
+Proposal Presented/Onboarding) — exclude HANDED_OVER, INACTIVE, 
+ON_HOLD from default kanban view (those live under the filter tabs 
+above, not as permanent columns). Each column header shows stage 
+name, count, and total ₹ value of leads in that column.
+
+Card fields (exact, per mockup):
+  Lead name + Lead ID (top row)
+  Property type · scope (e.g. "2 BHK · Modular Kitchen")
+  ₹ value (bold) + location
+  Intent dot (color) + star rating (filled/outline stars)
+  SLA breach badge (red, "SLA · Nh") if applicable
+  Follow-up overdue badge (if applicable)
+  Bottom row: assignee avatar + name, source, relative time ("2d ago")
+
+Drag-to-change-stage: 
+- On drop, call PATCH /api/leads/:id/stage { stage: <target> }
+- If 400 (gate blocked — Module 10 G1): revert the card to its 
+  original column, show a toast/banner with the exact "missing" 
+  array from the API response (e.g. "Cannot move to MQL — missing: 
+  Intent rating, Estimated budget, Next meeting date")
+- If 200: leave card in new column, update column counts/totals 
+  without a full page refetch if possible
+
+Card click → navigate to /leads/:leadId (existing lead detail page, 
+redesign is Batch C — for now just confirm navigation works).
+
+---
+
+AFTER IMPLEMENTATION:
+
+1. Screenshot /dashboard logged in as BRANCH_HEAD — paste it.
+2. Screenshot /dashboard logged in as BL — paste it, confirm it's 
+   visibly different from the BRANCH_HEAD layout.
+3. Screenshot /pipeline — paste it, confirm columns + cards render 
+   with real data (not placeholder/lorem ipsum).
+4. Manually drag one card to a stage that SHOULD be blocked by a 
+   gate (e.g. EFFECTIVE_LEAD card with no intent rating dragged to 
+   MQL column) — screenshot the error toast/banner.
+5. Manually drag one card to a stage that SHOULD succeed — screenshot 
+   the card landing in the new column.
+6. List every file created/modified.
+7. Confirm zero console errors in browser dev tools on all 3 pages 
+   (paste console output or confirm clean).
