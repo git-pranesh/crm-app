@@ -1,0 +1,63 @@
+Two checks before Batch A is signed off.
+
+---
+
+CHECK 1 — Confirm gate works on BOTH sides (block + allow)
+
+1. Pick lead X0011 (G3 Test Client, currently MQL).
+2. Via API, satisfy MQL->DQL prerequisites:
+   PATCH /api/leads/X0011 { estimatedValue: 1500000 }
+   POST /api/leads/X0011/meetings { type: "DQL", mode: "VIRTUAL", 
+     scheduledAt: "2026-06-25T10:00:00Z" }
+3. Now drag that card from MQL to DQL in the Pipeline UI.
+4. Screenshot it landing in the DQL column.
+5. Confirm Lead.stage = "DQL" in DB.
+
+If this works, the gate is correct — confirms.
+
+Then check floorPlanUrl:
+6. grep -n "floorPlanUrl" prisma/schema.prisma
+   → paste output. Does this field actually exist on the Lead model?
+7. If it exists: PATCH /api/leads/X0011 { floorPlanUrl: "https://test.com/plan.pdf" }
+   → drag DQL to Proposal Ready → screenshot success.
+8. If it does NOT exist: say so explicitly. This means the 
+   DQL->PROPOSAL_READY gate can never be satisfied by anyone until 
+   the field is added to the schema AND a UI to set it ships in 
+   Batch B (Lead Detail redesign). Flag this as a known blocker, 
+   not a bug to fix now.
+
+---
+
+CHECK 2 — Confirm JWT exposure is fully purged, not just route-removed
+
+1. grep -rn "eyJ" client/src/ 
+   → paste any matches. JWTs start with "eyJ" (base64 header). 
+   Zero matches expected.
+
+2. grep -rn "DevPages\|/dev/" client/src/ server/src/
+   → paste any matches. Should be zero.
+
+3. git log --all --oneline | grep -i "dev"
+   → paste output. Confirm which commit(s) introduced DevPages.tsx 
+   and which commit removed it.
+
+4. git show <commit-hash-that-added-DevPages> --stat
+   → confirm DevPages.tsx was actually in that commit (not just 
+   referenced).
+
+5. Was this commit ever pushed to a remote (origin/main, gitsafe-
+   backup, or similar)? Check:
+   git log --all --oneline --source | grep -i "dev" 
+   Paste output. If it was pushed to any remote before removal, 
+   the exposed token may exist in remote history even after local 
+   removal — flag this explicitly, do not assume local cleanup is 
+   sufficient.
+
+6. What was the actual JWT in DevPages.tsx — whose token was it 
+   (which test user)? If it was a real seeded user's token (not a 
+   throwaway), recommend rotating that user's Supabase password as 
+   a precaution, since the token may have been exposed in git 
+   history or build artifacts.
+
+Paste all 6 outputs raw. Do not summarize as "all clear" — show 
+the actual grep results.
