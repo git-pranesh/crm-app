@@ -33,9 +33,10 @@ const NAV_GROUPS = [
     items: [
       { to: '/pipeline', label: 'Pipeline', icon: '⬡' },
       { to: '/leads', label: 'Leads', icon: '👤' },
+      { to: '/meetings', label: 'Meetings', icon: '📅' },
+      { to: '/calendar', label: 'Calendar', icon: '🗓' },
       { to: '/whatsapp', label: 'WhatsApp', icon: '💬' },
       { to: '/discounts', label: 'Discounts', icon: '%' },
-      { to: '/meetings', label: 'Meetings', icon: '📅' },
     ],
   },
   {

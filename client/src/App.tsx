@@ -17,6 +17,7 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
+import Calendar from './pages/Calendar';
 import FeedbackForm from './pages/FeedbackForm';
 import AcceptInvite from './pages/AcceptInvite';
 
@@ -108,6 +109,7 @@ export default function App() {
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/settings" element={<Settings />} />
+                    <Route path="/calendar" element={<Calendar />} />
                     <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Layout>
