@@ -44,6 +44,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       stage, source, designerId, blId, search,
       isSLABreached, page = '1', limit = '50',
       projectType, location, dateRange, intent,
+      status,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -73,7 +74,17 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       ];
     }
 
-    if (stage) where.stage = stage;
+    // BUG-005: status → stage-set mapping (stage= takes precedence if both supplied)
+    const statusToStages: Record<string, string[]> = {
+      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING'],
+      ON_HOLD: ['ON_HOLD'],
+      INACTIVE: ['INACTIVE'],
+    };
+    if (stage) {
+      where.stage = stage;
+    } else if (status && statusToStages[status]) {
+      where.stage = { in: statusToStages[status] };
+    }
     if (source) where.source = source;
     if (designerId) where.assignedDesignerId = designerId;
     if (blId) where.assignedBLId = blId;
@@ -310,6 +321,100 @@ leadsRouter.post(
   },
 );
 
+// ── GET /api/leads/export — download filtered leads as CSV ───────────────────
+leadsRouter.get('/export', verifyToken, async (req, res) => {
+  try {
+    const {
+      stage, source, designerId, blId, search,
+      projectType, location, dateRange, intent,
+      status,
+    } = req.query as Record<string, string>;
+
+    const user = req.user!;
+    const where: any = {};
+
+    // Role scoping (same rules as list)
+    if (user.role === 'DESIGNER') {
+      where.assignedDesignerId = user.id;
+    } else if (user.role === 'BL') {
+      const teamMembers = await prisma.user.findMany({
+        where: { blId: user.id, isActive: true },
+        select: { id: true },
+      });
+      const teamIds = teamMembers.map((m: any) => m.id);
+      where.OR = [{ assignedBLId: user.id }, { assignedDesignerId: { in: teamIds } }];
+    }
+
+    const statusToStages: Record<string, string[]> = {
+      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING'],
+      ON_HOLD: ['ON_HOLD'],
+      INACTIVE: ['INACTIVE'],
+    };
+    if (stage) {
+      where.stage = stage;
+    } else if (status && statusToStages[status]) {
+      where.stage = { in: statusToStages[status] };
+    }
+    if (source) where.source = source;
+    if (designerId) where.assignedDesignerId = designerId;
+    if (blId) where.assignedBLId = blId;
+    if (projectType) where.projectType = projectType;
+    if (location) where.location = { contains: location, mode: 'insensitive' };
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { leadId: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (intent) {
+      const intentVal = parseInt(intent);
+      if (!isNaN(intentVal)) where.intentRating = intentVal;
+    }
+    if (dateRange) {
+      const now = new Date();
+      if (dateRange === '7d') where.createdAt = { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+      else if (dateRange === '30d') where.createdAt = { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) };
+      else if (dateRange === 'thisMonth') {
+        where.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+      }
+    }
+
+    const leads = await prisma.lead.findMany({
+      where,
+      include: {
+        assignedDesigner: { select: { name: true } },
+        assignedBL: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const header = 'Lead ID,Name,Phone,Email,Stage,Source,Estimated Value,Intent Rating,Designer,BL,Created At\n';
+    const rows = leads.map((l: any) => [
+      l.leadId,
+      `"${(l.name ?? '').replace(/"/g, '""')}"`,
+      l.phone ?? '',
+      l.email ?? '',
+      l.stage,
+      l.source ?? '',
+      l.estimatedValue ?? '',
+      l.intentRating ?? '',
+      `"${(l.assignedDesigner?.name ?? '').replace(/"/g, '""')}"`,
+      `"${(l.assignedBL?.name ?? '').replace(/"/g, '""')}"`,
+      l.createdAt.toISOString(),
+    ].join(','));
+    const csv = header + rows.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="leads_export_${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (err: any) {
+    console.error('[leads:export]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/leads/:id — get lead detail ──────────────────────────────────────
 leadsRouter.get('/:id', verifyToken, async (req, res) => {
   try {
@@ -422,6 +527,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
 
     if (stage && stage !== prevStage) {
       await logActivity(user.id, 'STAGE_CHANGED', id, { from: prevStage, to: stage });
+
+      // BUG-009 Part B: auto-resolve open SLA breaches when moving to a terminal stage
+      if (stage === 'HANDED_OVER' || stage === 'INACTIVE') {
+        await prisma.sLABreach.updateMany({
+          where: { leadId: id, resolvedAt: null },
+          data: { resolvedAt: new Date() },
+        });
+        await prisma.lead.update({ where: { id }, data: { isSLABreached: false } });
+      }
 
       // Auto-create DIPChecklist when moving to ONBOARDING
       if (stage === 'ONBOARDING') {

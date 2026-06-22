@@ -127,6 +127,7 @@ export default function LeadList() {
       if (filters.search) params.set('search', filters.search);
       if (filters.stage) params.set('stage', filters.stage);
       if (filters.source) params.set('source', filters.source);
+      if (filters.status) params.set('status', filters.status);
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
       setTotal(data.total);
@@ -136,13 +137,9 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters.search, filters.stage, filters.source]);
+  }, [page, filters.search, filters.stage, filters.source, filters.status]);
 
   useEffect(() => { load(); }, [load]);
-
-  const visibleLeads = filters.status
-    ? leads.filter((l) => deriveStatus(l.stage) === filters.status)
-    : leads;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +161,12 @@ export default function LeadList() {
   const handleExportCSV = async () => {
     setExporting(true);
     try {
-      const resp = await fetch('/api/reports/lead_summary/export', {
+      const exportParams = new URLSearchParams();
+      if (filters.search) exportParams.set('search', filters.search);
+      if (filters.stage) exportParams.set('stage', filters.stage);
+      if (filters.source) exportParams.set('source', filters.source);
+      if (filters.status) exportParams.set('status', filters.status);
+      const resp = await fetch(`/api/leads/export?${exportParams}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('crm_token')}` },
       });
       if (!resp.ok) { toast.error('Export failed'); return; }
@@ -300,13 +302,13 @@ export default function LeadList() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              {loading ? 'Loading…' : `${visibleLeads.length} of ${total} leads`}
+              {loading ? 'Loading…' : `${leads.length} of ${total} leads`}
             </p>
           </div>
 
           {loading ? (
             <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Loading leads…</div>
-          ) : visibleLeads.length === 0 ? (
+          ) : leads.length === 0 ? (
             <EmptyState icon="👤" title="No leads found" description="Try adjusting your filters or create a new lead"
               action={{ label: '+ New Lead', onClick: () => setShowCreate(true) }} />
           ) : (
@@ -321,7 +323,7 @@ export default function LeadList() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {visibleLeads.map((lead) => {
+                    {leads.map((lead) => {
                       const status = deriveStatus(lead.stage);
                       return (
                         <tr

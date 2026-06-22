@@ -178,10 +178,11 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
   const user = req.user!;
 
-  const { status, mom, rescheduledReason, outcome } = req.body as {
+  const { status, mom, rescheduledReason, noShowReason, outcome } = req.body as {
     status?: string;
     mom?: string;
     rescheduledReason?: string;
+    noShowReason?: string;
     outcome?: string;
   };
 
@@ -197,6 +198,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   }
   if (status === 'RESCHEDULED' && !rescheduledReason?.trim()) {
     res.status(400).json({ error: 'rescheduledReason is required when marking RESCHEDULED' });
+    return;
+  }
+  if (status === 'NO_SHOW' && !noShowReason?.trim()) {
+    res.status(400).json({ error: 'noShowReason is required when marking NO_SHOW' });
     return;
   }
 
@@ -216,6 +221,9 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   }
   if (status === 'RESCHEDULED') {
     updateData.rescheduledReason = rescheduledReason;
+  }
+  if (status === 'NO_SHOW') {
+    updateData.noShowReason = noShowReason!.trim();
   }
 
   const updated = await prisma.meeting.update({

@@ -301,6 +301,7 @@ model Meeting {
   status            MeetingStatus @default(SCHEDULED)
   scheduledAt       DateTime
   rescheduledReason String?
+  noShowReason      String?
   /// Minutes of Meeting — mandatory when status → COMPLETED
   mom               String?
   outcome           String?

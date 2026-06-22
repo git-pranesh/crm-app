@@ -167,7 +167,7 @@ leadWhatsAppRouter.get('/', verifyToken, async (req, res) => {
     data: { isRead: true },
   });
 
-  res.json({ messages, templates: Object.keys(WA_TEMPLATES) });
+  res.json({ messages });
 });
 
 // ── GET /api/whatsapp/inbox — role-scoped ────────────────────────────────────

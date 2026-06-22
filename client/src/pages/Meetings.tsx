@@ -123,7 +123,7 @@ export default function Meetings() {
     if (!noShowModal) return;
     setSubmitting(true);
     try {
-      await api.patch(`/meetings/${noShowModal.id}/status`, { status: 'NO_SHOW', rescheduledReason: noShowReason });
+      await api.patch(`/meetings/${noShowModal.id}/status`, { status: 'NO_SHOW', noShowReason });
       toast.success('Meeting marked no-show');
       setNoShowModal(null);
       await load();

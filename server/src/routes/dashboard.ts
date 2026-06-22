@@ -79,10 +79,10 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.count({ where: { ...leadWhere, createdAt: { gte: today } } }),
     prisma.lead.count({ where: { ...leadWhere, createdAt: { gte: week } } }),
     prisma.lead.count({ where: { ...leadWhere, createdAt: { gte: month } } }),
-    prisma.lead.groupBy({ by: ['stage'], where: leadWhere, _count: { id: true } }),
-    prisma.lead.groupBy({ by: ['source'], where: leadWhere, _count: { id: true } }),
+    prisma.lead.groupBy({ by: ['stage'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
+    prisma.lead.groupBy({ by: ['source'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.sLABreach.findMany({
-      where: { lead: leadWhere, resolvedAt: null },
+      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] } }, resolvedAt: null },
       include: { lead: { select: { id: true, leadId: true, name: true, stage: true } } },
       orderBy: { breachedAt: 'desc' },
       take: 5,
