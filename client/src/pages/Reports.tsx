@@ -1,51 +1,145 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
-  Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
+  CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { getStoredUser } from '../lib/auth';
 
-const REPORTS = [
-  { id: 'lead_summary', label: 'Lead Summary', icon: '📊', desc: 'Total leads by source & time period' },
-  { id: 'pipeline', label: 'Pipeline', icon: '🔄', desc: 'Stage distribution + avg days in stage' },
-  { id: 'conversion', label: 'Conversion Rates', icon: '📈', desc: 'Stage-by-stage conversion %' },
-  { id: 'timeline_performance', label: 'Timeline Performance', icon: '⏱️', desc: 'Avg days Lead→DQL→PP→Onboarding' },
-  { id: 'designer_performance', label: 'Designer Performance', icon: '👤', desc: 'Leads, DQLs, PPs, onboardings per designer' },
-  { id: 'bl_performance', label: 'BL Performance', icon: '👥', desc: 'Leads, closures, discount metrics per BL' },
-  { id: 'source_performance', label: 'Source Performance', icon: '🎯', desc: 'Leads + conversion per source' },
-  { id: 'campaign_performance', label: 'Campaign Performance', icon: '📣', desc: 'Leads + conversion per UTM campaign' },
-  { id: 'inactive_leads', label: 'Inactive Leads', icon: '💤', desc: 'Who dropped, at what stage, client feedback' },
-  { id: 'meeting_performance', label: 'Meeting Performance', icon: '📅', desc: 'Scheduled vs completed vs no-show per designer' },
-  { id: 'sales_cycle', label: 'Sales Cycle', icon: '🏆', desc: 'Avg/fastest/slowest days to onboarding' },
-  { id: 'lead_aging', label: 'Lead Aging', icon: '⏰', desc: 'Leads stuck past SLA threshold' },
-  { id: 'monthly_trend', label: 'Monthly Trend', icon: '📆', desc: 'Leads per month + best/worst analysis' },
-  { id: 'offer_performance', label: 'Offer Performance', icon: '🎁', desc: 'Onboardings + conversion rate per offer' },
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
+type AnyRow = Record<string, unknown>;
 
-const PIE_COLORS = ['#d95f32', '#f97316', '#f59e0b', '#6366f1', '#8b5cf6', '#22c55e', '#06b6d4'];
+// ── Constants ─────────────────────────────────────────────────────────────────
+const STAGE_LABEL: Record<string, string> = {
+  NEW_LEAD: 'New', EFFECTIVE_LEAD: 'Effective', MQL: 'MQL',
+  DQL: 'DQL', PROPOSAL_READY: 'Prop. Ready',
+  PROPOSAL_PRESENTED: 'Prop. Presented', ONBOARDING: 'Onboarding',
+  HANDED_OVER: 'Handed Over',
+};
+const STAGE_COLOR: Record<string, string> = {
+  NEW_LEAD: '#94a3b8', EFFECTIVE_LEAD: '#6366f1', MQL: '#f59e0b',
+  DQL: '#3b82f6', PROPOSAL_READY: '#8b5cf6',
+  PROPOSAL_PRESENTED: '#d95f32', ONBOARDING: '#22c55e', HANDED_OVER: '#06b6d4',
+};
+const BRAND = '#d95f32';
 
-function DataTable({ rows }: { rows: Record<string, unknown>[] }) {
-  if (!rows.length) return <p className="text-sm text-gray-400 text-center py-8">No data</p>;
-  const headers = Object.keys(rows[0]);
+function fmtMonth(iso: string) {
+  const [y, m] = iso.split('-');
+  return `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m - 1]} ${y}`;
+}
+
+function pct(n: number, d: number) {
+  if (!d) return '—';
+  return (n / d * 100).toFixed(1) + '%';
+}
+
+// ── Date presets ───────────────────────────────────────────────────────────────
+type Preset = 'month' | 'quarter' | 'lfy' | 'custom';
+
+function getPresetRange(p: Preset): { startDate: string; endDate: string } {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (p === 'month') {
+    return { startDate: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), endDate: fmt(now) };
+  }
+  if (p === 'quarter') {
+    const qStart = Math.floor(now.getMonth() / 3) * 3;
+    return { startDate: fmt(new Date(now.getFullYear(), qStart, 1)), endDate: fmt(now) };
+  }
+  if (p === 'lfy') {
+    // India FY: Apr 1 → Mar 31
+    const fyYear = now.getMonth() >= 3 ? now.getFullYear() - 1 : now.getFullYear() - 2;
+    return { startDate: `${fyYear}-04-01`, endDate: `${fyYear + 1}-03-31` };
+  }
+  return { startDate: '', endDate: '' };
+}
+
+// ── Quarterly aggregation ──────────────────────────────────────────────────────
+function groupMonthly(rows: { month: string; leads: number; onboardings: number }[], view: 'monthly' | 'quarterly' | 'annual') {
+  if (view === 'monthly') return rows.map((r) => ({ ...r, label: fmtMonth(r.month) }));
+  if (view === 'annual') {
+    const map = new Map<string, { leads: number; onboardings: number }>();
+    for (const r of rows) {
+      const y = r.month.slice(0, 4);
+      const cur = map.get(y) ?? { leads: 0, onboardings: 0 };
+      map.set(y, { leads: cur.leads + r.leads, onboardings: cur.onboardings + r.onboardings });
+    }
+    return [...map.entries()].map(([k, v]) => ({ label: k, ...v }));
+  }
+  // quarterly
+  const map = new Map<string, { leads: number; onboardings: number }>();
+  for (const r of rows) {
+    const [y, m] = r.month.split('-').map(Number);
+    const q = Math.floor((m - 1) / 3) + 1;
+    const key = `Q${q} ${y}`;
+    const cur = map.get(key) ?? { leads: 0, onboardings: 0 };
+    map.set(key, { leads: cur.leads + r.leads, onboardings: cur.onboardings + r.onboardings });
+  }
+  return [...map.entries()].map(([k, v]) => ({ label: k, ...v }));
+}
+
+// ── Shared components ──────────────────────────────────────────────────────────
+function SectionCard({ title, subtitle, onExport, children, id }: {
+  title: string; subtitle: string; onExport?: () => void;
+  children: React.ReactNode; id?: string;
+}) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div id={id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+        </div>
+        {onExport && (
+          <button onClick={onExport}
+            className="text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors shrink-0">
+            ↓ Export CSV
+          </button>
+        )}
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function KPICard({ label, value, sub, color = 'gray' }: {
+  label: string; value: string | number; sub?: string; color?: string;
+}) {
+  const bg = color === 'brand' ? 'bg-brand-50' : color === 'green' ? 'bg-green-50' : color === 'blue' ? 'bg-blue-50' : 'bg-gray-50';
+  const txt = color === 'brand' ? 'text-brand-700' : color === 'green' ? 'text-green-700' : color === 'blue' ? 'text-blue-700' : 'text-gray-800';
+  return (
+    <div className={`${bg} rounded-xl p-4`}>
+      <p className="text-xs font-medium text-gray-500 mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${txt}`}>{value}</p>
+      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function EmptyState({ msg }: { msg: string }) {
+  return <p className="text-sm text-gray-400 text-center py-8">{msg}</p>;
+}
+
+function MiniTable({ headers, rows }: { headers: { key: string; label: string }[]; rows: AnyRow[] }) {
+  if (!rows.length) return <EmptyState msg="No data available" />;
+  return (
+    <div className="overflow-x-auto mt-3">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-gray-200">
+          <tr className="border-b border-gray-100">
             {headers.map((h) => (
-              <th key={h} className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                {h.replace(/([A-Z])/g, ' $1').trim()}
-              </th>
+              <th key={h.key} className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h.label}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-gray-50">
           {rows.map((row, i) => (
             <tr key={i} className="hover:bg-gray-50">
               {headers.map((h) => (
-                <td key={h} className="py-2.5 px-3 text-gray-700">
-                  {row[h] === null || row[h] === undefined ? '—' : String(row[h])}
+                <td key={h.key} className="py-2 px-2 text-gray-700">
+                  {row[h.key] === null || row[h.key] === undefined ? '—' : String(row[h.key])}
                 </td>
               ))}
             </tr>
@@ -56,227 +150,681 @@ function DataTable({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
-function ReportChart({ type, data }: { type: string; data: unknown }) {
-  const rows = Array.isArray(data) ? data as Record<string, unknown>[] : (data as any)?.monthly ?? [];
-  if (!rows.length) return null;
-
-  if (type === 'lead_summary' || type === 'source_performance' || type === 'offer_performance') {
-    const key = type === 'offer_performance' ? 'offer' : 'source';
-    return (
-      <ResponsiveContainer width="100%" height={200}>
-        <PieChart>
-          <Pie data={rows} dataKey="count" nameKey={key} cx="50%" cy="50%" outerRadius={70}
-            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
-            {rows.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-          </Pie>
-          <Tooltip />
-        </PieChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (type === 'monthly_trend') {
-    return (
-      <ResponsiveContainer width="100%" height={200}>
-        <LineChart data={rows}>
-          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          <Line type="monotone" dataKey="leads" stroke="#d95f32" strokeWidth={2} dot={false} name="Leads" />
-          <Line type="monotone" dataKey="onboardings" stroke="#22c55e" strokeWidth={2} dot={false} name="Onboardings" />
-        </LineChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (type === 'pipeline' || type === 'conversion' || type === 'designer_performance' || type === 'meeting_performance') {
-    const numKeys = Object.keys(rows[0]).filter((k) => typeof rows[0][k] === 'number');
-    const labelKey = Object.keys(rows[0])[0];
-    return (
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={rows}>
-          <XAxis dataKey={labelKey} tick={{ fontSize: 10 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          {numKeys.slice(0, 3).map((k, i) => (
-            <Bar key={k} dataKey={k} fill={PIE_COLORS[i]} radius={[3, 3, 0, 0]} name={k} />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  return null;
+function Loader() {
+  return (
+    <div className="flex items-center justify-center py-12">
+      <div className="w-5 h-5 border-2 border-brand-300 border-t-brand-600 rounded-full animate-spin" />
+    </div>
+  );
 }
 
-export default function Reports() {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [data, setData] = useState<unknown>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({ startDate: '', endDate: '' });
+// ── Collapsible Section 8 card ─────────────────────────────────────────────────
+function CollapsibleCard({ title, subtitle, onExport, children }: {
+  title: string; subtitle: string; onExport?: () => void; children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full px-5 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="text-left">
+          <p className="text-sm font-semibold text-gray-900">{title}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {open && onExport && (
+            <span
+              onClick={(e) => { e.stopPropagation(); onExport(); }}
+              className="text-xs font-medium text-gray-500 hover:text-gray-800 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              ↓ Export CSV
+            </span>
+          )}
+          <span className="text-gray-400 text-sm">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+      {open && <div className="px-5 pb-5 border-t border-gray-100">{children}</div>}
+    </div>
+  );
+}
 
-  const runReport = async (type: string) => {
-    setSelected(type);
-    setLoading(true);
-    setError(null);
-    setData(null);
+// ── Export helper ──────────────────────────────────────────────────────────────
+function useExport() {
+  return async (reportType: string, qs: string) => {
+    const token = localStorage.getItem('crm_token') ?? '';
     try {
-      const params = new URLSearchParams();
-      if (filters.startDate) params.set('startDate', filters.startDate);
-      if (filters.endDate) params.set('endDate', filters.endDate);
-      const qs = params.toString();
-      const result = await api.get<{ type: string; data: unknown }>(`/reports/${type}${qs ? '?' + qs : ''}`);
-      setData(result.data);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
+      const resp = await fetch(`/api/reports/${reportType}/export${qs ? '?' + qs : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) { toast.error(`Export not available for ${reportType}`); return; }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${reportType}_report.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Export failed');
     }
   };
+}
 
-  const exportCSV = () => {
-    if (!selected) return;
-    const params = new URLSearchParams();
-    if (filters.startDate) params.set('startDate', filters.startDate);
-    if (filters.endDate) params.set('endDate', filters.endDate);
-    const qs = params.toString();
-    window.open(`/api/reports/${selected}/export${qs ? '?' + qs : ''}`, '_blank');
-  };
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function Reports() {
+  const user = getStoredUser();
+  const role = user?.role ?? '';
+  const showFull = ['BRANCH_HEAD', 'BL'].includes(role);
 
-  const tableRows = Array.isArray(data)
-    ? (data as Record<string, unknown>[])
-    : (data as any)?.monthly ?? (data ? [data] : []);
+  const [preset, setPreset] = useState<Preset>('month');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  type Rep = { data: any; loading: boolean };
+  const [r, setR] = useState<Record<string, Rep>>({});
+
+  const exportFn = useExport();
+
+  const buildQS = useCallback(() => {
+    const { startDate, endDate } = preset === 'custom'
+      ? { startDate: customStart, endDate: customEnd }
+      : getPresetRange(preset);
+    const p = new URLSearchParams();
+    if (startDate) p.set('startDate', startDate);
+    if (endDate) p.set('endDate', endDate);
+    return p.toString();
+  }, [preset, customStart, customEnd]);
+
+  const doExport = (type: string) => exportFn(type, buildQS());
+
+  const setRep = (key: string, data: any) =>
+    setR((prev) => ({ ...prev, [key]: { data, loading: false } }));
+  const setLoading = (key: string) =>
+    setR((prev) => ({ ...prev, [key]: { data: prev[key]?.data ?? null, loading: true } }));
+
+  const fetchAll = useCallback(async () => {
+    const qs = buildQS();
+    const qsStr = qs ? '?' + qs : '';
+    const endpoints = [
+      'lead_summary', 'pipeline', 'source_performance', 'designer_performance',
+      'monthly_trend', 'offer_performance', 'campaign_performance', 'inactive_leads',
+      'meeting_performance', 'conversion', 'bl_performance', 'sales_cycle',
+      'lead_aging', 'timeline_performance',
+    ];
+    endpoints.forEach((ep) => setLoading(ep));
+    await Promise.allSettled(
+      endpoints.map(async (ep) => {
+        try {
+          const res = await api.get<{ data: any }>(`/reports/${ep}${qsStr}`);
+          setRep(ep, res.data);
+        } catch (e: any) {
+          setRep(ep, null);
+        }
+      })
+    );
+  }, [buildQS]);
+
+  useEffect(() => {
+    if (preset !== 'custom') fetchAll();
+  }, [preset, fetchAll]);
+
+  const [trendView, setTrendView] = useState<'monthly' | 'quarterly' | 'annual'>('monthly');
+
+  // ── Derived KPI values ────────────────────────────────────────────────────
+  const leadSummaryRows: AnyRow[] = Array.isArray(r.lead_summary?.data) ? r.lead_summary.data : [];
+  const totalLeads = leadSummaryRows.reduce((s, row) => s + ((row.count as number) || 0), 0);
+
+  const pipelineRows: AnyRow[] = Array.isArray(r.pipeline?.data) ? r.pipeline.data : [];
+  const onboardedCount = pipelineRows
+    .filter((row) => row.stage === 'ONBOARDING' || row.stage === 'HANDED_OVER')
+    .reduce((s, row) => s + ((row.count as number) || 0), 0);
+  const conversionPct = totalLeads > 0 ? ((onboardedCount / totalLeads) * 100).toFixed(1) + '%' : '0%';
+  const activeDesigners = Array.isArray(r.designer_performance?.data)
+    ? r.designer_performance.data.length : 0;
+
+  // Pipeline chart data
+  const pipelineChartData = pipelineRows.map((row) => ({
+    stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+    stageKey: row.stage as string,
+    count: row.count as number,
+  }));
+
+  // Source chart data
+  const sourceRows: AnyRow[] = Array.isArray(r.source_performance?.data) ? r.source_performance.data : [];
+  const sourceChartData = sourceRows.map((row) => ({
+    source: String(row.source),
+    count: (row.total as number) || 0,
+  }));
+  const sourceTotal = sourceChartData.reduce((s, r) => s + r.count, 0);
+
+  // Monthly trend data
+  const monthlyRaw: { month: string; leads: number; onboardings: number }[] =
+    Array.isArray(r.monthly_trend?.data?.monthly) ? r.monthly_trend.data.monthly : [];
+  const trendData = groupMonthly(monthlyRaw, trendView);
+
+  // Offer performance
+  const offerRows: AnyRow[] = Array.isArray(r.offer_performance?.data) ? r.offer_performance.data : [];
+
+  // Campaign
+  const campaignRows: AnyRow[] = Array.isArray(r.campaign_performance?.data) ? r.campaign_performance.data : [];
+
+  // Inactive
+  const inactiveSummary = r.inactive_leads?.data?.summary ?? {};
+  const inactiveRows: AnyRow[] = r.inactive_leads?.data?.rows ?? [];
+
+  // Meeting performance
+  const meetingRows: AnyRow[] = Array.isArray(r.meeting_performance?.data) ? r.meeting_performance.data : [];
+
+  // BL performance
+  const blRows: AnyRow[] = Array.isArray(r.bl_performance?.data) ? r.bl_performance.data : [];
+
+  // Sales cycle
+  const salesCycleRows: AnyRow[] = Array.isArray(r.sales_cycle?.data) ? r.sales_cycle.data : [];
+
+  // Lead aging
+  const agingRows: AnyRow[] = Array.isArray(r.lead_aging?.data) ? r.lead_aging.data : [];
+
+  // Timeline performance
+  const timelineRows: AnyRow[] = Array.isArray(r.timeline_performance?.data) ? r.timeline_performance.data : [];
+
+  // Conversion funnel
+  const conversionRows: AnyRow[] = Array.isArray(r.conversion?.data) ? r.conversion.data : [];
+
+  // Designer performance
+  const designerRows: AnyRow[] = Array.isArray(r.designer_performance?.data) ? r.designer_performance.data : [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center gap-4">
-          <Link to="/dashboard" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</Link>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">Reports</h1>
-            <p className="text-xs text-gray-400">14 report types — select to generate</p>
-          </div>
+    <div className="flex flex-col h-full overflow-hidden">
+
+      {/* ── Sticky filter bar ─────────────────────────────────────────────── */}
+      <div className="shrink-0 bg-white border-b border-gray-100 px-5 py-2.5 flex items-center gap-3 flex-wrap">
+        <div>
+          <p className="text-base font-semibold text-gray-900">Reports</p>
         </div>
+        <div className="flex items-center gap-1 ml-3">
+          {([['month', 'This Month'], ['quarter', 'This Quarter'], ['lfy', 'Last Financial Year']] as [Preset, string][]).map(([p, label]) => (
+            <button
+              key={p}
+              onClick={() => setPreset(p)}
+              className={`text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${
+                preset === p ? 'bg-brand-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            onClick={() => setPreset('custom')}
+            className={`text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${
+              preset === 'custom' ? 'bg-brand-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Custom Range
+          </button>
+        </div>
+        {preset === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input type="date" value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-xs" />
+            <span className="text-xs text-gray-400">→</span>
+            <input type="date" value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1 text-xs" />
+            <button
+              onClick={fetchAll}
+              disabled={!customStart || !customEnd}
+              className="text-xs font-medium bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 disabled:opacity-40 transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
-        {/* Sidebar report list */}
-        <div className="w-64 shrink-0">
-          {/* Date filters */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 space-y-3">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Date Range</p>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">From</label>
-              <input type="date" value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">To</label>
-              <input type="date" value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm" />
-            </div>
-          </div>
+      {/* ── Scrollable content ────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-5 py-5 space-y-6 max-w-6xl mx-auto">
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {REPORTS.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => runReport(r.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${
-                  selected === r.id ? 'bg-brand-50 border-l-2 border-l-brand-500' : ''
-                }`}
-              >
-                <span className="text-lg shrink-0">{r.icon}</span>
-                <div className="min-w-0">
-                  <p className={`text-sm font-medium truncate ${selected === r.id ? 'text-brand-700' : 'text-gray-800'}`}>
-                    {r.label}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">{r.desc}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="flex-1 min-w-0">
-          {!selected && (
-            <div className="bg-white rounded-xl border border-gray-200 flex flex-col items-center justify-center py-20">
-              <p className="text-5xl mb-4">📊</p>
-              <p className="font-semibold text-gray-900 mb-1">Select a report</p>
-              <p className="text-sm text-gray-400">Choose from the list on the left to generate a report</p>
-            </div>
-          )}
-
-          {selected && (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              {/* Report header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                <div>
-                  <h2 className="font-semibold text-gray-900">
-                    {REPORTS.find((r) => r.id === selected)?.label}
-                  </h2>
-                  <p className="text-xs text-gray-400">
-                    {REPORTS.find((r) => r.id === selected)?.desc}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => runReport(selected)}
-                    className="text-xs bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 transition-colors"
-                  >
-                    Refresh
-                  </button>
-                  <button
-                    onClick={exportCSV}
-                    disabled={!data}
-                    className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-                  >
-                    ↓ Export CSV
-                  </button>
-                </div>
+          {/* ═══ SECTION 1 — SALES PIPELINE (full only) ═════════════════════ */}
+          {showFull && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Sales pipeline</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Conversion, performance &amp; trends across the pipeline.</p>
               </div>
 
-              {loading && (
-                <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Generating report…</div>
-              )}
-              {error && (
-                <div className="px-6 py-4 text-red-500 text-sm">{error}</div>
-              )}
+              {/* KPI row */}
+              <div className="grid grid-cols-4 gap-3">
+                <KPICard label="Total Leads" value={r.lead_summary?.loading ? '…' : totalLeads} color="brand" />
+                <KPICard label="Onboarded" value={r.pipeline?.loading ? '…' : onboardedCount} sub="Onboarding + Handed Over" color="green" />
+                <KPICard label="Conversion" value={r.pipeline?.loading ? '…' : conversionPct} sub="Leads → onboarded" color="blue" />
+                <KPICard label="Active Designers" value={r.designer_performance?.loading ? '…' : activeDesigners} />
+              </div>
 
-              {data && !loading && (
-                <div className="p-6 space-y-6">
-                  {/* Chart */}
-                  {tableRows.length > 0 && (
+              {/* Two charts side by side */}
+              <div className="grid grid-cols-2 gap-4">
+
+                {/* Source Performance */}
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                     <div>
-                      <ReportChart type={selected} data={data} />
+                      <p className="text-xs font-semibold text-gray-800">Lead source performance</p>
                     </div>
-                  )}
-
-                  {/* Monthly trend summary */}
-                  {selected === 'monthly_trend' && (data as any)?.bestMonth && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-green-50 rounded-xl p-4">
-                        <p className="text-xs text-green-600 font-medium">Best Month</p>
-                        <p className="text-lg font-bold text-green-700">{(data as any).bestMonth}</p>
-                      </div>
-                      <div className="bg-red-50 rounded-xl p-4">
-                        <p className="text-xs text-red-600 font-medium">Worst Month</p>
-                        <p className="text-lg font-bold text-red-700">{(data as any).worstMonth}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Data table */}
-                  <DataTable rows={tableRows} />
+                    <button onClick={() => doExport('source_performance')}
+                      className="text-[10px] text-gray-400 hover:text-gray-700 border border-gray-200 px-2 py-0.5 rounded-lg">
+                      ↓ CSV
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    {r.source_performance?.loading ? <Loader /> : sourceChartData.length === 0 ? <EmptyState msg="No source data" /> : (
+                      <>
+                        <ResponsiveContainer width="100%" height={160}>
+                          <BarChart data={sourceChartData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                            <XAxis dataKey="source" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                            <Tooltip contentStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="count" fill={BRAND} radius={[3, 3, 0, 0]} name="Leads" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <MiniTable
+                          headers={[{ key: 'source', label: 'Source' }, { key: 'total', label: 'Leads' }, { key: '_share', label: 'Share %' }]}
+                          rows={sourceRows.map((row) => ({
+                            ...row,
+                            _share: sourceTotal > 0 ? (((row.total as number) / sourceTotal) * 100).toFixed(1) + '%' : '—',
+                          }))}
+                        />
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {/* Stage Distribution */}
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-800">Stage distribution</p>
+                    </div>
+                    <button onClick={() => doExport('pipeline')}
+                      className="text-[10px] text-gray-400 hover:text-gray-700 border border-gray-200 px-2 py-0.5 rounded-lg">
+                      ↓ CSV
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    {r.pipeline?.loading ? <Loader /> : pipelineChartData.length === 0 ? <EmptyState msg="No pipeline data" /> : (
+                      <>
+                        <ResponsiveContainer width="100%" height={160}>
+                          <BarChart data={pipelineChartData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                            <XAxis dataKey="stage" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                            <Tooltip contentStyle={{ fontSize: 11 }} />
+                            <Bar dataKey="count" radius={[3, 3, 0, 0]} name="Leads">
+                              {pipelineChartData.map((d, i) => (
+                                <Cell key={i} fill={STAGE_COLOR[d.stageKey] ?? '#94a3b8'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <MiniTable
+                          headers={[{ key: 'stage', label: 'Stage' }, { key: 'count', label: 'Leads' }, { key: '_share', label: 'Share %' }]}
+                          rows={pipelineRows.map((row) => {
+                            const total = pipelineRows.reduce((s, r) => s + ((r.count as number) || 0), 0);
+                            return {
+                              stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+                              count: row.count,
+                              _share: total > 0 ? (((row.count as number) / total) * 100).toFixed(1) + '%' : '—',
+                            };
+                          })}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* ═══ SECTION 2 — DESIGNER PERFORMANCE (all roles) ═══════════════ */}
+          <SectionCard
+            title="Designer performance"
+            subtitle="Assigned leads, design meetings (DQL / PP) and conversion per designer."
+            onExport={() => doExport('designer_performance')}
+          >
+            {r.designer_performance?.loading ? <Loader /> : designerRows.length === 0 ? <EmptyState msg="No designer data" /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      {[['designer','Designer'],['leads','Assigned'],['dqlsDone','DQLs'],['ppsDone','PPs'],['onboardings','Onboarded'],['conversionPct','Conv. %']].map(([k, l]) => (
+                        <th key={k} className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{l}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {[...designerRows].sort((a, b) => (b.leads as number) - (a.leads as number)).map((row, i) => (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="py-2.5 px-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+                              <span className="text-[9px] font-bold text-brand-700">{String(row.designer)[0]?.toUpperCase()}</span>
+                            </div>
+                            <span className="text-gray-800 font-medium">{String(row.designer)}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-2 text-gray-700">{String(row.leads)}</td>
+                        <td className="py-2.5 px-2 text-gray-700">{String(row.dqlsDone)}</td>
+                        <td className="py-2.5 px-2 text-gray-700">{String(row.ppsDone)}</td>
+                        <td className="py-2.5 px-2 text-gray-700">{String(row.onboardings)}</td>
+                        <td className="py-2.5 px-2 font-medium text-gray-800">
+                          {typeof row.conversionPct === 'number' ? row.conversionPct.toFixed(1) + '%' : pct(row.onboardings as number, row.leads as number)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* ═══ SECTION 3 — MONTHLY TREND (all roles) ═══════════════════════ */}
+          <SectionCard
+            title="Monthly trend"
+            subtitle="New leads created each month."
+            onExport={() => doExport('monthly_trend')}
+          >
+            {r.monthly_trend?.loading ? <Loader /> : monthlyRaw.length === 0 ? <EmptyState msg="No monthly data" /> : (
+              <>
+                <div className="flex items-center gap-1 mb-3">
+                  {(['monthly', 'quarterly', 'annual'] as const).map((v) => (
+                    <button key={v} onClick={() => setTrendView(v)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-lg capitalize transition-colors ${trendView === v ? 'bg-brand-500 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                      <XAxis dataKey="label" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 9 }} allowDecimals={false} />
+                      <Tooltip contentStyle={{ fontSize: 11 }} />
+                      <Line type="monotone" dataKey="leads" stroke={BRAND} strokeWidth={2} dot={{ r: 4 }} name="Leads" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div className="overflow-x-auto self-start">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase">Month</th>
+                          <th className="text-right py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase">Leads created</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {trendData.map((row, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="py-2 px-2 text-gray-700">{row.label}</td>
+                            <td className="py-2 px-2 text-right font-medium text-gray-800">{row.leads}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </SectionCard>
+
+          {/* ═══ SECTION 4 — OFFER PERFORMANCE (full only) ═══════════════════ */}
+          {showFull && (
+            <SectionCard
+              title="Offer performance"
+              subtitle="Leads tagged to each promotional offer and how many onboarded."
+              onExport={() => doExport('offer_performance')}
+            >
+              {r.offer_performance?.loading ? <Loader /> : offerRows.length === 0 ? <EmptyState msg="No offers have been applied to leads yet." /> : (
+                <div className="space-y-2">
+                  {offerRows.map((row, i) => {
+                    const maxVal = Math.max(...offerRows.map((r) => (r.total as number) || 0), 1);
+                    const w = Math.max(((row.total as number) / maxVal) * 100, 4);
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-36 text-xs text-gray-700 text-right shrink-0 truncate" title={String(row.offer)}>{String(row.offer)}</div>
+                        <div className="flex-1 bg-gray-100 rounded-full h-6 relative">
+                          <div
+                            className="h-6 rounded-full flex items-center px-2"
+                            style={{ width: `${w}%`, backgroundColor: BRAND, minWidth: '2rem' }}
+                          >
+                            <span className="text-[10px] text-white font-bold whitespace-nowrap">{String(row.total)}</span>
+                          </div>
+                        </div>
+                        <div className="w-16 text-xs text-gray-400 shrink-0">{typeof row.conversionPct === 'number' ? row.conversionPct.toFixed(1) + '% conv.' : ''}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {/* ═══ SECTION 5 — CAMPAIGN PERFORMANCE (full only) ════════════════ */}
+          {showFull && (
+            <SectionCard
+              title="Campaign performance"
+              subtitle="Which Meta and Google campaigns are generating the best leads."
+              onExport={() => doExport('campaign_performance')}
+            >
+              {r.campaign_performance?.loading ? <Loader /> : campaignRows.length === 0 ? <EmptyState msg="No UTM campaign data available yet." /> : (
+                <MiniTable
+                  headers={[
+                    { key: 'campaign', label: 'Campaign' },
+                    { key: 'total', label: 'Leads' },
+                    { key: 'onboarding', label: 'Onboarded' },
+                    { key: 'conversionPct', label: 'Conv. %' },
+                  ]}
+                  rows={campaignRows.map((row) => ({
+                    ...row,
+                    conversionPct: typeof row.conversionPct === 'number' ? row.conversionPct.toFixed(1) + '%' : '—',
+                  }))}
+                />
+              )}
+            </SectionCard>
+          )}
+
+          {/* ═══ SECTION 6 — MEETING PERFORMANCE (all roles) ════════════════ */}
+          <SectionCard
+            title="Meeting performance"
+            subtitle="Meetings scheduled vs completed vs no-show per designer."
+            onExport={() => doExport('meeting_performance')}
+          >
+            {r.meeting_performance?.loading ? <Loader /> : meetingRows.length === 0 ? <EmptyState msg="No meeting data" /> : (
+              <MiniTable
+                headers={[
+                  { key: 'designer', label: 'Designer' },
+                  { key: 'scheduled', label: 'Scheduled' },
+                  { key: 'completed', label: 'Completed' },
+                  { key: 'noShow', label: 'No-Show' },
+                  { key: '_completionRate', label: 'Completion Rate %' },
+                ]}
+                rows={meetingRows.map((row) => ({
+                  ...row,
+                  _completionRate: typeof row.completionPct === 'number'
+                    ? row.completionPct.toFixed(1) + '%'
+                    : pct(row.completed as number, row.scheduled as number),
+                }))}
+              />
+            )}
+          </SectionCard>
+
+          {/* ═══ SECTION 7 — INACTIVE LEADS (full only) ══════════════════════ */}
+          {showFull && (
+            <SectionCard
+              title="Inactive leads"
+              subtitle="Leads that dropped off, at which stage, and why."
+              onExport={() => doExport('inactive_leads')}
+            >
+              {r.inactive_leads?.loading ? <Loader /> : (
+                <>
+                  {inactiveSummary.totalInactivated !== undefined && (
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+                      <span className="font-semibold text-gray-800">{inactiveSummary.totalInactivated ?? 0}</span> leads inactivated
+                      {' · '}
+                      <span className="font-semibold text-gray-800">{inactiveSummary.responseRate ?? 0}%</span> feedback response rate
+                    </div>
+                  )}
+                  {inactiveRows.length === 0 ? <EmptyState msg="No inactive leads in this period." /> : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            {['Lead ID','Name','Stage','Reason','Feedback Received','Feedback Response'].map((h) => (
+                              <th key={h} className="text-left py-2 px-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {inactiveRows.map((row: any, i: number) => (
+                            <tr key={i} className="hover:bg-gray-50">
+                              <td className="py-2.5 px-2 font-mono text-gray-500">{String(row.leadId ?? '—')}</td>
+                              <td className="py-2.5 px-2 text-gray-800 font-medium">{String(row.name ?? '—')}</td>
+                              <td className="py-2.5 px-2 text-gray-600">{STAGE_LABEL[row.stage] ?? String(row.stage ?? '—')}</td>
+                              <td className="py-2.5 px-2 text-gray-600">{String(row.reason ?? '—')}</td>
+                              <td className="py-2.5 px-2">
+                                {row.feedbackFormSentAt ? (
+                                  <span className="bg-green-100 text-green-700 text-[10px] font-medium px-1.5 py-0.5 rounded-full">Yes</span>
+                                ) : (
+                                  <span className="bg-gray-100 text-gray-500 text-[10px] font-medium px-1.5 py-0.5 rounded-full">No</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-2 text-gray-600">{row.feedbackResponse ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </SectionCard>
+          )}
+
+          {/* ═══ SECTION 8 — COLLAPSIBLE REPORTS ════════════════════════════ */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Additional Reports</p>
+
+            {/* BL Performance (full only) */}
+            {showFull && (
+              <CollapsibleCard
+                title="BL performance"
+                subtitle="Leads managed, closures, and discount metrics per Branch Lead."
+                onExport={() => doExport('bl_performance')}
+              >
+                {r.bl_performance?.loading ? <Loader /> : (
+                  <MiniTable
+                    headers={[
+                      { key: 'bl', label: 'BL Name' },
+                      { key: 'leadsManaged', label: 'Leads Managed' },
+                      { key: 'closed', label: 'Closed' },
+                      { key: 'discountRequested', label: 'Discount Requests' },
+                      { key: 'discountApproved', label: 'Approved' },
+                      { key: 'discountRejected', label: 'Rejected' },
+                    ]}
+                    rows={blRows}
+                  />
+                )}
+              </CollapsibleCard>
+            )}
+
+            {/* Sales Cycle */}
+            <CollapsibleCard
+              title="Sales cycle"
+              subtitle="Average, fastest and slowest days from lead creation to onboarding."
+              onExport={() => doExport('sales_cycle')}
+            >
+              {r.sales_cycle?.loading ? <Loader /> : (
+                <MiniTable
+                  headers={[
+                    { key: 'metric', label: 'Metric' },
+                    { key: 'avgDays', label: 'Avg Days' },
+                    { key: 'fastestDays', label: 'Fastest' },
+                    { key: 'slowestDays', label: 'Slowest' },
+                  ]}
+                  rows={salesCycleRows}
+                />
+              )}
+            </CollapsibleCard>
+
+            {/* Lead Aging */}
+            <CollapsibleCard
+              title="Lead aging"
+              subtitle="Leads currently past their SLA threshold."
+              onExport={() => doExport('lead_aging')}
+            >
+              {r.lead_aging?.loading ? <Loader /> : (
+                <MiniTable
+                  headers={[
+                    { key: 'leadId', label: 'Lead ID' },
+                    { key: 'name', label: 'Name' },
+                    { key: '_stage', label: 'Stage' },
+                    { key: 'daysInStage', label: 'Days in Stage' },
+                    { key: 'slaThreshold', label: 'SLA Threshold' },
+                    { key: 'overdueDays', label: 'Overdue Days' },
+                  ]}
+                  rows={agingRows.map((row) => ({
+                    ...row,
+                    _stage: STAGE_LABEL[row.stage as string] ?? String(row.stage),
+                  }))}
+                />
+              )}
+            </CollapsibleCard>
+
+            {/* Timeline Performance */}
+            <CollapsibleCard
+              title="Timeline performance"
+              subtitle="Average days per stage transition."
+              onExport={() => doExport('timeline_performance')}
+            >
+              {r.timeline_performance?.loading ? <Loader /> : (
+                <MiniTable
+                  headers={[
+                    { key: 'metric', label: 'Metric' },
+                    { key: 'avg', label: 'Avg Days' },
+                    { key: 'min', label: 'Min' },
+                    { key: 'max', label: 'Max' },
+                  ]}
+                  rows={timelineRows}
+                />
+              )}
+            </CollapsibleCard>
+
+            {/* Conversion Funnel Detail */}
+            <CollapsibleCard
+              title="Conversion funnel detail"
+              subtitle="Stage-by-stage conversion rates."
+              onExport={() => doExport('conversion')}
+            >
+              {r.conversion?.loading ? <Loader /> : (
+                <MiniTable
+                  headers={[
+                    { key: '_from', label: 'Stage' },
+                    { key: '_to', label: 'To' },
+                    { key: 'fromCount', label: 'Leads' },
+                    { key: 'toCount', label: 'Converted' },
+                    { key: '_rate', label: 'Conversion %' },
+                  ]}
+                  rows={conversionRows.map((row) => ({
+                    ...row,
+                    _from: STAGE_LABEL[row.from as string] ?? String(row.from),
+                    _to: STAGE_LABEL[row.to as string] ?? String(row.to),
+                    _rate: typeof row.rate === 'number' ? row.rate.toFixed(1) + '%' : '—',
+                  }))}
+                />
+              )}
+            </CollapsibleCard>
+          </div>
+
         </div>
       </div>
     </div>
