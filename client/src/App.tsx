@@ -8,6 +8,8 @@ import Layout from './components/Layout';
 import LeadDetail from './pages/LeadDetail';
 import LeadList from './pages/LeadList';
 import Inbox from './pages/Inbox';
+import Meetings from './pages/Meetings';
+import Discounts from './pages/Discounts';
 import Dashboard from './pages/Dashboard';
 import Pipeline from './pages/Pipeline';
 import Reports from './pages/Reports';
@@ -18,22 +20,6 @@ import Settings from './pages/Settings';
 import FeedbackForm from './pages/FeedbackForm';
 import AcceptInvite from './pages/AcceptInvite';
 
-// ── Auth helpers ──────────────────────────────────────────────────────────────
-
-export function getStoredUser(): { id: string; name: string; email: string; role: string } | null {
-  try {
-    const raw = localStorage.getItem('crm_user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function logout() {
-  localStorage.removeItem('crm_token');
-  localStorage.removeItem('crm_user');
-  window.location.href = '/login';
-}
 
 // ── Auth Guard ────────────────────────────────────────────────────────────────
 
@@ -115,6 +101,9 @@ export default function App() {
                     <Route path="/leads" element={<LeadList />} />
                     <Route path="/leads/:leadId" element={<LeadDetail />} />
                     <Route path="/inbox" element={<Inbox />} />
+                    <Route path="/whatsapp" element={<Inbox />} />
+                    <Route path="/meetings" element={<Meetings />} />
+                    <Route path="/discounts" element={<Discounts />} />
                     <Route path="/tasks" element={<Tasks />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/admin" element={<Admin />} />

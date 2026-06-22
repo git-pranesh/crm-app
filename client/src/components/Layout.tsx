@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
-import { getStoredUser, logout } from '../App';
+import { getStoredUser, logout } from '../lib/auth';
 
 interface SearchLead {
   id: string;
@@ -33,9 +33,9 @@ const NAV_GROUPS = [
     items: [
       { to: '/pipeline', label: 'Pipeline', icon: '⬡' },
       { to: '/leads', label: 'Leads', icon: '👤' },
-      { to: '/inbox', label: 'WhatsApp', icon: '💬' },
-      { to: '/leads?tab=discounts', label: 'Discounts', icon: '%' },
-      { to: '/leads?tab=meetings', label: 'Meetings', icon: '📅' },
+      { to: '/whatsapp', label: 'WhatsApp', icon: '💬' },
+      { to: '/discounts', label: 'Discounts', icon: '%' },
+      { to: '/meetings', label: 'Meetings', icon: '📅' },
     ],
   },
   {

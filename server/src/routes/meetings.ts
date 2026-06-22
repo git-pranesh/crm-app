@@ -124,6 +124,42 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   res.status(201).json({ meeting });
 });
 
+// ── GET /api/meetings — role-scoped global view ───────────────────────────────
+meetingStatusRouter.get('/', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    let where: any = {};
+
+    if (user.role === 'DESIGNER' || user.role === 'CRE') {
+      where.lead = { assignedDesignerId: user.id };
+    } else if (user.role === 'BL') {
+      const members = await prisma.user.findMany({
+        where: { blId: user.id },
+        select: { id: true },
+      });
+      where.lead = { assignedDesignerId: { in: members.map((m: any) => m.id) } };
+    }
+    // BRANCH_HEAD: no filter = all meetings
+
+    const meetings = await prisma.meeting.findMany({
+      where,
+      include: {
+        lead: {
+          select: {
+            id: true, leadId: true, name: true, phone: true,
+            assignedDesigner: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+
+    res.json({ meetings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/leads/:leadId/meetings ──────────────────────────────────────────
 meetingsRouter.get('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };

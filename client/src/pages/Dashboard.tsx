@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { api } from '../lib/api';
-import { getStoredUser } from '../App';
+import { getStoredUser } from '../lib/auth';
 
 interface DashboardData {
   totalLeads: number;

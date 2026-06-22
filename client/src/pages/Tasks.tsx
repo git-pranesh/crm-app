@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
-import { getStoredUser } from '../App';
+import { getStoredUser } from '../lib/auth';
 
 type Filter = 'upcoming' | 'overdue' | 'completed' | 'all';
 
