@@ -28,18 +28,25 @@ function TaskCard({ task, onComplete }: { task: FollowUpTask; onComplete: (id: s
     }
   };
 
-  const overdueClass = task.isOverdue && !task.isCompleted ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-white';
-  const completedClass = task.isCompleted ? 'opacity-60' : '';
+  const isOverduePending = task.isOverdue && !task.isCompleted;
 
   return (
-    <div className={`rounded-xl border p-4 flex items-start gap-4 ${overdueClass} ${completedClass}`}>
-      <div className="mt-0.5">
+    <div
+      className="bg-white rounded-2xl p-4 flex items-start gap-4 transition-all"
+      style={{
+        border: isOverduePending ? '1px solid #FECACA' : '1px solid #EDE8E3',
+        background: isOverduePending ? '#FFF5F5' : '#fff',
+        opacity: task.isCompleted ? 0.6 : 1,
+        boxShadow: '0 1px 3px 0 rgba(100,60,20,0.06)',
+      }}
+    >
+      <div className="mt-0.5 shrink-0">
         {task.isCompleted ? (
-          <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xs">✓</span>
+          <span className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xs font-bold">✓</span>
         ) : task.isOverdue ? (
-          <span className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs">!</span>
+          <span className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center text-red-600 text-xs font-bold">!</span>
         ) : (
-          <span className="w-5 h-5 rounded-full border-2 border-gray-300" />
+          <span className="w-5 h-5 rounded-full" style={{ border: '2px solid #EDE8E3' }} />
         )}
       </div>
 
@@ -49,32 +56,32 @@ function TaskCard({ task, onComplete }: { task: FollowUpTask; onComplete: (id: s
             {task.lead && (
               <Link
                 to={`/leads/${task.lead.id}`}
-                className="text-sm font-medium text-brand-600 hover:underline"
+                className="text-sm font-semibold text-brand-600 hover:text-brand-700 hover:underline transition-colors"
               >
                 {task.lead.name}
               </Link>
             )}
             {task.lead && (
-              <span className="ml-2 text-xs text-gray-400 font-mono">{task.lead.leadId}</span>
+              <span className="ml-2 text-xs text-stone-400 font-mono font-medium">{task.lead.leadId}</span>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {task.isOverdue && !task.isCompleted && (
-              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Overdue</span>
+              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">Overdue</span>
             )}
             {task.isCompleted && (
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Done</span>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Done</span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+        <div className="flex items-center gap-3 mt-1 text-xs text-stone-500">
           <span>📅 {formatDate(task.dueDate)}{task.dueTime ? ` at ${task.dueTime}` : ''}</span>
-          <span>·</span>
+          <span className="text-stone-300">·</span>
           <span>👤 {task.assignedTo?.name}</span>
           {task.lead?.stage && (
             <>
-              <span>·</span>
+              <span className="text-stone-300">·</span>
               <span className="capitalize">{task.lead.stage.replace(/_/g, ' ')}</span>
             </>
           )}
@@ -85,7 +92,10 @@ function TaskCard({ task, onComplete }: { task: FollowUpTask; onComplete: (id: s
         <button
           onClick={handleComplete}
           disabled={completing}
-          className="shrink-0 text-xs text-gray-400 hover:text-green-600 border border-gray-200 hover:border-green-300 px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+          className="shrink-0 text-xs text-stone-400 hover:text-green-600 transition-colors font-medium px-2.5 py-1 rounded-xl disabled:opacity-50"
+          style={{ border: '1px solid #EDE8E3' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#86EFAC'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#EDE8E3'; }}
         >
           {completing ? '…' : 'Done'}
         </button>
@@ -149,8 +159,8 @@ export default function Tasks() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Follow-up tasks across your leads</p>
+          <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Tasks</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Follow-up tasks across your leads</p>
         </div>
       </div>
 
@@ -158,13 +168,23 @@ export default function Tasks() {
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setTab('my')}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${tab === 'my' ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-800 border border-gray-200'}`}
+            className={`px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
+              tab === 'my'
+                ? 'bg-brand-500 text-white'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+            style={tab === 'my' ? {} : { border: '1px solid #EDE8E3' }}
           >
             My Tasks ({myTasks.length})
           </button>
           <button
             onClick={() => setTab('team')}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${tab === 'team' ? 'bg-brand-500 text-white' : 'text-gray-500 hover:text-gray-800 border border-gray-200'}`}
+            className={`px-4 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
+              tab === 'team'
+                ? 'bg-brand-500 text-white'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+            style={tab === 'team' ? {} : { border: '1px solid #EDE8E3' }}
           >
             Team Tasks ({teamTasks.length})
           </button>
@@ -176,13 +196,14 @@ export default function Tasks() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className={`px-3 py-1 rounded-xl text-xs font-semibold transition-colors ${
               filter === f.key
                 ? f.key === 'overdue'
                   ? 'bg-red-500 text-white'
                   : 'bg-brand-500 text-white'
-                : 'text-gray-500 hover:text-gray-700 border border-gray-200'
+                : 'text-stone-500 hover:text-stone-700'
             }`}
+            style={filter === f.key ? {} : { border: '1px solid #EDE8E3' }}
           >
             {f.label}
           </button>
@@ -190,10 +211,11 @@ export default function Tasks() {
       </div>
 
       {loading ? (
-        <div className="text-center text-gray-400 py-12">Loading tasks…</div>
+        <div className="text-center text-stone-400 py-12 animate-pulse">Loading tasks…</div>
       ) : activeTasks.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-400 text-sm">No {filter !== 'all' ? filter : ''} tasks</p>
+          <p className="text-2xl mb-2">✓</p>
+          <p className="text-stone-400 text-sm">No {filter !== 'all' ? filter : ''} tasks</p>
         </div>
       ) : (
         <div className="space-y-2">
