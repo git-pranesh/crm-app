@@ -60,15 +60,20 @@ const RULE_LABELS: Record<string, string> = {
 };
 
 function SkeletonCard() {
-  return <div className="h-28 bg-gray-200 rounded-xl animate-pulse" />;
+  return <div className="h-28 rounded-2xl animate-pulse" style={{ background: '#EDE8E3' }} />;
 }
 
 function KPICard({ label, value, sub, accent = false }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-5 ${accent ? 'bg-brand-50 border-brand-200' : 'bg-white border-gray-200'}`}>
-      <p className={`text-2xl font-bold ${accent ? 'text-brand-700' : 'text-gray-900'}`}>{value}</p>
-      <p className={`text-sm font-medium mt-1 ${accent ? 'text-brand-600' : 'text-gray-700'}`}>{label}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5 leading-snug">{sub}</p>}
+    <div
+      className={`rounded-2xl p-5 shadow-warm-sm ${accent ? 'border border-brand-200' : ''}`}
+      style={accent
+        ? { background: '#FEF0E8', border: '1px solid #f6ccb8' }
+        : { background: '#fff', border: '1px solid #EDE8E3' }}
+    >
+      <p className={`text-2xl font-extrabold tracking-tight ${accent ? 'text-brand-700' : 'text-stone-900'}`}>{value}</p>
+      <p className={`text-sm font-semibold mt-1 ${accent ? 'text-brand-600' : 'text-stone-700'}`}>{label}</p>
+      {sub && <p className="text-xs text-stone-400 mt-0.5 leading-snug">{sub}</p>}
     </div>
   );
 }
@@ -76,8 +81,8 @@ function KPICard({ label, value, sub, accent = false }: { label: string; value: 
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3">
-      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</p>
-      <div className="flex-1 h-px bg-gray-100" />
+      <p className="text-xs font-bold text-stone-400 uppercase tracking-widest">{title}</p>
+      <div className="flex-1 h-px" style={{ background: '#EDE8E3' }} />
     </div>
   );
 }
@@ -140,8 +145,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
       {/* Row 2 – Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Pipeline funnel – horizontal bars */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Pipeline Funnel</h3>
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Pipeline Funnel</h3>
           {funnelData.every((d) => d.count === 0) ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active leads</div>
           ) : (
@@ -159,8 +164,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
         </div>
 
         {/* Source mix – donut */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Lead Sources</h3>
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Lead Sources</h3>
           {data.sourceBreakdown.length === 0 ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No source data</div>
           ) : (
@@ -198,8 +203,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
       {/* Row 3 – Conversion + SLA breaches */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Stage conversion */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Stage Conversion</h3>
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Stage Conversion</h3>
           <div className="space-y-3">
             {[
               { label: 'EL → MQL', value: data.conversionRates.elToMql },
@@ -208,8 +213,8 @@ function BHDashboard({ data }: { data: DashboardData }) {
               { label: 'PP → Onboarding', value: data.conversionRates.ppToOnboarding },
             ].map((r) => (
               <div key={r.label} className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 w-28 shrink-0">{r.label}</span>
-                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <span className="text-xs text-stone-500 w-28 shrink-0">{r.label}</span>
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: '#EDE8E3' }}>
                   <div
                     className="h-full bg-brand-500 rounded-full transition-all"
                     style={{ width: `${Math.min(r.value, 100)}%` }}
@@ -222,9 +227,9 @@ function BHDashboard({ data }: { data: DashboardData }) {
         </div>
 
         {/* SLA breaches */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+        <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #EDE8E3' }}>
+            <h3 className="font-bold text-stone-900 flex items-center gap-2">
               SLA Breaches
               {data.slaBreaches.activeCount > 0 && (
                 <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">
@@ -234,25 +239,26 @@ function BHDashboard({ data }: { data: DashboardData }) {
             </h3>
           </div>
           {data.slaBreaches.activeCount === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+            <div className="flex flex-col items-center justify-center py-8 text-stone-400">
               <span className="text-2xl mb-1">✓</span>
-              <p className="text-sm font-medium text-gray-500">All clear</p>
+              <p className="text-sm font-semibold text-stone-500">All clear</p>
               <p className="text-xs">No active SLA breaches</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-50 max-h-52 overflow-y-auto">
+            <div className="max-h-52 overflow-y-auto">
               {data.slaBreaches.list.map((b) => (
-                <div key={b.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
+                <div key={b.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#FAF6F2]" style={{ borderBottom: '1px solid #F5F0EB' }}>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-stone-900 truncate">
                       {b.lead.name}
-                      <span className="text-gray-400 font-normal ml-1 text-xs">({b.lead.leadId})</span>
+                      <span className="text-stone-400 font-normal ml-1 text-xs">({b.lead.leadId})</span>
                     </p>
                     <p className="text-xs text-red-600">{RULE_LABELS[b.rule] ?? b.rule} · {hoursOverdue(b.breachedAt)}h overdue</p>
                   </div>
                   <Link
                     to={`/leads/${b.lead.id}`}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg text-gray-600 shrink-0 ml-2"
+                    className="text-xs px-2.5 py-1 rounded-lg text-stone-600 shrink-0 ml-2 hover:bg-stone-100 transition-colors"
+                    style={{ border: '1px solid #EDE8E3' }}
                   >
                     View →
                   </Link>
@@ -264,18 +270,18 @@ function BHDashboard({ data }: { data: DashboardData }) {
       </div>
 
       {/* Row 4 – Activity feed */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="font-semibold text-gray-900 mb-4">Today's Activity</h3>
+      <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+        <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Today's Activity</h3>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Calls Logged', value: data.teamActivity.callsToday, icon: '📞', color: 'bg-blue-50 text-blue-600' },
-            { label: 'Stage Moves', value: data.teamActivity.stagesMovedToday, icon: '🔄', color: 'bg-purple-50 text-purple-600' },
-            { label: 'Tasks Completed', value: data.teamActivity.tasksCompletedToday, icon: '✅', color: 'bg-green-50 text-green-600' },
+            { label: 'Calls Logged', value: data.teamActivity.callsToday, icon: '📞', bg: '#FEF0E8', color: 'text-brand-700' },
+            { label: 'Stage Moves', value: data.teamActivity.stagesMovedToday, icon: '🔄', bg: '#FDF6ED', color: 'text-amber-700' },
+            { label: 'Tasks Completed', value: data.teamActivity.tasksCompletedToday, icon: '✅', bg: '#F0FAF4', color: 'text-green-700' },
           ].map((item) => (
-            <div key={item.label} className={`rounded-xl p-4 ${item.color} bg-opacity-60`}>
+            <div key={item.label} className="rounded-2xl p-4" style={{ background: item.bg }}>
               <div className="text-2xl mb-1">{item.icon}</div>
-              <p className="text-3xl font-bold">{item.value}</p>
-              <p className="text-xs font-medium mt-0.5">{item.label}</p>
+              <p className={`text-3xl font-extrabold tracking-tight ${item.color}`}>{item.value}</p>
+              <p className={`text-xs font-semibold mt-0.5 ${item.color} opacity-80`}>{item.label}</p>
             </div>
           ))}
         </div>
@@ -338,8 +344,8 @@ function BLDashboard({ data }: { data: DashboardData }) {
       {/* Row 2 – Phase load + Needs attention */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Phase load */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h3 className="font-semibold text-gray-900 mb-4">Phase Load</h3>
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Phase Load</h3>
           {phaseData.length === 0 ? (
             <div className="flex items-center justify-center h-44 text-gray-400 text-sm">No active projects</div>
           ) : (
@@ -371,9 +377,9 @@ function BLDashboard({ data }: { data: DashboardData }) {
         </div>
 
         {/* Needs attention */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900">Needs Attention</h3>
+        <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: '1px solid #EDE8E3' }}>
+            <h3 className="font-bold text-stone-900">Needs Attention</h3>
             {attentionCount > 0 && (
               <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-full">{attentionCount}</span>
             )}
@@ -413,9 +419,9 @@ function BLDashboard({ data }: { data: DashboardData }) {
       {/* Row 3 – Collections due + Coming soon */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Collections due */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Collections Due</h3>
+        <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <div className="px-5 py-4" style={{ borderBottom: '1px solid #EDE8E3' }}>
+            <h3 className="font-bold text-stone-900">Collections Due</h3>
           </div>
           {data.collectionsDue.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-400">
@@ -448,10 +454,10 @@ function BLDashboard({ data }: { data: DashboardData }) {
         </div>
 
         {/* Site & service pulse — coming soon */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 flex flex-col items-center justify-center text-center min-h-[180px]">
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[180px]" style={{ border: '1px solid #EDE8E3' }}>
           <span className="text-3xl mb-2">🔧</span>
-          <h3 className="font-semibold text-gray-700 mb-1">Site & Service Pulse</h3>
-          <p className="text-xs text-gray-400 max-w-[180px] leading-relaxed">
+          <h3 className="font-semibold text-stone-700 mb-1">Site & Service Pulse</h3>
+          <p className="text-xs text-stone-400 max-w-[180px] leading-relaxed">
             Service & Warranty module is coming in a future release.
           </p>
         </div>
@@ -482,14 +488,15 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Dashboard</h1>
+          <p className="text-sm text-stone-400 mt-0.5">
             {isBH ? 'Branch overview — all teams' : `Your scope · ${user?.name ?? ''}`}
           </p>
         </div>
         <Link
           to="/reports"
-          className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg text-gray-700 transition-colors"
+          className="text-sm px-4 py-2 rounded-xl text-stone-600 hover:text-stone-900 transition-colors font-medium"
+          style={{ border: '1px solid #EDE8E3', background: '#fff' }}
         >
           Full Reports →
         </Link>
@@ -501,14 +508,14 @@ export default function Dashboard() {
             {[1,2,3,4,5,6].map((i) => <SkeletonCard key={i} />)}
           </div>
           <div className="grid grid-cols-2 gap-6">
-            <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
-            <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+            <div className="h-64 rounded-2xl animate-pulse" style={{ background: '#EDE8E3' }} />
+            <div className="h-64 rounded-2xl animate-pulse" style={{ background: '#EDE8E3' }} />
           </div>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm">{error}</div>
       )}
 
       {data && (isBH ? <BHDashboard data={data} /> : <BLDashboard data={data} />)}

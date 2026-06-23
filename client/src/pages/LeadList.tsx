@@ -16,15 +16,15 @@ interface Lead {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'bg-indigo-100 text-indigo-700',
-  MQL: 'bg-purple-100 text-purple-700',
-  DQL: 'bg-fuchsia-100 text-fuchsia-700',
-  PROPOSAL_READY: 'bg-amber-100 text-amber-700',
-  PROPOSAL_PRESENTED: 'bg-orange-100 text-orange-700',
+  EFFECTIVE_LEAD: 'bg-stone-100 text-stone-700',
+  MQL: 'bg-amber-100 text-amber-800',
+  DQL: 'bg-orange-100 text-orange-800',
+  PROPOSAL_READY: 'bg-brand-50 text-brand-700',
+  PROPOSAL_PRESENTED: 'bg-brand-100 text-brand-700',
   ONBOARDING: 'bg-green-100 text-green-700',
-  HANDED_OVER: 'bg-teal-100 text-teal-700',
-  INACTIVE: 'bg-gray-100 text-gray-500',
-  ON_HOLD: 'bg-slate-100 text-slate-600',
+  HANDED_OVER: 'bg-emerald-100 text-emerald-700',
+  INACTIVE: 'bg-stone-100 text-stone-500',
+  ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -196,25 +196,26 @@ export default function LeadList() {
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white px-6 py-4" style={{ borderBottom: '1px solid #EDE8E3' }}>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Leads</h1>
-            <p className="text-xs text-gray-400 mt-0.5">All leads in your scope</p>
+            <h1 className="text-2xl font-extrabold text-stone-900 tracking-tight">Leads</h1>
+            <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportCSV}
               disabled={exporting}
-              className="border border-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="text-stone-600 px-3 py-2 rounded-xl text-sm hover:bg-stone-50 disabled:opacity-50 transition-colors font-medium"
+              style={{ border: '1px solid #EDE8E3' }}
             >
               {exporting ? 'Exporting…' : '↓ Export CSV'}
             </button>
             <button
               onClick={() => setShowCreate(!showCreate)}
-              className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+              className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 transition-colors"
             >
               {showCreate ? 'Cancel' : '+ New Lead'}
             </button>
@@ -225,8 +226,8 @@ export default function LeadList() {
       <div className="px-6 py-4 space-y-4">
         {/* Create form */}
         {showCreate && (
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h2 className="font-semibold text-gray-900 mb-4">Create New Lead</h2>
+          <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+            <h2 className="font-bold text-stone-900 mb-4 tracking-tight">Create New Lead</h2>
             <form onSubmit={handleCreate} className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma' },
@@ -236,29 +237,31 @@ export default function LeadList() {
                 { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                  <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                    {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
                   </label>
                   <input
                     value={(newLead as any)[f.key]}
                     onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
                     required={f.required}
                     placeholder={f.placeholder}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                   />
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Source</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Source</label>
                 <select value={newLead.source} onChange={(e) => setNewLead({ ...newLead, source: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                  className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                   <option value="">Select source</option>
                   {SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div className="col-span-2 lg:col-span-3 flex justify-end">
                 <button type="submit" disabled={creating}
-                  className="bg-brand-500 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                  className="bg-brand-500 text-white px-6 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
                   {creating ? 'Creating…' : 'Create Lead'}
                 </button>
               </div>
@@ -267,47 +270,51 @@ export default function LeadList() {
         )}
 
         {/* Filter bar */}
-        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-wrap items-center gap-3">
+        <div className="bg-white rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <input
             value={filters.search}
             onChange={(e) => setFilter('search', e.target.value)}
             placeholder="Search name, ID, phone, location…"
-            className="flex-1 min-w-[200px] border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            className="flex-1 min-w-[200px] rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
           />
           <select value={filters.stage} onChange={(e) => setFilter('stage', e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+            className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
             <option value="">All stages</option>
             {STAGE_OPTIONS.map((s) => <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>)}
           </select>
           <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+            className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
             <option value="">All statuses</option>
             <option value="Active">Active</option>
             <option value="On Hold">On Hold</option>
             <option value="Inactive">Inactive</option>
           </select>
           <select value={filters.source} onChange={(e) => setFilter('source', e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+            className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
             <option value="">All sources</option>
             {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
           {hasFilters && (
-            <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-gray-600 underline">
+            <button onClick={clearFilters} className="text-xs text-stone-400 hover:text-stone-600 underline">
               Clear
             </button>
           )}
         </div>
 
         {/* Count + Table */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
+        <div className="bg-white rounded-2xl overflow-hidden shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid #EDE8E3' }}>
+            <p className="text-xs text-stone-500 font-medium">
               {loading ? 'Loading…' : `${leads.length} of ${total} leads`}
             </p>
           </div>
 
           {loading ? (
-            <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Loading leads…</div>
+            <div className="py-16 text-center text-stone-400 text-sm animate-pulse">Loading leads…</div>
           ) : leads.length === 0 ? (
             <EmptyState icon="👤" title="No leads found" description="Try adjusting your filters or create a new lead"
               action={{ label: '+ New Lead', onClick: () => setShowCreate(true) }} />
@@ -316,42 +323,45 @@ export default function LeadList() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
+                    <tr style={{ background: '#FAF6F2', borderBottom: '1px solid #EDE8E3' }}>
                       {['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'Updated'].map((h) => (
-                        <th key={h} className="text-left py-2.5 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left py-2.5 px-4 text-xs font-bold text-stone-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody>
                     {leads.map((lead) => {
                       const status = deriveStatus(lead.stage);
                       return (
                         <tr
                           key={lead.id}
                           onClick={() => navigate(`/leads/${lead.id}`)}
-                          className="hover:bg-gray-50 cursor-pointer"
+                          className="cursor-pointer transition-colors"
+                          style={{ borderBottom: '1px solid #F5F0EB' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#FAF6F2')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = '')}
                         >
                           <td className="py-3 px-4">
-                            <span className="text-brand-600 font-mono text-xs font-semibold">{lead.leadId}</span>
+                            <span className="text-brand-600 font-mono text-xs font-bold">{lead.leadId}</span>
                             {lead.isSLABreached && <span className="ml-1 text-red-400 text-xs">⚠</span>}
                           </td>
-                          <td className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{lead.name}</td>
+                          <td className="py-3 px-4 font-semibold text-stone-900 whitespace-nowrap">{lead.name}</td>
                           <td className="py-3 px-4">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STAGE_COLORS[lead.stage] ?? 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}>
                               {STAGE_LABELS[lead.stage] ?? lead.stage}
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[status]}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[status]}`}>
                               {status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-gray-700 text-xs whitespace-nowrap">{fmtVal(lead.estimatedValue)}</td>
-                          <td className="py-3 px-4">{avatar(lead.assignedDesigner?.name) ?? <span className="text-gray-300 text-xs">—</span>}</td>
-                          <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">{lead.source?.replace(/_/g, ' ') ?? '—'}</td>
+                          <td className="py-3 px-4 text-stone-700 text-xs font-medium whitespace-nowrap">{fmtVal(lead.estimatedValue)}</td>
+                          <td className="py-3 px-4">{avatar(lead.assignedDesigner?.name) ?? <span className="text-stone-300 text-xs">—</span>}</td>
+                          <td className="py-3 px-4 text-stone-500 text-xs whitespace-nowrap">{lead.source?.replace(/_/g, ' ') ?? '—'}</td>
                           <td className={`py-3 px-4 text-xs ${intentColor(lead.intentRating)}`}>{intentLabel(lead.intentRating)}</td>
                           <td className="py-3 px-4"><Stars rating={lead.intentRating} /></td>
-                          <td className="py-3 px-4 text-gray-400 text-xs whitespace-nowrap">{relTime(lead.updatedAt)}</td>
+                          <td className="py-3 px-4 text-stone-400 text-xs whitespace-nowrap">{relTime(lead.updatedAt)}</td>
                         </tr>
                       );
                     })}
@@ -360,15 +370,17 @@ export default function LeadList() {
               </div>
 
               {pages > 1 && (
-                <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-                  <p className="text-xs text-gray-400">Page {page} of {pages}</p>
+                <div className="px-4 py-3 flex items-center justify-between" style={{ borderTop: '1px solid #EDE8E3' }}>
+                  <p className="text-xs text-stone-400">Page {page} of {pages}</p>
                   <div className="flex gap-2">
                     <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                      className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
+                      className="text-xs px-3 py-1.5 rounded-xl disabled:opacity-40 hover:bg-stone-50 transition-colors"
+                      style={{ border: '1px solid #EDE8E3' }}>
                       ← Prev
                     </button>
                     <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page === pages}
-                      className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
+                      className="text-xs px-3 py-1.5 rounded-xl disabled:opacity-40 hover:bg-stone-50 transition-colors"
+                      style={{ border: '1px solid #EDE8E3' }}>
                       Next →
                     </button>
                   </div>

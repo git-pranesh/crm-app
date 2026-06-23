@@ -40,15 +40,15 @@ interface Quote {
 interface AppUser { id: string; name: string; role: string; }
 
 const STAGE_COLORS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'bg-indigo-100 text-indigo-700',
-  MQL: 'bg-purple-100 text-purple-700',
-  DQL: 'bg-fuchsia-100 text-fuchsia-700',
-  PROPOSAL_READY: 'bg-amber-100 text-amber-700',
-  PROPOSAL_PRESENTED: 'bg-orange-100 text-orange-700',
+  EFFECTIVE_LEAD: 'bg-stone-100 text-stone-700',
+  MQL: 'bg-amber-100 text-amber-800',
+  DQL: 'bg-orange-100 text-orange-800',
+  PROPOSAL_READY: 'bg-brand-50 text-brand-700',
+  PROPOSAL_PRESENTED: 'bg-brand-100 text-brand-700',
   ONBOARDING: 'bg-green-100 text-green-700',
-  HANDED_OVER: 'bg-teal-100 text-teal-700',
-  INACTIVE: 'bg-gray-100 text-gray-500',
-  ON_HOLD: 'bg-slate-100 text-slate-600',
+  HANDED_OVER: 'bg-emerald-100 text-emerald-700',
+  INACTIVE: 'bg-stone-100 text-stone-500',
+  ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -91,8 +91,8 @@ function relTime(d: string) {
 
 function SidebarCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{title}</h3>
+    <div className="bg-white rounded-2xl p-4 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+      <h3 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">{title}</h3>
       {children}
     </div>
   );
@@ -100,9 +100,9 @@ function SidebarCard({ title, children }: { title: string; children: React.React
 
 function InfoRow({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div className="flex justify-between items-start gap-2 py-1 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 shrink-0">{label}</span>
-      <span className="text-xs text-gray-700 text-right">{value ?? '—'}</span>
+    <div className="flex justify-between items-start gap-2 py-1 last:border-0" style={{ borderBottom: '1px solid #F5F0EB' }}>
+      <span className="text-xs text-stone-400 shrink-0">{label}</span>
+      <span className="text-xs text-stone-700 text-right">{value ?? '—'}</span>
     </div>
   );
 }
@@ -317,35 +317,38 @@ export default function LeadDetail() {
   const blUsers = users.filter((u) => u.role === 'BL');
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       {/* Stage-change modal */}
       {stageModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Change Stage</h3>
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Change Stage</h3>
             <form onSubmit={handleStageChange} className="space-y-4">
               <select value={newStage} onChange={(e) => setNewStage(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
                 {ALL_STAGES.map((s) => (
                   <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>
                 ))}
               </select>
               {newStage === 'INACTIVE' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reason <span className="text-red-500">*</span>
+                  <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                    Reason <span className="text-brand-500">*</span>
                   </label>
                   <textarea rows={3} value={inactivationReason} onChange={(e) => setInactivationReason(e.target.value)}
                     required placeholder="e.g. Budget mismatch, not interested"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-                  <p className="text-xs text-gray-400 mt-1">Feedback email + SMS sent automatically.</p>
+                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                  <p className="text-xs text-stone-400 mt-1">Feedback email + SMS sent automatically.</p>
                 </div>
               )}
               <div className="flex gap-3">
                 <button type="button" onClick={() => setStageModal(false)}
-                  className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+                  className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
                 <button type="submit" disabled={changingStage || !newStage || newStage === lead?.stage}
-                  className="flex-1 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50">
+                  className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
                   {changingStage ? 'Saving…' : 'Update Stage'}
                 </button>
               </div>
@@ -356,25 +359,27 @@ export default function LeadDetail() {
 
       {/* Intent override modal */}
       {intentModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="font-semibold text-gray-900 mb-1">Override Intent Rating</h3>
-            <p className="text-xs text-gray-400 mb-4">System-computed rating may differ. Reason required when overriding.</p>
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Override Intent Rating</h3>
+            <p className="text-xs text-stone-400 mb-4">System-computed rating may differ. Reason required when overriding.</p>
             <div className="flex justify-center mb-4">
               <StarRating rating={pendingRating} onSelect={setPendingRating} />
             </div>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-1.5">Reason</label>
               <textarea rows={2} value={intentReason} onChange={(e) => setIntentReason(e.target.value)}
                 placeholder="e.g. Confirmed purchase intent during site visit"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400" />
-              <p className="text-xs text-gray-400 mt-1">Required if overriding system rating.</p>
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+              <p className="text-xs text-stone-400 mt-1">Required if overriding system rating.</p>
             </div>
             <div className="flex gap-3">
               <button onClick={() => setIntentModal(false)}
-                className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+                className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
               <button onClick={handleIntentSave} disabled={savingIntent || !pendingRating}
-                className="flex-1 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50">
+                className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
                 {savingIntent ? 'Saving…' : 'Save Rating'}
               </button>
             </div>
@@ -383,25 +388,25 @@ export default function LeadDetail() {
       )}
 
       {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3">
+      <div className="sticky top-0 z-10 bg-white px-6 py-3" style={{ borderBottom: '1px solid #EDE8E3' }}>
         {loadingLead ? (
           <div className="h-12 flex items-center">
-            <div className="h-4 w-48 bg-gray-100 rounded animate-pulse" />
+            <div className="h-4 w-48 rounded-lg animate-pulse" style={{ background: '#EDE8E3' }} />
           </div>
         ) : lead ? (
           <div className="flex items-start justify-between gap-4">
             {/* Left: name + subtitle + stage/intent row */}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg font-semibold text-gray-900 truncate">{lead.name}</h1>
+                <h1 className="text-xl font-extrabold text-stone-900 tracking-tight truncate">{lead.name}</h1>
                 {lead.isSLABreached && (
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">⚠ SLA</span>
+                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">⚠ SLA</span>
                 )}
                 {lead.currentOffer && (
-                  <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium">🎁 {lead.currentOffer.name}</span>
+                  <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">🎁 {lead.currentOffer.name}</span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-stone-400 mt-0.5 font-medium">
                 {lead.leadId}
                 {lead.projectType ? ` · ${lead.projectType}` : ''}
                 {lead.scope ? ` · ${lead.scope}` : ''}
@@ -411,7 +416,7 @@ export default function LeadDetail() {
               <div className="flex items-center gap-3 mt-1.5">
                 <button
                   onClick={openStageModal}
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-medium cursor-pointer hover:opacity-80 transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-gray-100 text-gray-600'}`}
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold cursor-pointer hover:opacity-80 transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}
                   title="Click to change stage"
                 >
                   {STAGE_LABELS[lead.stage] ?? lead.stage} ▾
@@ -422,7 +427,7 @@ export default function LeadDetail() {
                   className="flex items-center gap-1 hover:opacity-70 transition-opacity"
                 >
                   {Array.from({ length: 5 }, (_, i) => (
-                    <span key={i} className={`text-base ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                    <span key={i} className={`text-base ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-stone-200'}`}>★</span>
                   ))}
                 </button>
               </div>
@@ -432,24 +437,27 @@ export default function LeadDetail() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => toast('Call logging — coming soon')}
-                className="border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors"
+                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                style={{ border: '1px solid #EDE8E3' }}
               >📞 Log Call</button>
               <button
                 onClick={() => handleTabChange('meetings')}
-                className="border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors"
+                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                style={{ border: '1px solid #EDE8E3' }}
               >📅 Meeting</button>
               <button
                 onClick={() => handleTabChange('discount')}
-                className="border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 transition-colors"
+                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                style={{ border: '1px solid #EDE8E3' }}
               >💰 Discount</button>
               <button
                 onClick={() => handleTabChange('whatsapp')}
-                className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-600 transition-colors"
+                className="bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors"
               >💬 WhatsApp</button>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Lead not found</p>
+          <p className="text-sm text-stone-500">Lead not found</p>
         )}
       </div>
 
@@ -465,16 +473,16 @@ export default function LeadDetail() {
         {/* Main col */}
         <div className="flex-1 min-w-0 space-y-0">
           {/* Tab nav */}
-          <div className="bg-white rounded-t-xl border border-gray-200 border-b-0">
+          <div className="bg-white rounded-t-2xl" style={{ border: '1px solid #EDE8E3', borderBottom: 'none' }}>
             <nav className="flex gap-0 overflow-x-auto scrollbar-hide">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
-                  className={`px-4 py-3 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+                  className={`px-4 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
                     activeTab === tab.id
                       ? 'border-brand-500 text-brand-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      : 'border-transparent text-stone-500 hover:text-stone-700'
                   }`}
                 >
                   {tab.label}
@@ -484,7 +492,7 @@ export default function LeadDetail() {
           </div>
 
           {/* Tab content */}
-          <div className="bg-white rounded-b-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-b-2xl p-5" style={{ border: '1px solid #EDE8E3' }}>
             {activeTab === 'overview' && lead && (
               <div className="space-y-5">
                 {/* Key facts */}

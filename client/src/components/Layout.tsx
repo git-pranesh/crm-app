@@ -57,10 +57,10 @@ const NAV_GROUPS = [
 ];
 
 const ROLE_COLORS: Record<string, string> = {
-  CRE: 'bg-indigo-100 text-indigo-700',
-  BL: 'bg-purple-100 text-purple-700',
-  DESIGNER: 'bg-blue-100 text-blue-700',
-  BRANCH_HEAD: 'bg-amber-100 text-amber-700',
+  CRE: 'bg-amber-100 text-amber-700',
+  BL: 'bg-brand-100 text-brand-700',
+  DESIGNER: 'bg-orange-100 text-orange-700',
+  BRANCH_HEAD: 'bg-stone-100 text-stone-700',
 };
 
 function fmtRelTime(date: string) {
@@ -154,18 +154,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden" style={{ background: '#F5F0EB' }}>
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 bg-white border-r border-gray-100 flex flex-col h-full overflow-y-auto">
+      <aside className="w-56 shrink-0 bg-white flex flex-col h-full overflow-y-auto" style={{ borderRight: '1px solid #EDE8E3' }}>
         {/* Logo */}
-        <div className="px-4 py-4 border-b border-gray-100 shrink-0">
+        <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-brand-500 flex items-center justify-center shrink-0">
               <span className="text-white text-sm font-bold">D</span>
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900 leading-tight">Interiors by DeX</p>
-              <p className="text-[10px] text-gray-400 font-medium tracking-wide uppercase">CRM</p>
+              <p className="text-sm font-bold text-stone-900 leading-tight">Interiors by DeX</p>
+              <p className="text-[10px] text-stone-400 font-medium tracking-widest uppercase">CRM</p>
             </div>
           </Link>
         </div>
@@ -178,8 +178,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 onClick={() => toggleSection(group.label)}
                 className="w-full flex items-center justify-between px-2 py-1 mb-0.5"
               >
-                <span className="text-[10px] font-semibold text-gray-400 tracking-wider">{group.label}</span>
-                <span className="text-gray-300 text-xs">{collapsed[group.label] ? '›' : '⌄'}</span>
+                <span className="text-[10px] font-semibold text-stone-400 tracking-widest">{group.label}</span>
+                <span className="text-stone-300 text-xs">{collapsed[group.label] ? '›' : '⌄'}</span>
               </button>
               {!collapsed[group.label] && (
                 <div className="space-y-0.5">
@@ -189,11 +189,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <Link
                         key={item.to}
                         to={item.to}
-                        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm transition-all ${
                           active
-                            ? 'bg-brand-50 text-brand-700 font-medium'
-                            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            ? 'bg-brand-50 text-brand-600 font-semibold'
+                            : 'text-stone-500 hover:text-stone-800 hover:bg-cream-200'
                         }`}
+                        style={active ? { background: '#FEF0E8' } : undefined}
                       >
                         <span className="text-base w-4 text-center">{item.icon}</span>
                         <span>{item.label}</span>
@@ -209,21 +210,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* User / logout */}
         {user && (
-          <div className="shrink-0 border-t border-gray-100 px-3 py-3">
+          <div className="shrink-0 px-3 py-3" style={{ borderTop: '1px solid #EDE8E3' }}>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
                 <span className="text-brand-700 text-xs font-bold">{user.name[0]?.toUpperCase()}</span>
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-gray-900 truncate">{user.name}</p>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                <p className="text-xs font-semibold text-stone-800 truncate">{user.name}</p>
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${ROLE_COLORS[user.role] ?? 'bg-stone-100 text-stone-600'}`}>
                   {user.role}
                 </span>
               </div>
             </div>
             <button
               onClick={logout}
-              className="w-full text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors text-left"
+              className="w-full text-xs text-stone-400 hover:text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-lg transition-colors text-left"
             >
               Sign out
             </button>
@@ -234,37 +235,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-100 px-4 py-2.5 flex items-center gap-3 shrink-0">
+        <header className="bg-white px-4 py-2.5 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
           {/* Search */}
           <div className="relative flex-1 max-w-md" ref={searchRef}>
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50 focus-within:bg-white focus-within:border-brand-300 focus-within:ring-1 focus-within:ring-brand-200 transition-all">
-              <span className="pl-3 text-gray-400 text-sm">⌕</span>
+            <div className="flex items-center rounded-xl overflow-hidden bg-white transition-all" style={{ border: '1px solid #EDE8E3' }}>
+              <span className="pl-3 text-stone-400 text-sm">⌕</span>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
                 placeholder="Search name, phone, Lead ID…"
-                className="flex-1 bg-transparent px-2 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none"
+                className="flex-1 bg-transparent px-2 py-2 text-sm text-stone-800 placeholder-stone-400 focus:outline-none"
               />
               {search && (
                 <button onClick={() => { setSearch(''); setSearchResults([]); setSearchOpen(false); }}
-                  className="pr-2 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                  className="pr-2 text-stone-400 hover:text-stone-600 text-xs">✕</button>
               )}
             </div>
             {searchOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-warm-lg z-50 overflow-hidden" style={{ border: '1px solid #EDE8E3' }}>
                 {searchResults.map((lead) => (
                   <button
                     key={lead.id}
                     onClick={() => { navigate(`/leads/${lead.id}`); setSearch(''); setSearchOpen(false); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left border-b border-gray-50 last:border-0"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-cream-100 text-left last:border-0"
+                    style={{ borderBottom: '1px solid #F5F0EB' }}
                   >
-                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                      <span className="text-gray-500 text-xs font-bold">{lead.name[0]?.toUpperCase()}</span>
+                    <div className="w-7 h-7 rounded-full bg-stone-100 flex items-center justify-center shrink-0">
+                      <span className="text-stone-500 text-xs font-bold">{lead.name[0]?.toUpperCase()}</span>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{lead.name}</p>
-                      <p className="text-xs text-gray-400">{lead.leadId} · {lead.stage.replace(/_/g, ' ')}</p>
+                      <p className="text-sm font-medium text-stone-900 truncate">{lead.name}</p>
+                      <p className="text-xs text-stone-400">{lead.leadId} · {lead.stage.replace(/_/g, ' ')}</p>
                     </div>
                   </button>
                 ))}
@@ -277,7 +279,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="relative" ref={notifsRef}>
               <button
                 onClick={() => setNotifsOpen((o) => !o)}
-                className="relative w-9 h-9 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+                className="relative w-9 h-9 flex items-center justify-center rounded-xl text-stone-500 hover:text-stone-800 transition-colors"
+                style={{ background: 'transparent' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F0EB')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <span className="text-lg">🔔</span>
                 {unreadCount > 0 && (
@@ -287,20 +292,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </button>
               {notifsOpen && (
-                <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-900">Notifications</p>
+                <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-warm-lg z-50 overflow-hidden" style={{ border: '1px solid #EDE8E3' }}>
+                  <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #EDE8E3' }}>
+                    <p className="text-sm font-semibold text-stone-900">Notifications</p>
                     {unreadCount > 0 && (
                       <span className="text-xs text-brand-600 font-medium">{unreadCount} unread</span>
                     )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                  <div className="max-h-72 overflow-y-auto divide-y divide-cream-100">
                     {notifs.length === 0 ? (
-                      <p className="text-center text-sm text-gray-400 py-6">No notifications</p>
+                      <p className="text-center text-sm text-stone-400 py-6">No notifications</p>
                     ) : notifs.slice(0, 10).map((n) => (
                       <div key={n.id} className={`px-4 py-3 ${!n.isRead ? 'bg-brand-50' : ''}`}>
-                        <p className="text-xs text-gray-800 leading-snug">{n.message}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{fmtRelTime(n.createdAt)}</p>
+                        <p className="text-xs text-stone-700 leading-snug">{n.message}</p>
+                        <p className="text-[10px] text-stone-400 mt-0.5">{fmtRelTime(n.createdAt)}</p>
                       </div>
                     ))}
                   </div>
@@ -311,7 +316,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {/* New Lead */}
             <button
               onClick={() => setShowNewLead(true)}
-              className="bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 shrink-0"
+              className="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
             >
               <span className="text-base leading-none">+</span>
               New Lead
@@ -328,11 +333,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* New Lead Modal */}
       {showNewLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowNewLead(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+          <div className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm" onClick={() => setShowNewLead(false)} />
+          <div className="relative bg-white rounded-3xl shadow-warm-lg w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900">New Lead</h2>
-              <button onClick={() => setShowNewLead(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              <h2 className="text-lg font-bold text-stone-900">New Lead</h2>
+              <button onClick={() => setShowNewLead(false)} className="text-stone-400 hover:text-stone-600 text-xl leading-none w-8 h-8 flex items-center justify-center rounded-xl hover:bg-stone-100 transition-colors">✕</button>
             </div>
             <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
               {[
@@ -343,24 +348,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 { key: 'location', label: 'Location', required: false, placeholder: 'Whitefield, Bangalore' },
               ].map((f) => (
                 <div key={f.key} className={(f as any).span === 2 ? 'col-span-2' : ''}>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                  <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                    {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
                   </label>
                   <input
                     value={(newLead as any)[f.key]}
                     onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
                     required={f.required}
                     placeholder={f.placeholder}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                    onFocus={(e) => e.currentTarget.style.background = '#fff'}
+                    onBlur={(e) => e.currentTarget.style.background = '#FDFAF7'}
                   />
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Source</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Source</label>
                 <select
                   value={newLead.source}
                   onChange={(e) => setNewLead({ ...newLead, source: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                 >
                   <option value="">Select source</option>
                   {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
@@ -368,11 +377,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </div>
               <div className="col-span-2 flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => setShowNewLead(false)}
-                  className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  className="px-4 py-2.5 text-sm font-medium text-stone-600 rounded-xl hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}>
                   Cancel
                 </button>
                 <button type="submit" disabled={creating}
-                  className="px-5 py-2 text-sm font-medium bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-lg transition-colors">
+                  className="px-5 py-2.5 text-sm font-semibold bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-xl transition-colors">
                   {creating ? 'Creating…' : 'Create Lead'}
                 </button>
               </div>

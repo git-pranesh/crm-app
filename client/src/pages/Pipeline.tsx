@@ -40,11 +40,11 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_ACCENT: Record<string, string> = {
-  EFFECTIVE_LEAD: 'bg-indigo-500',
-  MQL: 'bg-violet-500',
-  DQL: 'bg-fuchsia-500',
-  PROPOSAL_READY: 'bg-amber-500',
-  PROPOSAL_PRESENTED: 'bg-orange-500',
+  EFFECTIVE_LEAD: 'bg-stone-400',
+  MQL: 'bg-amber-500',
+  DQL: 'bg-orange-500',
+  PROPOSAL_READY: 'bg-brand-400',
+  PROPOSAL_PRESENTED: 'bg-brand-500',
   ONBOARDING: 'bg-green-500',
 };
 
@@ -101,30 +101,31 @@ function LeadCard({
       draggable
       onDragStart={(e) => onDragStart(e, lead)}
       onDragEnd={onDragEnd}
-      className="bg-white border border-gray-200 rounded-xl p-3.5 shadow-sm hover:shadow-md hover:border-gray-300 transition-all cursor-grab active:cursor-grabbing group"
+      className="bg-white rounded-2xl p-3.5 cursor-grab active:cursor-grabbing group transition-all hover:shadow-warm"
+      style={{ border: '1px solid #EDE8E3', boxShadow: '0 1px 3px 0 rgba(100,60,20,0.08)' }}
     >
       {/* Top row: name + lead ID */}
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <Link
           to={`/leads/${lead.id}`}
-          className="text-sm font-semibold text-gray-900 hover:text-brand-700 leading-tight truncate"
+          className="text-sm font-semibold text-stone-900 hover:text-brand-600 leading-tight truncate"
           onClick={(e) => e.stopPropagation()}
         >
           {lead.name}
         </Link>
-        <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded shrink-0">{lead.leadId}</span>
+        <span className="text-[10px] font-mono text-stone-400 px-1.5 py-0.5 rounded shrink-0" style={{ background: '#F5F0EB' }}>{lead.leadId}</span>
       </div>
 
       {/* Property type · scope */}
       {scope && (
-        <p className="text-xs text-gray-500 mb-1.5 truncate">{scope}</p>
+        <p className="text-xs text-stone-500 mb-1.5 truncate">{scope}</p>
       )}
 
       {/* Value + location */}
       <div className="flex items-center gap-2 mb-2">
-        {val && <span className="text-sm font-bold text-gray-800">{val}</span>}
+        {val && <span className="text-sm font-bold text-stone-800">{val}</span>}
         {lead.location && (
-          <span className="text-xs text-gray-400 truncate flex-1">{lead.location}</span>
+          <span className="text-xs text-stone-400 truncate flex-1">{lead.location}</span>
         )}
       </div>
 
@@ -149,7 +150,7 @@ function LeadCard({
       </div>
 
       {/* Bottom row: assignee + source + time */}
-      <div className="flex items-center gap-1.5 pt-1.5 border-t border-gray-50">
+      <div className="flex items-center gap-1.5 pt-1.5" style={{ borderTop: '1px solid #F5F0EB' }}>
         {lead.assignedDesigner ? (
           <div className="flex items-center gap-1 flex-1 min-w-0">
             <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
@@ -157,25 +158,25 @@ function LeadCard({
                 {lead.assignedDesigner.name[0]?.toUpperCase()}
               </span>
             </div>
-            <span className="text-[10px] text-gray-500 truncate">{lead.assignedDesigner.name}</span>
+            <span className="text-[10px] text-stone-500 truncate">{lead.assignedDesigner.name}</span>
           </div>
         ) : lead.assignedBL ? (
           <div className="flex items-center gap-1 flex-1 min-w-0">
-            <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-              <span className="text-[9px] font-bold text-purple-700">
+            <div className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+              <span className="text-[9px] font-bold text-amber-700">
                 {lead.assignedBL.name[0]?.toUpperCase()}
               </span>
             </div>
-            <span className="text-[10px] text-gray-500 truncate">{lead.assignedBL.name}</span>
+            <span className="text-[10px] text-stone-500 truncate">{lead.assignedBL.name}</span>
           </div>
         ) : (
-          <span className="text-[10px] text-gray-300 flex-1">Unassigned</span>
+          <span className="text-[10px] text-stone-300 flex-1">Unassigned</span>
         )}
 
         {lead.source && (
-          <span className="text-[10px] text-gray-400 shrink-0 hidden sm:block">{fmtSource(lead.source)}</span>
+          <span className="text-[10px] text-stone-400 shrink-0 hidden sm:block">{fmtSource(lead.source)}</span>
         )}
-        <span className="text-[10px] text-gray-400 shrink-0">{relTime(lead.createdAt)} ago</span>
+        <span className="text-[10px] text-stone-400 shrink-0">{relTime(lead.createdAt)} ago</span>
       </div>
     </div>
   );
@@ -330,21 +331,21 @@ export default function Pipeline() {
   return (
     <div className="flex flex-col h-full">
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-3 shrink-0">
+      <div className="bg-white px-5 py-3 flex items-center gap-3 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
         {/* Filter tabs */}
-        <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-0.5 rounded-xl p-1" style={{ background: '#F5F0EB' }}>
           {TABS.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === tab.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-stone-900 shadow-warm-sm'
+                  : 'text-stone-500 hover:text-stone-700'
               }`}
             >
               {tab.label}
-              <span className={`ml-1.5 ${activeTab === tab.key ? 'text-brand-600' : 'text-gray-400'}`}>
+              <span className={`ml-1.5 ${activeTab === tab.key ? 'text-brand-600' : 'text-stone-400'}`}>
                 {counts[tab.key]}
               </span>
             </button>
@@ -352,7 +353,7 @@ export default function Pipeline() {
         </div>
 
         {/* Search */}
-        <div className="flex items-center border border-gray-200 rounded-lg bg-gray-50 overflow-hidden focus-within:bg-white focus-within:border-brand-300 transition-all flex-1 max-w-xs">
+        <div className="flex items-center rounded-xl overflow-hidden transition-all flex-1 max-w-xs" style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
           <span className="pl-2.5 text-gray-400 text-sm">⌕</span>
           <input
             value={search}
