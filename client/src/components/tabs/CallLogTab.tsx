@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { api, type CallRecord } from '../../lib/api';
 
 const OUTCOMES = [
@@ -89,7 +90,7 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
             disabled={refreshing}
             className="text-xs text-brand-600 hover:text-brand-700 hover:underline disabled:opacity-50"
           >
-            {refreshing ? 'Checking…' : '↻ Fetch recording'}
+            <span className="flex items-center gap-1"><RefreshCw size={11} strokeWidth={2} className={refreshing ? 'animate-spin' : ''} /> {refreshing ? 'Checking…' : 'Fetch recording'}</span>
           </button>
         </div>
       )}
@@ -160,7 +161,7 @@ export default function CallLogTab({ leadId }: Props) {
       {/* Escalation banner */}
       {needsEscalation && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex gap-3">
-          <span className="text-red-500 text-xl">⚠️</span>
+          <AlertTriangle size={18} strokeWidth={2} className="text-red-500 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-red-700">Escalation Required</p>
             <p className="text-sm text-red-600 mt-0.5">

@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import {
+  Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
+  ChevronDown, Star, RefreshCw, Mail,
+} from 'lucide-react';
 import { api } from '../lib/api';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
@@ -64,10 +68,10 @@ const ALL_STAGES = [
 ];
 
 const ACTION_ICONS: Record<string, string> = {
-  STAGE_CHANGED: '🔄', INTENT_RATING_UPDATED: '⭐', NOTE_ADDED: '📝',
-  CALL_LOGGED: '📞', MEETING_SCHEDULED: '📅', MEETING_UPDATED: '📅',
-  WHATSAPP_SENT: '💬', QUOTE_CREATED: '📄', DISCOUNT_REQUESTED: '💰',
-  LEAD_CREATED: '✨', ASSIGNMENT_CHANGED: '👤', BL_ASSIGNED: '👔',
+  STAGE_CHANGED: '↗', INTENT_RATING_UPDATED: '★', NOTE_ADDED: '·',
+  CALL_LOGGED: '·', MEETING_SCHEDULED: '·', MEETING_UPDATED: '·',
+  WHATSAPP_SENT: '·', QUOTE_CREATED: '·', DISCOUNT_REQUESTED: '·',
+  LEAD_CREATED: '·', ASSIGNMENT_CHANGED: '·', BL_ASSIGNED: '·',
 };
 
 function fmtVal(v?: string | number | null) {
@@ -400,10 +404,10 @@ export default function LeadDetail() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-extrabold text-stone-900 tracking-tight truncate">{lead.name}</h1>
                 {lead.isSLABreached && (
-                  <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">⚠ SLA</span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold"><AlertTriangle size={10} strokeWidth={2.5} /> SLA</span>
                 )}
                 {lead.currentOffer && (
-                  <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">🎁 {lead.currentOffer.name}</span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold"><Gift size={10} strokeWidth={2} /> {lead.currentOffer.name}</span>
                 )}
               </div>
               <p className="text-xs text-stone-400 mt-0.5 font-medium">
@@ -419,7 +423,7 @@ export default function LeadDetail() {
                   className={`text-xs px-2.5 py-0.5 rounded-full font-semibold cursor-pointer hover:opacity-80 transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}
                   title="Click to change stage"
                 >
-                  {STAGE_LABELS[lead.stage] ?? lead.stage} ▾
+                  <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} <ChevronDown size={10} strokeWidth={2.5} /></span>
                 </button>
                 <button
                   onClick={() => openIntentModal(lead.intentRating ?? 0)}
@@ -437,23 +441,23 @@ export default function LeadDetail() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => toast('Call logging — coming soon')}
-                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
                 style={{ border: '1px solid #EDE8E3' }}
-              >📞 Log Call</button>
+              ><Phone size={13} strokeWidth={2} /> Log Call</button>
               <button
                 onClick={() => handleTabChange('meetings')}
-                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
                 style={{ border: '1px solid #EDE8E3' }}
-              >📅 Meeting</button>
+              ><CalendarPlus size={13} strokeWidth={2} /> Meeting</button>
               <button
                 onClick={() => handleTabChange('discount')}
-                className="text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
                 style={{ border: '1px solid #EDE8E3' }}
-              >💰 Discount</button>
+              ><Tag size={13} strokeWidth={2} /> Discount</button>
               <button
                 onClick={() => handleTabChange('whatsapp')}
-                className="bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors"
-              >💬 WhatsApp</button>
+                className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors"
+              ><MessageCircle size={13} strokeWidth={2} /> WhatsApp</button>
             </div>
           </div>
         ) : (
@@ -728,7 +732,7 @@ export default function LeadDetail() {
                 {lead.currentOffer && (
                   <div className="mt-2">
                     <span className="inline-flex items-center gap-1 text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium">
-                      🎁 {lead.currentOffer.name}
+                      <Gift size={10} strokeWidth={2} /> {lead.currentOffer.name}
                     </span>
                   </div>
                 )}

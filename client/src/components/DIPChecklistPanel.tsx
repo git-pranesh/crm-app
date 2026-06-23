@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Check, Mail } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -125,8 +126,8 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
           </p>
         </div>
         {isComplete && (
-          <span className="text-xs font-medium bg-green-100 text-green-700 px-2.5 py-1 rounded-full">
-            ✓ Done
+          <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2.5 py-1 rounded-full">
+            <Check size={11} strokeWidth={2.5} /> Done
           </span>
         )}
       </div>
@@ -197,9 +198,9 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
           href={checklist.internalMailThreadUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 block text-xs text-brand-600 hover:underline truncate"
+          className="mt-2 flex items-center gap-1.5 text-xs text-brand-600 hover:underline truncate"
         >
-          📧 View internal thread →
+          <Mail size={12} strokeWidth={1.8} /> View internal thread →
         </a>
       )}
     </div>

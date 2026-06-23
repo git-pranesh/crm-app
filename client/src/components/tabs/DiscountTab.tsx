@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Check, X, Tag } from 'lucide-react';
 import { api } from '../../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -137,7 +138,10 @@ export default function DiscountTab({ leadId }: Props) {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h3 className="font-semibold text-gray-900 mb-4">
-              {reviewModal.action === 'APPROVED' ? '✓ Approve Discount Request' : '✕ Reject Discount Request'}
+              <span className="flex items-center gap-2">
+              {reviewModal.action === 'APPROVED' ? <Check size={16} strokeWidth={2.5} /> : <X size={16} strokeWidth={2.5} />}
+              {reviewModal.action === 'APPROVED' ? 'Approve Discount Request' : 'Reject Discount Request'}
+            </span>
             </h3>
             <form onSubmit={handleReview} className="space-y-4">
               {reviewModal.action === 'REJECTED' && (
@@ -268,7 +272,9 @@ export default function DiscountTab({ leadId }: Props) {
         <div className="text-center py-10 text-gray-400 text-sm animate-pulse">Loading requests…</div>
       ) : requests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-14 text-center">
-          <span className="text-4xl mb-3">💰</span>
+          <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center mb-3">
+            <Tag size={22} strokeWidth={1.5} className="text-stone-400" />
+          </div>
           <p className="font-medium text-gray-900 mb-1">No discount requests</p>
           <p className="text-sm text-gray-400">
             {isBL ? 'No discount requests raised for this lead yet.' : 'Use the button above to raise a discount request for BL approval'}
@@ -304,15 +310,15 @@ export default function DiscountTab({ leadId }: Props) {
                 <div className="flex gap-2 mt-3">
                   <button
                     onClick={() => setReviewModal({ id: req.id, action: 'APPROVED' })}
-                    className="flex-1 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 font-medium transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 font-medium transition-colors"
                   >
-                    ✓ Approve
+                    <Check size={12} strokeWidth={2.5} /> Approve
                   </button>
                   <button
                     onClick={() => { setReviewModal({ id: req.id, action: 'REJECTED' }); setRejectComment(''); }}
-                    className="flex-1 text-xs bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 font-medium transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1 text-xs bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-100 font-medium transition-colors"
                   >
-                    ✕ Reject
+                    <X size={12} strokeWidth={2.5} /> Reject
                   </button>
                 </div>
               )}

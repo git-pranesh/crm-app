@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Tag } from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 import toast from 'react-hot-toast';
@@ -231,7 +232,9 @@ export default function Discounts() {
             <div className="py-16 text-center text-gray-400 text-sm animate-pulse">Loading…</div>
           ) : displayed.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-3xl mb-2">💰</p>
+              <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center mx-auto mb-2">
+                <Tag size={22} strokeWidth={1.5} className="text-stone-400" />
+              </div>
               <p className="text-gray-500 text-sm">No {tab} requests</p>
             </div>
           ) : (

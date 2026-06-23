@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CalendarDays } from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 import toast from 'react-hot-toast';
@@ -352,7 +353,9 @@ export default function Calendar() {
       {isEmpty ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-4xl mb-3">📅</p>
+            <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center mb-3">
+              <CalendarDays size={26} strokeWidth={1.5} className="text-stone-400" />
+            </div>
             <p className="text-sm font-medium text-gray-600">No meetings scheduled for this period</p>
             <p className="text-xs text-gray-400 mt-1">Schedule meetings from a lead's page</p>
           </div>

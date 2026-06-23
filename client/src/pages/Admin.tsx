@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 
@@ -153,10 +154,10 @@ export default function Admin() {
     }
   };
 
-  const tabs: { id: AdminTab; label: string; icon: string }[] = [
-    { id: 'users', label: 'Users', icon: '👥' },
-    { id: 'schedules', label: 'Report Schedules', icon: '📅' },
-    { id: 'health', label: 'System Health', icon: '🩺' },
+  const tabs: { id: AdminTab; label: string; Icon: LucideIcon }[] = [
+    { id: 'users', label: 'Users', Icon: Users2 },
+    { id: 'schedules', label: 'Report Schedules', Icon: CalendarDays },
+    { id: 'health', label: 'System Health', Icon: Activity },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -171,7 +172,7 @@ export default function Admin() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDeactivate} />
           <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl">⚠️</span>
+              <AlertTriangle size={22} strokeWidth={1.8} className="text-red-500" />
             </div>
             <h2 className="text-base font-semibold text-gray-900 text-center mb-1">
               Deactivate {deactivateTarget.name}?
@@ -187,7 +188,7 @@ export default function Admin() {
                 {hasLeads ? (
                   <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
                     <p className="text-sm font-medium text-amber-800 mb-2">
-                      ⚠️ {deactivatePreview.activeLeads} active lead{deactivatePreview.activeLeads !== 1 ? 's' : ''} must be reassigned before deactivating.
+                      <AlertTriangle size={13} strokeWidth={2} className="inline mr-1 -mt-0.5" />{deactivatePreview.activeLeads} active lead{deactivatePreview.activeLeads !== 1 ? 's' : ''} must be reassigned before deactivating.
                     </p>
                     <ul className="text-xs text-amber-700 space-y-1 mb-3">
                       {deactivatePreview.leads.slice(0, 5).map((l) => (
@@ -217,7 +218,7 @@ export default function Admin() {
                   </div>
                 ) : (
                   <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-center">
-                    <p className="text-sm text-green-700">✅ No active leads — safe to deactivate immediately.</p>
+                    <p className="text-sm text-green-700"><CheckCircle2 size={13} strokeWidth={2} className="inline mr-1 -mt-0.5" />No active leads — safe to deactivate immediately.</p>
                   </div>
                 )}
               </>
@@ -263,7 +264,7 @@ export default function Admin() {
                   tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {t.icon} {t.label}
+                <t.Icon size={14} strokeWidth={1.8} className="inline mr-1.5 -mt-0.5" />{t.label}
               </button>
             ))}
           </nav>
@@ -312,7 +313,7 @@ export default function Admin() {
                 <h2 className="font-semibold text-gray-900">Team Members ({users.filter((u) => u.isActive).length} active)</h2>
               </div>
               {users.length === 0 ? (
-                <EmptyState icon="👤" title="No users yet" description="Invite team members using the form above" />
+                <EmptyState Icon={Users2} title="No users yet" description="Invite team members using the form above" />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -391,7 +392,7 @@ export default function Admin() {
             </div>
 
             {schedules.length === 0 ? (
-              <EmptyState icon="📅" title="No report schedules" description="Create a schedule above to start receiving automatic reports" />
+              <EmptyState Icon={CalendarDays} title="No report schedules" description="Create a schedule above to start receiving automatic reports" />
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <table className="w-full text-sm">
@@ -453,7 +454,9 @@ export default function Admin() {
                   { label: 'Meta Lead Ads', ok: health.metaConfigured },
                 ].map((item) => (
                   <div key={item.label} className={`flex items-center gap-3 p-3 rounded-xl ${item.ok ? 'bg-green-50' : 'bg-gray-50'}`}>
-                    <span className="text-lg">{item.ok ? '✅' : '⚙️'}</span>
+                    {item.ok
+                      ? <CheckCircle2 size={18} strokeWidth={1.8} className="text-green-500 shrink-0" />
+                      : <Circle size={18} strokeWidth={1.8} className="text-gray-300 shrink-0" />}
                     <div>
                       <p className="text-sm font-medium text-gray-900">{item.label}</p>
                       <p className={`text-xs ${item.ok ? 'text-green-600' : 'text-gray-400'}`}>{item.ok ? 'Configured' : 'Not configured'}</p>

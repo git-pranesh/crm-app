@@ -1,3 +1,5 @@
+import { AlertTriangle, Trash2 } from 'lucide-react';
+
 interface Props {
   open: boolean;
   title: string;
@@ -19,7 +21,9 @@ export default function ConfirmDialog({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
       <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full animate-in zoom-in-95">
         <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${destructive ? 'bg-red-100' : 'bg-amber-100'}`}>
-          <span className="text-2xl">{destructive ? '🗑️' : '⚠️'}</span>
+          {destructive
+            ? <Trash2 size={22} strokeWidth={1.8} className="text-red-500" />
+            : <AlertTriangle size={22} strokeWidth={1.8} className="text-amber-500" />}
         </div>
         <h2 className="text-base font-semibold text-gray-900 text-center mb-2">{title}</h2>
         <p className="text-sm text-gray-500 text-center mb-6">{message}</p>

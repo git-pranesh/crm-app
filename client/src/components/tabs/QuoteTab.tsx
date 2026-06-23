@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FileText, X as XIcon, RefreshCw } from 'lucide-react';
 import { api } from '../../lib/api';
 import toast from 'react-hot-toast';
 
@@ -75,9 +76,9 @@ export default function QuoteTab({ leadId, leadRef }: Props) {
             <span className="text-xs text-gray-500 font-mono">{iframeSrc}</span>
             <button
               onClick={() => setShowIframe(false)}
-              className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              className="text-gray-400 hover:text-gray-600 flex items-center"
             >
-              ×
+              <XIcon size={15} strokeWidth={2} />
             </button>
           </div>
           <iframe
@@ -94,7 +95,9 @@ export default function QuoteTab({ leadId, leadRef }: Props) {
         <div className="text-center py-10 text-gray-400 text-sm animate-pulse">Loading quotes…</div>
       ) : quotes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-14 text-center">
-          <span className="text-4xl mb-3">📝</span>
+          <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center mb-3">
+            <FileText size={22} strokeWidth={1.5} className="text-stone-400" />
+          </div>
           <p className="font-medium text-gray-900 mb-1">No quotes yet</p>
           <p className="text-sm text-gray-400">Open the Quote Builder above to create the first proposal for {leadRef}</p>
         </div>

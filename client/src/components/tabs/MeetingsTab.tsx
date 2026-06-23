@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Mail, ChevronDown, ChevronUp } from 'lucide-react';
 import { api, type Meeting } from '../../lib/api';
 
 const MODES = [
@@ -168,8 +169,8 @@ export default function MeetingsTab({ leadId }: Props) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
-          <p className="text-xs text-gray-400">
-            ✉️ Confirmation email + SMS will be sent to client automatically.
+          <p className="flex items-center gap-1.5 text-xs text-gray-400">
+            <Mail size={12} strokeWidth={1.8} /> Confirmation email + SMS will be sent to client automatically.
           </p>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button
@@ -319,7 +320,10 @@ export default function MeetingsTab({ leadId }: Props) {
                     onClick={() => setShowQuestionnaire(!showQuestionnaire)}
                     className="text-xs text-brand-600 hover:text-brand-700 font-medium hover:underline"
                   >
-                    {showQuestionnaire ? '▲ Hide' : '▼ View'} Pre-meeting Questionnaire
+                    <span className="flex items-center gap-1">
+                      {showQuestionnaire ? <ChevronUp size={12} strokeWidth={2} /> : <ChevronDown size={12} strokeWidth={2} />}
+                      {showQuestionnaire ? 'Hide' : 'View'} Pre-meeting Questionnaire
+                    </span>
                   </button>
                   {showQuestionnaire && (
                     <div className="mt-2 bg-fuchsia-50 border border-fuchsia-100 rounded-lg p-3 space-y-2">

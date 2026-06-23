@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Phone, RefreshCw, CheckCircle2, Wrench } from 'lucide-react';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -274,12 +275,12 @@ function BHDashboard({ data }: { data: DashboardData }) {
         <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Today's Activity</h3>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Calls Logged', value: data.teamActivity.callsToday, icon: '📞', bg: '#FEF0E8', color: 'text-brand-700' },
-            { label: 'Stage Moves', value: data.teamActivity.stagesMovedToday, icon: '🔄', bg: '#FDF6ED', color: 'text-amber-700' },
-            { label: 'Tasks Completed', value: data.teamActivity.tasksCompletedToday, icon: '✅', bg: '#F0FAF4', color: 'text-green-700' },
+            { label: 'Calls Logged', value: data.teamActivity.callsToday, Icon: Phone, bg: '#FEF0E8', color: 'text-brand-700' },
+            { label: 'Stage Moves', value: data.teamActivity.stagesMovedToday, Icon: RefreshCw, bg: '#FDF6ED', color: 'text-amber-700' },
+            { label: 'Tasks Completed', value: data.teamActivity.tasksCompletedToday, Icon: CheckCircle2, bg: '#F0FAF4', color: 'text-green-700' },
           ].map((item) => (
             <div key={item.label} className="rounded-2xl p-4" style={{ background: item.bg }}>
-              <div className="text-2xl mb-1">{item.icon}</div>
+              <div className="mb-2"><item.Icon size={18} strokeWidth={1.8} /></div>
               <p className={`text-3xl font-extrabold tracking-tight ${item.color}`}>{item.value}</p>
               <p className={`text-xs font-semibold mt-0.5 ${item.color} opacity-80`}>{item.label}</p>
             </div>
@@ -455,7 +456,7 @@ function BLDashboard({ data }: { data: DashboardData }) {
 
         {/* Site & service pulse — coming soon */}
         <div className="bg-white rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[180px]" style={{ border: '1px solid #EDE8E3' }}>
-          <span className="text-3xl mb-2">🔧</span>
+          <Wrench size={28} strokeWidth={1.5} className="text-stone-300 mb-2" />
           <h3 className="font-semibold text-stone-700 mb-1">Site & Service Pulse</h3>
           <p className="text-xs text-stone-400 max-w-[180px] leading-relaxed">
             Service & Warranty module is coming in a future release.

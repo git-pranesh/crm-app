@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import {
+  LayoutDashboard, Kanban, Users, CalendarDays, Calendar,
+  MessageCircle, Tag, Building2, BarChart2, Users2, Settings,
+  Bell, Search, X, ChevronRight, ChevronDown, Plus,
+  type LucideIcon,
+} from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser, logout } from '../lib/auth';
 
@@ -23,35 +29,38 @@ interface NotifItem {
 
 const SOURCE_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
 
-const NAV_GROUPS = [
+interface NavItem { to: string; label: string; Icon: LucideIcon }
+interface NavGroup { label: string; items: NavItem[] }
+
+const NAV_GROUPS: NavGroup[] = [
   {
     label: 'OVERVIEW',
-    items: [{ to: '/dashboard', label: 'Dashboard', icon: '▤' }],
+    items: [{ to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard }],
   },
   {
     label: 'SALES',
     items: [
-      { to: '/pipeline', label: 'Pipeline', icon: '⬡' },
-      { to: '/leads', label: 'Leads', icon: '👤' },
-      { to: '/meetings', label: 'Meetings', icon: '📅' },
-      { to: '/calendar', label: 'Calendar', icon: '🗓' },
-      { to: '/whatsapp', label: 'WhatsApp', icon: '💬' },
-      { to: '/discounts', label: 'Discounts', icon: '%' },
+      { to: '/pipeline', label: 'Pipeline', Icon: Kanban },
+      { to: '/leads', label: 'Leads', Icon: Users },
+      { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
+      { to: '/calendar', label: 'Calendar', Icon: Calendar },
+      { to: '/whatsapp', label: 'WhatsApp', Icon: MessageCircle },
+      { to: '/discounts', label: 'Discounts', Icon: Tag },
     ],
   },
   {
     label: 'DELIVERY',
-    items: [{ to: '/projects', label: 'Projects', icon: '🏗' }],
+    items: [{ to: '/projects', label: 'Projects', Icon: Building2 }],
   },
   {
     label: 'INSIGHTS',
-    items: [{ to: '/reports', label: 'Reports', icon: '📈' }],
+    items: [{ to: '/reports', label: 'Reports', Icon: BarChart2 }],
   },
   {
     label: 'WORKSPACE',
     items: [
-      { to: '/admin', label: 'Team & Roles', icon: '👥' },
-      { to: '/settings', label: 'Settings', icon: '⚙' },
+      { to: '/admin', label: 'Team & Roles', Icon: Users2 },
+      { to: '/settings', label: 'Settings', Icon: Settings },
     ],
   },
 ];
@@ -179,7 +188,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className="w-full flex items-center justify-between px-2 py-1 mb-0.5"
               >
                 <span className="text-[10px] font-semibold text-stone-400 tracking-widest">{group.label}</span>
-                <span className="text-stone-300 text-xs">{collapsed[group.label] ? '›' : '⌄'}</span>
+                {collapsed[group.label]
+                  ? <ChevronRight size={12} className="text-stone-300" />
+                  : <ChevronDown size={12} className="text-stone-300" />
+                }
               </button>
               {!collapsed[group.label] && (
                 <div className="space-y-0.5">
@@ -196,7 +208,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         }`}
                         style={active ? { background: '#FEF0E8' } : undefined}
                       >
-                        <span className="text-base w-4 text-center">{item.icon}</span>
+                        <item.Icon size={15} strokeWidth={1.8} className="shrink-0" />
                         <span>{item.label}</span>
                         {active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-brand-500" />}
                       </Link>
@@ -239,7 +251,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Search */}
           <div className="relative flex-1 max-w-md" ref={searchRef}>
             <div className="flex items-center rounded-xl overflow-hidden bg-white transition-all" style={{ border: '1px solid #EDE8E3' }}>
-              <span className="pl-3 text-stone-400 text-sm">⌕</span>
+              <Search size={14} strokeWidth={1.8} className="ml-3 text-stone-400 shrink-0" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -249,7 +261,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               />
               {search && (
                 <button onClick={() => { setSearch(''); setSearchResults([]); setSearchOpen(false); }}
-                  className="pr-2 text-stone-400 hover:text-stone-600 text-xs">✕</button>
+                  className="pr-2 text-stone-400 hover:text-stone-600 flex items-center">
+                  <X size={14} strokeWidth={2} />
+                </button>
               )}
             </div>
             {searchOpen && searchResults.length > 0 && (
@@ -284,7 +298,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 onMouseEnter={(e) => (e.currentTarget.style.background = '#F5F0EB')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span className="text-lg">🔔</span>
+                <Bell size={17} strokeWidth={1.8} />
                 {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-brand-500 text-white text-[10px] font-bold px-0.5">
                     {unreadCount > 99 ? '99+' : unreadCount}
@@ -318,7 +332,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setShowNewLead(true)}
               className="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 shrink-0"
             >
-              <span className="text-base leading-none">+</span>
+              <Plus size={15} strokeWidth={2.5} />
               New Lead
             </button>
           </div>
@@ -337,7 +351,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="relative bg-white rounded-3xl shadow-warm-lg w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-stone-900">New Lead</h2>
-              <button onClick={() => setShowNewLead(false)} className="text-stone-400 hover:text-stone-600 text-xl leading-none w-8 h-8 flex items-center justify-center rounded-xl hover:bg-stone-100 transition-colors">✕</button>
+              <button onClick={() => setShowNewLead(false)} className="text-stone-400 hover:text-stone-600 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-stone-100 transition-colors"><X size={16} strokeWidth={2} /></button>
             </div>
             <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
               {[

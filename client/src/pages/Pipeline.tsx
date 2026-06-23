@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Search } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Lead {
@@ -452,7 +453,7 @@ export default function Pipeline() {
           <div className="max-w-2xl mx-auto space-y-2">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <span className="text-3xl mb-2">🔍</span>
+                <Search size={28} strokeWidth={1.5} className="text-gray-300 mb-2" />
                 <p className="text-sm font-medium">No leads in this view</p>
               </div>
             ) : filtered.map((lead) => (

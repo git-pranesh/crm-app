@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { AlertCircle, CheckCircle2, Heart, Smile } from 'lucide-react';
 
 export default function FeedbackForm() {
   const { token } = useParams<{ token: string }>();
@@ -58,7 +59,9 @@ export default function FeedbackForm() {
 
         {state === 'error' && (
           <div className="text-center">
-            <p className="text-5xl mb-4">😕</p>
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle size={28} strokeWidth={1.5} className="text-gray-400" />
+            </div>
             <p className="font-semibold text-gray-900 mb-2">Link not found</p>
             <p className="text-sm text-gray-500">This feedback link may have expired or is invalid.</p>
           </div>
@@ -66,7 +69,9 @@ export default function FeedbackForm() {
 
         {state === 'already_done' && (
           <div className="text-center">
-            <p className="text-5xl mb-4">✅</p>
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={28} strokeWidth={1.5} className="text-green-500" />
+            </div>
             <p className="font-semibold text-gray-900 mb-2">Already submitted</p>
             <p className="text-sm text-gray-500">
               Thank you{clientName ? `, ${clientName}` : ''}! We have already received your feedback.
@@ -76,7 +81,9 @@ export default function FeedbackForm() {
 
         {state === 'submitted' && (
           <div className="text-center">
-            <p className="text-5xl mb-4">🙏</p>
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+              <Heart size={28} strokeWidth={1.5} className="text-green-500" />
+            </div>
             <p className="font-semibold text-gray-900 mb-2">Thank you!</p>
             <p className="text-sm text-gray-500">
               Your feedback means a lot to us, {clientName}. We will use it to improve our service.
@@ -88,7 +95,7 @@ export default function FeedbackForm() {
           <>
             <div className="mb-6">
               <h1 className="text-xl font-bold text-gray-900 mb-2">
-                Hi {clientName}! 👋
+                Hi {clientName}!
               </h1>
               <p className="text-sm text-gray-600 leading-relaxed">
                 We noticed we haven't been in touch for a while and would love to hear from you. 

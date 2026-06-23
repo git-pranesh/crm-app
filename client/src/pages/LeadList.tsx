@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Users, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 
@@ -316,7 +317,7 @@ export default function LeadList() {
           {loading ? (
             <div className="py-16 text-center text-stone-400 text-sm animate-pulse">Loading leads…</div>
           ) : leads.length === 0 ? (
-            <EmptyState icon="👤" title="No leads found" description="Try adjusting your filters or create a new lead"
+            <EmptyState Icon={Users} title="No leads found" description="Try adjusting your filters or create a new lead"
               action={{ label: '+ New Lead', onClick: () => setShowCreate(true) }} />
           ) : (
             <>
@@ -343,7 +344,7 @@ export default function LeadList() {
                         >
                           <td className="py-3 px-4">
                             <span className="text-brand-600 font-mono text-xs font-bold">{lead.leadId}</span>
-                            {lead.isSLABreached && <span className="ml-1 text-red-400 text-xs">⚠</span>}
+                            {lead.isSLABreached && <AlertTriangle size={10} strokeWidth={2.5} className="ml-1 text-red-400 inline" />}
                           </td>
                           <td className="py-3 px-4 font-semibold text-stone-900 whitespace-nowrap">{lead.name}</td>
                           <td className="py-3 px-4">

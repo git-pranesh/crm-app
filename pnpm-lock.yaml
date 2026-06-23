@@ -46,7 +46,7 @@ catalogs:
       specifier: ^12.23.24
       version: 12.35.1
     lucide-react:
-      specifier: ^0.545.0
+      specifier: 0.545.0
       version: 0.545.0
     react:
       specifier: 19.1.0
@@ -603,6 +603,9 @@ importers:
       axios:
         specifier: ^1.16.1
         version: 1.16.1
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.545.0(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -4021,6 +4024,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -6809,6 +6813,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-react@0.545.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   lucide-react@0.545.0(react@19.1.0):
     dependencies:

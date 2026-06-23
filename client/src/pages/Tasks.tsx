@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Calendar, User } from 'lucide-react';
 import { api } from '../lib/api';
 import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -76,9 +77,9 @@ function TaskCard({ task, onComplete }: { task: FollowUpTask; onComplete: (id: s
         </div>
 
         <div className="flex items-center gap-3 mt-1 text-xs text-stone-500">
-          <span>📅 {formatDate(task.dueDate)}{task.dueTime ? ` at ${task.dueTime}` : ''}</span>
+          <span className="flex items-center gap-1"><Calendar size={12} strokeWidth={1.8} /> {formatDate(task.dueDate)}{task.dueTime ? ` at ${task.dueTime}` : ''}</span>
           <span className="text-stone-300">·</span>
-          <span>👤 {task.assignedTo?.name}</span>
+          <span className="flex items-center gap-1"><User size={12} strokeWidth={1.8} /> {task.assignedTo?.name}</span>
           {task.lead?.stage && (
             <>
               <span className="text-stone-300">·</span>

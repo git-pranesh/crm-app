@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Gift, MessageCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 
@@ -205,7 +206,7 @@ export default function Settings() {
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <span className="text-base">🎁</span>
+              <Gift size={16} strokeWidth={1.8} className="text-stone-500" />
               <div>
                 <h2 className="text-sm font-semibold text-gray-900">Offers &amp; schemes</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Seasonal offers that can be tagged on a lead or quote.</p>
@@ -266,7 +267,7 @@ export default function Settings() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <span className="text-base">💬</span>
+            <MessageCircle size={16} strokeWidth={1.8} className="text-stone-500" />
             <div>
               <h2 className="text-sm font-semibold text-gray-900">WhatsApp templates</h2>
               <p className="text-xs text-gray-400 mt-0.5">Pre-approved message templates used across the automation flows. Read-only here.</p>

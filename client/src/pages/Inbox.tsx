@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { MessageCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -169,7 +170,7 @@ export default function Inbox() {
             <div className="py-12 text-center text-gray-400 text-xs animate-pulse">Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center">
-              <p className="text-2xl mb-2">💬</p>
+              <MessageCircle size={28} strokeWidth={1.5} className="text-gray-300 mb-2" />
               <p className="text-gray-400 text-xs">{search ? 'No results' : 'No conversations yet'}</p>
             </div>
           ) : (
@@ -218,7 +219,9 @@ export default function Inbox() {
         {!selected ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
-              <p className="text-5xl mb-4">💬</p>
+              <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mb-4">
+                <MessageCircle size={30} strokeWidth={1.5} className="text-stone-300" />
+              </div>
               <p className="text-gray-500 text-sm font-medium">Select a conversation to start messaging</p>
               <p className="text-gray-400 text-xs mt-1">{inbox.length} conversation{inbox.length !== 1 ? 's' : ''} in your scope</p>
             </div>

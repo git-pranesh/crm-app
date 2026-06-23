@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { CalendarDays, User } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 
@@ -237,7 +238,9 @@ export default function Meetings() {
             <div className="py-16 text-center text-stone-400 text-sm animate-pulse">Loading meetings…</div>
           ) : displayed.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-3xl mb-2">📅</p>
+              <div className="w-12 h-12 rounded-2xl bg-stone-100 flex items-center justify-center mx-auto mb-2">
+                <CalendarDays size={22} strokeWidth={1.5} className="text-stone-400" />
+              </div>
               <p className="text-stone-400 text-sm">No {tab} meetings</p>
             </div>
           ) : (
@@ -267,7 +270,7 @@ export default function Meetings() {
 
                     {/* Row 3: date + time */}
                     <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                      <span>📅</span>
+                      <CalendarDays size={13} strokeWidth={1.8} className="shrink-0" />
                       <span>{date}</span>
                       <span className="text-stone-300">·</span>
                       <span>{time}</span>
