@@ -175,6 +175,13 @@ export default function LeadDetail() {
   const [reassignValue, setReassignValue] = useState('');
   const [savingReassign, setSavingReassign] = useState(false);
 
+  const [editDetailsModal, setEditDetailsModal] = useState(false);
+  const [editDetails, setEditDetails] = useState({
+    projectType: '', scope: '', location: '', possessionTimeline: '',
+    estimatedValue: '', nextMeetingDate: '',
+  });
+  const [savingDetails, setSavingDetails] = useState(false);
+
   const loadLead = useCallback(() => {
     if (!leadId) return;
     setLoadingLead(true);
@@ -219,6 +226,49 @@ export default function LeadDetail() {
   };
 
   const openStageModal = () => { setNewStage(lead?.stage ?? ''); setInactivationReason(''); setStageModal(true); };
+
+  const toLocalDatetimeInput = (iso: string) => {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const openEditDetails = () => {
+    if (!lead) return;
+    setEditDetails({
+      projectType: lead.projectType ?? '',
+      scope: lead.scope ?? '',
+      location: lead.location ?? '',
+      possessionTimeline: lead.possessionTimeline ?? '',
+      estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
+      nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
+    });
+    setEditDetailsModal(true);
+  };
+
+  const handleSaveDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingDetails(true);
+    try {
+      await api.patch(`/leads/${leadId}`, {
+        projectType: editDetails.projectType.trim() || null,
+        scope: editDetails.scope.trim() || null,
+        location: editDetails.location.trim() || null,
+        possessionTimeline: editDetails.possessionTimeline.trim() || null,
+        estimatedValue: editDetails.estimatedValue.trim() || null,
+        nextMeetingDate: editDetails.nextMeetingDate
+          ? new Date(editDetails.nextMeetingDate).toISOString()
+          : null,
+      });
+      toast.success('Project details updated');
+      setEditDetailsModal(false);
+      loadLead(); loadActivities();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not update details');
+    } finally {
+      setSavingDetails(false);
+    }
+  };
 
   const handleStageChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -354,6 +404,47 @@ export default function LeadDetail() {
                 <button type="submit" disabled={changingStage || !newStage || newStage === lead?.stage}
                   className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
                   {changingStage ? 'Saving…' : 'Update Stage'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit project details modal */}
+      {editDetailsModal && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-md p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Edit Project Details</h3>
+            <p className="text-xs text-stone-400 mb-4">Estimated value and next meeting date are required to move a lead to MQL.</p>
+            <form onSubmit={handleSaveDetails} className="space-y-3">
+              {([
+                { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
+                { key: 'scope', label: 'Scope of Work', placeholder: '2-bedroom / 3-bedroom / Full home' },
+                { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
+                { key: 'possessionTimeline', label: 'Possession', placeholder: 'Immediate / 3 months' },
+                { key: 'estimatedValue', label: 'Estimated Value (₹)', placeholder: '1500000', type: 'number' },
+                { key: 'nextMeetingDate', label: 'Next Meeting Date & Time', type: 'datetime-local' },
+              ] as { key: keyof typeof editDetails; label: string; placeholder?: string; type?: string }[]).map((f) => (
+                <div key={f.key}>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                  <input
+                    type={f.type ?? 'text'}
+                    value={editDetails[f.key]}
+                    onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                    placeholder={f.placeholder}
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                  />
+                </div>
+              ))}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setEditDetailsModal(false)}
+                  className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
+                <button type="submit" disabled={savingDetails}
+                  className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                  {savingDetails ? 'Saving…' : 'Save Details'}
                 </button>
               </div>
             </form>
@@ -700,11 +791,17 @@ export default function LeadDetail() {
           <SidebarCard title="Project Details">
             {lead ? (
               <>
+                <div className="flex justify-end -mt-1 mb-1">
+                  <button onClick={openEditDetails} className="text-xs text-brand-500 hover:underline font-medium">Edit</button>
+                </div>
                 <InfoRow label="Type" value={lead.projectType} />
-                <InfoRow label="Config" value={lead.scope} />
+                <InfoRow label="Scope of work" value={lead.scope} />
                 <InfoRow label="Location" value={lead.location} />
                 <InfoRow label="Possession" value={lead.possessionTimeline} />
                 <InfoRow label="Est. value" value={fmtVal(lead.estimatedValue)} />
+                <InfoRow label="Next meeting" value={lead.nextMeetingDate
+                  ? new Date(lead.nextMeetingDate).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+                  : undefined} />
                 <InfoRow label="Floor plan" value={lead.floorPlanUrl
                   ? <a href={lead.floorPlanUrl} target="_blank" rel="noreferrer" className="text-brand-500 hover:underline truncate block max-w-[120px]">View</a>
                   : undefined} />
