@@ -119,7 +119,7 @@ export default function LeadList() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '' });
-  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '' });
+  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,12 +144,18 @@ export default function LeadList() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone) { toast.error('Name and phone are required'); return; }
+    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source) {
+      toast.error('Name, phone, location and source are required'); return;
+    }
+    const digits = newLead.phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
+    if (digits.length !== 10) {
+      toast.error('Phone number must be exactly 10 digits'); return;
+    }
     setCreating(true);
     try {
-      const data = await api.post<{ lead: Lead }>('/leads', newLead);
+      const data = await api.post<{ lead: Lead }>('/leads', { ...newLead, phone: digits });
       toast.success(`Lead ${data.lead.leadId} created`);
-      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '' });
+      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
       setShowCreate(false);
       await load();
     } catch (e: any) {
@@ -232,11 +238,14 @@ export default function LeadList() {
             <form onSubmit={handleCreate} className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma' },
-                { key: 'phone', label: 'Phone', required: true, placeholder: '+91 98765 43210' },
+                { key: 'phone', label: 'Phone', required: true, placeholder: '98765 43210 (10 digits)' },
                 { key: 'email', label: 'Email', placeholder: 'priya@example.com' },
                 { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
-                { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
-              ].map((f) => (
+                { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
+                { key: 'scope', label: 'Scope of Work', placeholder: '2-bedroom / 3-bedroom / Full home' },
+                { key: 'possessionTimeline', label: 'Possession', placeholder: 'Immediate / 3 months / 6 months' },
+                { key: 'estimatedValue', label: 'Estimated Value (₹)', placeholder: '1500000', type: 'number' },
+              ].map((f: any) => (
                 <div key={f.key}>
                   <label className="block text-xs font-semibold text-stone-600 mb-1.5">
                     {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}

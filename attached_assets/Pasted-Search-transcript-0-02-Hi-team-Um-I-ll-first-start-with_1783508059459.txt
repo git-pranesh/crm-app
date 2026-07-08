@@ -1,0 +1,499 @@
+Search transcript
+0:02
+Hi team. Um I'll first start with the changes in this uh lead tab and then
+0:09
+I'll move forward to dashboard pipeline and the rest of the areas. So first
+0:14
+thing is uh lead creation. While we are creating a new lead, if you look over
+0:19
+here, project type, configuration, location, estimated value, all these are
+0:23
+there. But when I'm trying to create a new lead, it's only asking for the full
+0:28
+name. contact email, project type, location and source. What is missing uh
+0:34
+from the overview tab and this tab is the uh estimated value. Uh configuration
+0:40
+is there, position is not there, position is not there, estimated value
+0:45
+is not there, offer is not there. Uh so that has to be here as well. But
+0:52
+probably we can we can keep it as a non-mandatory
+0:57
+uh field uh because not all clients will give the uh estimated value while they
+1:04
+are uh you know walking in for the first time or calling for the first time. So
+1:08
+we can keep it as non-mand non-mandatory fields. What must be kept as mandatory
+1:14
+is the name, contact number and uh location. probably all these three uh
+1:21
+name, contact number, location and source uh these four can be kept as
+1:26
+mandate and but the rest of the details that are here must as well be uh
+1:32
+displayed. So this is one thing. Secondarily, uh
+1:37
+the floor plan over here, uh this must be an attachment and not a link because
+1:44
+people will not will only get the floor plan from the client as an attachment
+1:49
+probably a photo or a PDF. Um and if we ask them to upload it into our drive and
+1:56
+then uh you know uh update the link over here there are good chances that anybody
+2:02
+can change that uh change the photo in the drive link or remove the photo
+2:07
+remove the attachment over there and then the entire history will be lost. So
+2:11
+the floor plan uh best practices floor plan can be as an attachment over here
+2:16
+instead of a link and once the attachment is uploaded they can give uh
+2:21
+save and then about the lead can be here. So while creating a lead if they
+2:28
+want to add any notes they can add. So that is something that is enough for
+2:33
+this overview tab and this entire activity thing can actually move to this
+2:38
+activity tab. So if I open a lead uh the entire activity that is done uh in the
+2:48
+in the uh lead should be logged here. For example, if someone called, if
+2:54
+someone did, you know, any changes, whatever it is, all the activities must
+3:00
+be uh recorded over here in the activity tab, which is calls, meetings, any notes
+3:07
+added up and uh any follow-ups done, stage
+3:11
+changes done, uh any quotes created, and any designer changes, this counts. If
+3:17
+anything happens inside this lead, it must be logged only in this activity
+3:22
+tab. And uh when I open this activity tab, I should be able to see in and out
+3:27
+of what someone has uh done on this lead. And uh when that activity is being
+3:34
+logged in, uh this kind of uh explanation is actually tough for
+3:40
+someone to read. So we can remove all these rule and then open bracket and all
+3:46
+those. Say for example if a call if someone has made a call and that should
+3:51
+be shown as an activity can we um log out.
+4:01
+One second. If that is being shown as an activity
+4:08
+uh that can be shown as call made uh uh call answered or not answered and what
+4:16
+is the followup uh not even follow we can even ignore that just that what
+4:21
+activity they did like for example call done call answered unanswered that's all
+4:27
+and over here if it is a call it can also uh you know have one One more thing
+4:34
+like um spoken for these many seconds like let's say they spoke for 1 minute
+4:41
+answer for 1 minute 2 minutes like how we have it in our phone right we we
+4:45
+always have the call log in our phone to how many minutes we spoke for and if if
+4:50
+in case someone missed the call uh call tried uh calling for 30 seconds tried
+4:57
+for 10 seconds because what happens is sometimes when we are thinking in volume
+5:02
+sometimes what people will do is they'll just you know click a call button for a
+5:07
+second and then they will cut the call and then they will you know say that we
+5:12
+I tried I called 100 numbers today. So we also need how many seconds even if it
+5:18
+goes unanswered how many seconds the call was tried for is something uh that
+5:24
+has to be there. This is to do with the uh activity tab and the type batch
+5:31
+should be clearly like call meeting note all those things
+5:36
+and uh sorry for that I'm just
+5:47
+okay and over here we have this calls right I
+5:53
+mean we can we can ignore this uh tab entirely or probably we can have the
+5:58
+call separately over here and we can just have all the recordings for all the
+6:02
+calls made over here. Let it be like say for example.
+6:21
+Okay. Say for example it is getting um uh logged like this right. Uh we can
+6:29
+have it if it says fetch recording. Okay. instead of keeping a fetch
+6:34
+recording option. Now one is first thing is automatically when I click the lock
+6:40
+call or uh instead of lock call we can change it as uh call now right and when
+6:48
+we click call now um when it says coming soon I assume the call will
+6:53
+automatically go um you know redirected from the system and the person will be
+6:59
+able to call from their phone and once that call is done uh what should get
+7:05
+logged over here is if the call got answered or not. Yes. And if the uh what
+7:11
+is the timing of the call? Yes. And uh what is the the recording of the call?
+7:18
+And immediately these three things must be automatically captured and
+7:24
+immediately as someone cuts the call there should be uh you know once the
+7:29
+call has started the window should only show that call and uh you know have an
+7:34
+option let's say probably on top over here or something even if they're using
+7:39
+some other tabs over here the uh the window should show end call and once
+7:44
+they click end call here they should be able to end the call or once they click
+7:48
+can call on their phone also they should be able to end the call either ways if
+7:52
+they ended the call through the system or through the phone automatically this
+7:56
+window must pop up and uh this should ask for whatever is the outcome answered
+8:03
+RNR call back scheduled I'll give more of what these uh outcomes must be like
+8:10
+uh because we have a few other things I'll probably give it as a document
+8:17
+and uh duration let's ignore because it'll automatically uh get captured and
+8:24
+we can have the call nodes this is also mandatory uh we must have the uh call
+8:31
+nodes logged over here and uh one again. Yes. Uh we we can add add the notes over
+8:55
+here. And then in the followup uh task, we must have uh uh date and time for the
+9:02
+followup. And we can save the call. Once the call
+9:07
+is saved, right? What will happen is it will first is it'll go under the
+9:12
+activity and get saved. like say for example
+9:17
+call made and like I explained previously it will come over here under
+9:22
+the activity and get saved and the followup task that has been created
+9:29
+let's say I give safe call over here
+9:46
+it is coming up over here. Right? One another thing that must happen is
+9:53
+um there should be an let's say I have created one for uh 7th July 911 a.m. I
+10:01
+am not receiving any kind of notifications or alarm that I have an
+10:06
+upcoming task at this this time. So what can happen is uh when I I've created a
+10:13
+follow-up task, it should have an alarm or a notification system where when the
+10:18
+task is due, the system should automatically notify that you are
+10:23
+supposed to call you know this this person like exactly like an alarm it
+10:27
+should work and uh it should uh actually remind and
+10:32
+the person should be able to either do the task. There can be two options
+10:37
+complete task and uh uh snooze the alarm. Snooze the alarm or remind later
+10:44
+uh something like that. If someone marks complete task, the system should
+10:49
+automatically um uh if let's say I click complete the
+10:54
+task, right? And the the person has clicked it without any call. Let's say
+10:59
+the follow-up task is to call someone uh by 9:11 a.m. and uh the person clicks
+11:06
+complete task without any uh call made or any call attempted then the system
+11:12
+should uh automatically ask no activity recorded. Do you still want the want to
+11:17
+mark this task as completed? And if the person clicks yes that should
+11:23
+also get logged in the activity that u it has been marked completed.
+11:29
+below that should be no no activity log. So by this we'll be able to see if
+11:36
+someone is actually calling and marking the follow-up task as done or they are
+11:41
+randomly marking it as done. Uh because now right now we are able to just
+11:47
+randomly mark it as done right. So this is also something that has to be fixed.
+11:56
+And uh okay.
+12:14
+And over here, Okay. So this is to do with the
+13:02
+follow-ups calls activity and uh when it comes to meeting there are more of uh
+13:08
+meeting types that has to be added. This will be given from my end. I will uh
+13:14
+have this noted as well and mode even for that uh matter must be given from
+13:22
+our end. Date and time is okay. Confirmation
+13:27
+email plus SMS will be uh sent automatically and if someone marks as uh
+13:34
+no show confirm.
+13:39
+Okay. Res. Yeah. Another uh small thing is when
+13:48
+someone is uh rescheduling a meeting, the system must ask for the date to
+13:54
+reschedu. It just simply says rescheduled. But to when that is the
+13:59
+question, let's say for example, I'm scheduling a new meeting for tomorrow.
+14:05
+and mode easy visit type DQL schedule meeting and I'm giving
+14:14
+rescheduled okay no premeating questioner submitted
+14:19
+yet this must be clearly told us what is a premeating questioner instead of this
+14:24
+I'll give a different uh dominology uh
+14:31
+and uh if I am marking It has rescheduled.
+14:38
+It should also ask reason for rescheduling and when to reschedu
+14:42
+instead of just reason for rescheduling because again someone has to go and
+14:47
+schedule a meeting from here. Instead it can ask for when to reschedule over
+14:52
+there itself. It is the entire workflow. This is to do with the meeting tab. And
+15:00
+when it comes to the quotes tab, every uh
+15:06
+everybody, let's say this is a designer login, right? Uh
+15:13
+I'll open Let me just check
+15:37
+login details of the CR code builder. So the agenda is uh if I enter any name and
+15:45
+any password it is trying to uh log in and the entire code builder is only uh
+15:53
+logging in. So instead of that so instead of let's say for example if I
+16:07
+uh I'm logging in uh through Alan's portal
+16:11
+uh Okay. Um, there's no glitch around this.
+16:50
+Um sorry that was my bad only that particular person's uh portal
+16:57
+is opening that is uh well and good uh code generator code builder over here I
+17:03
+guess is fine uh but I'll just check again I thought it had some glitch
+17:08
+anyways coming to the uh discount part let's say I will log in from
+17:24
+I will log in from an admin account. Can't find variable review or comment.
+18:15
+So this says mandatory only when rejecting
+18:25
+but then it is asking for a mandatory even when I'm trying to approve it and
+18:32
+this is not clear for any user even for me it is not very clear uh review
+18:40
+discount 20 person let's say
+18:45
+not sure what to enter over here anyways even if I do so and I
+18:55
+go over here it's not pending
+19:06
+it was Priya's test lead it discount approve.
+19:17
+Okay, if I am approving and if I am going back to Priya's login again
+19:26
+go here. So this is approved. Let's say for
+19:45
+example if I'm creating a request discount right uh what must actually
+19:50
+come over here is uh woodwork uh value without uh GST
+19:58
+uh that is first thing. Second thing is um total project value without GST and
+20:08
+third is proposed discount percentage. Fourth is the reason for discount and
+20:16
+fifth should be an attachment of the quote. It can be an attachment of the
+20:22
+quote link as well. But there is a small uh glitch on it. Let me explain it that
+20:28
+that has to be fixed on the quote builder and if that is fixed we can even
+20:32
+attach the code link over here and submit it for BL approval.
+20:37
+uh so the the first I'll I'll give a list of what all has to be asked here as
+20:44
+well. So this is to do with the discount.
+20:52
+And uh now if I come back to overview one more
+20:58
+thing is instead of this configuration uh it can be changed to scope of work.
+21:04
+For example project type location position uh created will automatically
+21:10
+be captured. Scope of work will be twobedroom, 3bedroom, 4bedroom,
+21:14
+property. All these will be captured as uh scope of work
+21:21
+and uh I have explained about the
+21:28
+yes one another thing is as soon as we create a leak the original explanation
+21:33
+was that the system must automatically capture the star rating, right? But it
+21:39
+was not captured. I manually entered let's say I am creating a
+21:46
+new lead now and over here even if I type four
+21:52
+numbers the system I'll I'll check if the system is
+21:58
+accepting Yeah, one another glitch. When we even
+22:15
+typed four numbers, the system is accepting. The system must not accept
+22:20
+that. Uh it should only be uh 10 numbers
+22:26
+and we should give a clear conditioning for that. That is one thing. Second
+22:30
+thing, when I created leads, it is not uh being captured over here. Third thing
+22:35
+uh I mean these things I'm not able to enter over here to be captured the value
+22:39
+position the system didn't ask me for all those things and next is uh the star
+22:44
+rating is not being captured so I will give a criteria
+22:50
+uh for the system to auto capture the star rating based on the details these
+22:55
+key facts that we are entering right based on these details I will give
+23:01
+a date of um how the system must auto capture the star rating and someone can
+23:08
+capture it, right? And if I am overriding the
+23:18
+uh if I am overriding the uh rating yes
+23:24
+reason is required and uh we can you know save that uh rating to why it has
+23:31
+been uh re-entered and one another thing is
+23:36
+when I'm trying to move to MQL stage Right? This only says cannot move to
+23:43
+MQL. It should it should give a clear explanation of why someone is is not
+23:48
+able to move this particular lead to the MQL stage. Um that is one another thing
+23:55
+and the other thing is the stage of this lead uh stage is uh mentioned over here.
+24:01
+The status of this lead if it's on hold active or inactive that status must also
+24:06
+be here. stage of the lead, status of the lead, then the star rating. If it is
+24:11
+that way, it'll be uh best and I'm going to pipeline now.
+24:19
+So in pipeline uh over here we must have filters. Uh it
+24:25
+should be drop-down filters like now now I'm only able to uh search in terms of
+24:32
+the name, right? That should not how it should be like it should have drop- down
+24:37
+filters and I should be able to filter lead um with the uh value stage uh next
+24:48
+meeting date I'll give this as well what are the drop-downs that can come on this
+24:54
+filter I'll I'll probably give this as well
+24:58
+and uh now three leads the pipeline value is zero is what is shown here
+25:04
+because the system did not capture the uh budget of uh any of these leads. Uh
+25:10
+but how this can be shown is uh total leads
+25:16
+um as in total leads count let's say for example total 30 leads pipeline value x
+25:24
+amount in that uh three active leads pipeline value y amount. So uh the total
+25:31
+number of leads and total pipeline value the active leads and the pipeline value
+25:36
+only of the active leads. If if it is split this way we'll also know how many
+25:41
+leads has been wasted by this particular person. And when I'm trying to move one
+25:47
+card from here as well it is showing intent rating estimated budget next
+25:53
+meeting date is missing like this. It should also uh show over there. And uh
+25:59
+the system can allow me. I actually tried this. There were a couple of uh uh
+26:05
+test leads in the DQL stage. Uh I tried moving it back to the effective lead and
+26:11
+it got moved. It should not be like that. It should only be only from MQL.
+26:17
+Someone should be able to move it to the effective lead stage. Once it passes on
+26:21
+to the DQL stage, even if they're inactivating, they should only
+26:25
+inactivate in whatever stages it were in, but they should not be able to move
+26:29
+it in reverse. The system should not allow them to move it in reverse. And uh
+26:36
+past this on boarding DIP is also something that has to be there. There
+26:40
+has to be few more cards added over here. I'll tell what those cards are as
+26:46
+well. and uh
+26:55
+request project workflow. One another thing that I missed saying
+27:08
+is this is not editable at all. So is it
+27:16
+good to have this editable because sometimes the client will not say when
+27:21
+they when they are giving when they are walking in on when they are calling on
+27:26
+an urge they will not say what the position when the position is or what
+27:30
+their budget is but then later on when we get to know the uh details I think it
+27:35
+is good to keep it editable because this area we are not able to edit at all for
+27:41
+that matter but once the floor plan is uh uploaded
+27:46
+the the system should mandatory I mean someone should not be able to delete it
+27:51
+unless otherwise they re-upload a different floor plan. It can also be
+27:55
+kept editable but they should not be able to uh delete that particular uh
+28:00
+floor plan and uh again coming back to the pipeline. I
+28:07
+think I have explained the pipeline over here. Coming back to the dashboard, this
+28:13
+entire dashboard details must be uh changed uh according to what uh what is
+28:19
+the actual you know dashboard detail that is required that as well I'll give
+28:23
+it clearly. Now one blocker for us to not being able to move forward or give
+28:29
+more details is that in no login we we have MQL or DQL leads because we are not
+28:36
+able to um uh capture the budget. So if you could
+28:41
+create a couple of test leads and let us know we'll be able to actually use the
+28:46
+MQLDQL or proposal ready stage and we'll be able to
+28:51
+tell what are the fixes that has to happen. But I think apart from that um I
+28:58
+have given a clarity of what it is as of now.
+29:08
+Yep.

@@ -26,7 +26,11 @@ async function request<T>(
       throw new Error('Session expired — please sign in again');
     }
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? `HTTP ${res.status}`);
+    const base = err.error ?? `HTTP ${res.status}`;
+    const msg = Array.isArray(err.missing) && err.missing.length
+      ? `${base} — missing: ${err.missing.join(', ')}`
+      : base;
+    throw new Error(msg);
   }
 
   return res.json() as Promise<T>;
