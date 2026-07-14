@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
-import { logActivity } from '../lib/activityLog.js';
 import { createNotification, notifyManagers } from '../lib/notifications.js';
 
 export const callsRouter = Router({ mergeParams: true });
@@ -40,10 +39,16 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // Enforce mandatory follow-up
-  if (!followUpTask?.dueDate) {
+  // Call notes are mandatory
+  if (!notes?.trim()) {
+    res.status(400).json({ error: 'Call notes are required' });
+    return;
+  }
+
+  // Enforce mandatory follow-up with both date and time
+  if (!followUpTask?.dueDate || !followUpTask?.dueTime) {
     res.status(400).json({
-      error: 'A follow-up task (dueDate required) must be set before saving the call',
+      error: 'A follow-up task with due date and time must be set before saving the call',
     });
     return;
   }
@@ -76,10 +81,21 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       },
     });
 
+    // Log CALL_LOGGED with the same timestamp as the task so this call does
+    // not count as "activity after the task was created" (completion guard
+    // uses a strictly-greater comparison).
+    await tx.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'CALL_LOGGED',
+        leadId,
+        meta: { outcome, duration },
+        createdAt: newTask.createdAt,
+      },
+    });
+
     return [newCall, newTask];
   });
-
-  await logActivity(user.id, 'CALL_LOGGED', leadId, { outcome, duration });
 
   // RNR escalation logic
   const rnrCount = await prisma.call.count({

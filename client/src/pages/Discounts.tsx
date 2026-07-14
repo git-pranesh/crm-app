@@ -98,7 +98,7 @@ export default function Discounts() {
     if (!reviewTarget) return;
     setReviewing(true);
     try {
-      await api.patch(`/discount-requests/${reviewTarget.id}`, { status: 'APPROVED', reviewerComment });
+      await api.patch(`/discount-requests/${reviewTarget.id}`, { status: 'APPROVED', reviewerComment: reviewComment.trim() || undefined });
       toast.success('Discount approved');
       setReviewTarget(null);
       await load();

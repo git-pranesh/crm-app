@@ -8,7 +8,7 @@ import { sendSms } from '../services/smsService.js';
 import { sendEmail, inactivationEmail, onHoldEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
-import { checkStageRequirements } from '../config/stageRequirements.js';
+import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 
 export const leadsRouter = Router();
@@ -468,6 +468,18 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     // ── Stage-gate: every configured transition must satisfy its required
     //    fields/actions (single source of truth in config/stageRequirements). ─
     if (stage && stage !== prevStage) {
+      // Backward-move restriction: once a lead has reached DQL, it cannot be
+      // moved backward along the funnel (off-funnel moves like ON_HOLD /
+      // INACTIVE remain allowed).
+      const fromIdx = FUNNEL_ORDER.indexOf(prevStage as any);
+      const toIdx = FUNNEL_ORDER.indexOf(stage as any);
+      const dqlIdx = FUNNEL_ORDER.indexOf('DQL');
+      if (fromIdx >= dqlIdx && fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
+        res.status(400).json({
+          error: `Cannot move this lead backward from ${prevStage} — leads that have reached DQL cannot go back in the funnel`,
+        });
+        return;
+      }
       const prospective = {
         ...existing,
         ...(estimatedValue !== undefined && {

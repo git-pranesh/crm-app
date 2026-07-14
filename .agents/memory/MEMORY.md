@@ -13,3 +13,5 @@
 - [Login page added](login-page.md) — app now has /login page; RequireAuth guard redirects to /login on 401; logout clears crm_token+crm_user
 - [WhatsApp/Twilio delivery](whatsapp-delivery.md) — never fake-send; needs TWILIO_* env vars; E.164 normalize on send; inbound matches last-10 digits via endsWith
 - [Lead PATCH clear semantics](lead-patch-semantics.md) — optional lead fields use `!== undefined`+null-to-clear; datetime-local must prefill in local time, not toISOString slice
+- [Task completion guard](task-completion-guard.md) — tasks need lead activity after creation; spawning activity logged at task timestamp so it doesn't self-satisfy
+- [Meeting reschedule](meeting-reschedule.md) — RESCHEDULED requires newScheduledAt and flips status back to SCHEDULED; never treat RESCHEDULED as terminal

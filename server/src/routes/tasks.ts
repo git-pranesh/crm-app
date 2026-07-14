@@ -127,6 +127,22 @@ myTasksRouter.patch('/:id/complete', verifyToken, async (req, res) => {
     return;
   }
 
+  // Guard: a task can only be completed if some activity (call, meeting,
+  // note, WhatsApp, etc.) was recorded on the lead after the task was created.
+  const activitySince = await prisma.activityLog.count({
+    where: {
+      leadId: task.leadId,
+      createdAt: { gt: task.createdAt },
+      action: { notIn: ['TASK_CREATED', 'TASK_COMPLETED'] },
+    },
+  });
+  if (activitySince === 0) {
+    res.status(400).json({
+      error: 'No activity has been recorded on this lead since the task was created. Log a call, meeting, or note before completing the task.',
+    });
+    return;
+  }
+
   const updated = await prisma.followUpTask.update({
     where: { id },
     data: { isCompleted: true, isOverdue: false, completedAt: new Date() },

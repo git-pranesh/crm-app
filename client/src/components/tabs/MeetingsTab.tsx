@@ -37,7 +37,7 @@ export default function MeetingsTab({ leadId }: Props) {
     meetingId: string;
     status: 'COMPLETED' | 'RESCHEDULED' | 'NO_SHOW';
   } | null>(null);
-  const [statusForm, setStatusForm] = useState({ mom: '', rescheduledReason: '' });
+  const [statusForm, setStatusForm] = useState({ mom: '', rescheduledReason: '', newScheduledAt: '' });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
 
   const loadMeetings = async () => {
@@ -78,7 +78,7 @@ export default function MeetingsTab({ leadId }: Props) {
 
   const openStatusModal = (meetingId: string, status: 'COMPLETED' | 'RESCHEDULED' | 'NO_SHOW') => {
     setStatusModal({ meetingId, status });
-    setStatusForm({ mom: '', rescheduledReason: '' });
+    setStatusForm({ mom: '', rescheduledReason: '', newScheduledAt: '' });
     setError(null);
   };
 
@@ -92,6 +92,9 @@ export default function MeetingsTab({ leadId }: Props) {
         status: statusModal.status,
         mom: statusForm.mom || undefined,
         rescheduledReason: statusForm.rescheduledReason || undefined,
+        newScheduledAt: statusForm.newScheduledAt
+          ? new Date(statusForm.newScheduledAt).toISOString()
+          : undefined,
       });
       setStatusModal(null);
       await loadMeetings();
@@ -208,19 +211,34 @@ export default function MeetingsTab({ leadId }: Props) {
                 </div>
               )}
               {statusModal.status === 'RESCHEDULED' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reason for Rescheduling <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={statusForm.rescheduledReason}
-                    onChange={(e) => setStatusForm({ ...statusForm, rescheduledReason: e.target.value })}
-                    required
-                    placeholder="e.g. Client unavailable, site not ready…"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Reason for Rescheduling <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={statusForm.rescheduledReason}
+                      onChange={(e) => setStatusForm({ ...statusForm, rescheduledReason: e.target.value })}
+                      required
+                      placeholder="e.g. Client unavailable, site not ready…"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      New Date & Time <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={statusForm.newScheduledAt}
+                      onChange={(e) => setStatusForm({ ...statusForm, newScheduledAt: e.target.value })}
+                      required
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">The meeting stays active and moves to this new time. Client will be notified.</p>
+                  </div>
+                </>
               )}
               {statusModal.status === 'NO_SHOW' && (
                 <p className="text-sm text-gray-500">

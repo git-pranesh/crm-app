@@ -6,6 +6,7 @@ import {
   ChevronDown, Star, RefreshCw, Mail,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { describeActivity } from '../lib/activityLabels';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -674,13 +675,7 @@ export default function LeadDetail() {
                             <p className="text-xs text-gray-700">
                               <span className="font-medium">{a.user?.name}</span>
                               {' — '}
-                              {a.action === 'STAGE_CHANGED'
-                                ? `Stage: ${STAGE_LABELS[a.meta?.from] ?? a.meta?.from} → ${STAGE_LABELS[a.meta?.to] ?? a.meta?.to}`
-                                : a.action === 'NOTE_ADDED'
-                                ? `Note: ${a.meta?.note ?? ''}`
-                                : a.action === 'INTENT_RATING_UPDATED'
-                                ? `Intent rating set to ${a.meta?.rating ?? '—'}`
-                                : a.action.replace(/_/g, ' ').toLowerCase()}
+                              {describeActivity(a.action, a.meta)}
                             </p>
                           </div>
                           <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
@@ -705,17 +700,8 @@ export default function LeadDetail() {
                         <p className="text-xs text-gray-700">
                           <span className="font-medium">{a.user?.name ?? 'System'}</span>
                           {' — '}
-                          {a.action === 'STAGE_CHANGED'
-                            ? `Stage: ${STAGE_LABELS[a.meta?.from] ?? a.meta?.from} → ${STAGE_LABELS[a.meta?.to] ?? a.meta?.to}`
-                            : a.action === 'NOTE_ADDED'
-                            ? `Note: ${a.meta?.note ?? ''}`
-                            : a.action === 'INTENT_RATING_UPDATED'
-                            ? `Intent rating updated to ${a.meta?.rating ?? '—'}${a.meta?.reason ? ` (${a.meta.reason})` : ''}`
-                            : a.action.replace(/_/g, ' ').toLowerCase()}
+                          {describeActivity(a.action, a.meta)}
                         </p>
-                        {a.meta && Object.keys(a.meta).length > 0 && a.action !== 'STAGE_CHANGED' && a.action !== 'NOTE_ADDED' && a.action !== 'INTENT_RATING_UPDATED' && (
-                          <p className="text-xs text-gray-400 mt-0.5">{JSON.stringify(a.meta).slice(0, 80)}</p>
-                        )}
                       </div>
                       <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
                     </div>

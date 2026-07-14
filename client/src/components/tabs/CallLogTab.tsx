@@ -136,15 +136,15 @@ export default function CallLogTab({ leadId }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.outcome || !form.dueDate) return;
+    if (!form.outcome || !form.notes.trim() || !form.dueDate || !form.dueTime) return;
     setSubmitting(true);
     setError(null);
     try {
       await api.post(`/leads/${leadId}/calls`, {
         outcome: form.outcome,
         duration: form.duration ? Number(form.duration) * 60 : undefined,
-        notes: form.notes || undefined,
-        followUpTask: { dueDate: form.dueDate, dueTime: form.dueTime || undefined },
+        notes: form.notes.trim(),
+        followUpTask: { dueDate: form.dueDate, dueTime: form.dueTime },
       });
       setForm({ outcome: '', duration: '', notes: '', dueDate: '', dueTime: '' });
       setShowForm(false);
@@ -221,13 +221,16 @@ export default function CallLogTab({ leadId }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes <span className="text-red-500">*</span>
+            </label>
             <textarea
               rows={2}
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="Call notes…"
+              placeholder="What was discussed on the call…"
             />
           </div>
 
@@ -248,11 +251,12 @@ export default function CallLogTab({ leadId }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Time</label>
+                <label className="block text-xs text-gray-500 mb-1">Due Time <span className="text-red-500">*</span></label>
                 <input
                   type="time"
                   value={form.dueTime}
                   onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
+                  required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>

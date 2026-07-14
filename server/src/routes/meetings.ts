@@ -178,12 +178,13 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
   const user = req.user!;
 
-  const { status, mom, rescheduledReason, noShowReason, outcome } = req.body as {
+  const { status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt } = req.body as {
     status?: string;
     mom?: string;
     rescheduledReason?: string;
     noShowReason?: string;
     outcome?: string;
+    newScheduledAt?: string;
   };
 
   const validStatuses = ['COMPLETED', 'RESCHEDULED', 'NO_SHOW'];
@@ -199,6 +200,12 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   if (status === 'RESCHEDULED' && !rescheduledReason?.trim()) {
     res.status(400).json({ error: 'rescheduledReason is required when marking RESCHEDULED' });
     return;
+  }
+  if (status === 'RESCHEDULED') {
+    if (!newScheduledAt || isNaN(new Date(newScheduledAt).getTime())) {
+      res.status(400).json({ error: 'newScheduledAt (new date & time) is required when rescheduling' });
+      return;
+    }
   }
   if (status === 'NO_SHOW' && !noShowReason?.trim()) {
     res.status(400).json({ error: 'noShowReason is required when marking NO_SHOW' });
@@ -220,7 +227,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     updateData.momSent = true;
   }
   if (status === 'RESCHEDULED') {
+    // The meeting stays active: move it to the new time and keep it SCHEDULED
+    updateData.status = 'SCHEDULED';
     updateData.rescheduledReason = rescheduledReason;
+    updateData.scheduledAt = new Date(newScheduledAt!);
   }
   if (status === 'NO_SHOW') {
     updateData.noShowReason = noShowReason!.trim();
@@ -282,9 +292,12 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
         lead.id,
       ).catch((e) => console.warn('[meetings:sms:mom]', e.message));
     } else if (status === 'RESCHEDULED') {
+      const newTime = new Date(newScheduledAt!).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+      });
       sendSms(
         lead.phone,
-        `Hi ${lead.name}, your meeting has been rescheduled. Reason: ${rescheduledReason}. We'll share the new time shortly. - Interiors by DeX`,
+        `Hi ${lead.name}, your meeting has been rescheduled to ${newTime}. Reason: ${rescheduledReason}. - Interiors by DeX`,
         lead.id,
       ).catch((e) => console.warn('[meetings:sms:rescheduled]', e.message));
     } else if (status === 'NO_SHOW') {
@@ -310,6 +323,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     meetingId: id,
     mom,
     rescheduledReason,
+    ...(status === 'RESCHEDULED' && { newDate: new Date(newScheduledAt!).toISOString() }),
   });
 
   await recalculateMilestones(lead.id);
