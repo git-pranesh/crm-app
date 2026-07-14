@@ -1,0 +1,23 @@
+Feedback item	Scope doc reference
+Task alarm/reminder notifications	3.5 — "Agent receives a reminder notification when a follow-up is due" = Yes
+Mandatory follow-up date + time after every call	3.4 — "choose date, time, and reminder type... must be kept mandatory. Without a followup task and date agent must not be able to close the call"
+Auto star rating from criteria	1.7 — star rating 1–5 in scope, and comment says "Will add the categories to the lead tracker for reference" — the criteria doc was always promised
+Pipeline dropdown filters	2.7 — "Filter leads by: designer, BL, source, stage, project type, location, date range, intent" = Yes
+More meeting modes	4.3 — "EC visit or Site Visit or Virtual or Public place" already listed in scope comments
+Dashboard revamp	13.1–13.6 — detailed spec in scope, including per-designer live dashboards, targets vs achieved — much of this simply wasn't built
+Offer tracking	R125 — "Offer given for every lead must be tracked... report showing onboardings per offer" = explicitly in scope
+Mandatory call notes	4.7 pattern + 3.1 includes notes in call logging
+New discount form fields	6.1 covers the request form (original amount, discount, reason) — woodwork/ex-GST fields are a refinement of an in-scope form, not a new feature
+And the scope doc confirms the discount bug: 6.3 — "Comment mandatory during rejection" only. Making it mandatory on approve was our error.
+
+Genuinely new or ambiguous — honestly, very little
+Click-to-call telephony with auto-captured duration/recording — the closest to "new," but even here row 3.1's comment asks: "Is call recording possible + Is calling from the system possible? As available in the teleCRM?" — so they raised it at scoping time and it was never answered or excluded. Ambiguous at best; hard to call it out-of-scope. Row 12.3 even says "Everyone's calls must be done through the system."
+Floor plan as file attachment — not explicitly specified, but row 1.6 says "platforms must be kept flexible to add more fields." A reasonable refinement request.
+Backward-move restriction past DQL — new rule, but a small logic change, not a feature.
+"No activity recorded" guard on task completion — new detail, trivial.
+Bottom line
+The client is essentially right again: nearly all of the feedback is in-scope work that either wasn't built or was built differently than specified. The only defensible "new ask" conversation is click-to-call telephony — and even that they flagged as a question during scoping, so it's a discussion about feasibility/provider costs (Exotel/Twilio Voice), not a scope-creep claim.
+
+My earlier classification was wrong because I judged against what was built rather than what was agreed. Apologies — the scope doc is the contract.
+
+Want me to now get back to fixing the blocker (editable project details so leads can reach MQL), and then work through the gap list in scope order?
