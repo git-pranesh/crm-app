@@ -40,6 +40,7 @@ import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
 import { schedulePerformanceRecalc } from './jobs/performanceRecalc.js';
+import { startTaskReminderLoop } from './services/taskReminders.js';
 import './jobs/emailWorker.js';
 import './jobs/performanceRecalc.js';
 
@@ -193,6 +194,9 @@ app.listen(PORT, async () => {
   } else {
     console.log('[jobs] Skipping background job schedule — Redis not configured');
   }
+
+  // Task due reminders — in-process loop, independent of Redis
+  startTaskReminderLoop();
 });
 
 export default app;

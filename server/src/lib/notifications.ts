@@ -5,7 +5,9 @@ export type NotificationType =
   | 'RNR_ESCALATION'
   | 'DISCOUNT_REQUEST'
   | 'SLA_BREACH'
-  | 'MEETING_NO_SHOW';
+  | 'MEETING_NO_SHOW'
+  | 'TASK_DUE'
+  | 'BL_ASSIGNED';
 
 export async function createNotification(
   userId: string,

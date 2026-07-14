@@ -10,6 +10,7 @@ interface DiscountRequest {
   id: string; status: string;
   originalAmount: number; amount: number; discountPct: number;
   reason: string; reviewerComment?: string | null;
+  woodworkValueExGst?: number | null; totalValueExGst?: number | null; quoteLink?: string | null;
   forwardedToRole?: string | null;
   createdAt: string; reviewedAt?: string | null;
   lead: Lead;
@@ -272,7 +273,24 @@ export default function Discounts() {
                         <span>{relTime(req.createdAt)}</span>
                       </div>
 
-                      {/* Row 3: reason */}
+                      {/* Row 3: ex-GST values + quote link */}
+                      {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteLink) && (
+                        <div className="flex items-center gap-3 flex-wrap text-xs text-gray-500">
+                          {req.woodworkValueExGst != null && (
+                            <span>Woodwork ex-GST: <span className="text-gray-700 font-medium">{fmtVal(Number(req.woodworkValueExGst))}</span></span>
+                          )}
+                          {req.totalValueExGst != null && (
+                            <span>Total ex-GST: <span className="text-gray-700 font-medium">{fmtVal(Number(req.totalValueExGst))}</span></span>
+                          )}
+                          {req.quoteLink && (
+                            <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
+                              View quote
+                            </a>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Row 4: reason */}
                       <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-600">
                         {req.reason}
                       </div>

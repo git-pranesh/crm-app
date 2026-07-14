@@ -15,3 +15,4 @@
 - [Lead PATCH clear semantics](lead-patch-semantics.md) — optional lead fields use `!== undefined`+null-to-clear; datetime-local must prefill in local time, not toISOString slice
 - [Task completion guard](task-completion-guard.md) — tasks need lead activity after creation; spawning activity logged at task timestamp so it doesn't self-satisfy
 - [Meeting reschedule](meeting-reschedule.md) — RESCHEDULED requires newScheduledAt and flips status back to SCHEDULED; never treat RESCHEDULED as terminal
+- [Discount request integrity](discount-request-fields.md) — discountPct is derived server-side from amounts (approval thresholds depend on it); client pct only cross-checked

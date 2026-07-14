@@ -10,6 +10,9 @@ interface DiscountRequest {
   amount: number;
   discountPct: number;
   reason: string;
+  woodworkValueExGst?: number | null;
+  totalValueExGst?: number | null;
+  quoteLink?: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reviewerComment?: string;
   createdAt: string;
@@ -38,7 +41,7 @@ export default function DiscountTab({ leadId }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirm, setConfirm] = useState<{ open: boolean }>({ open: false });
-  const [form, setForm] = useState({ originalAmount: '', amount: '', reason: '' });
+  const [form, setForm] = useState({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
 
   // BL review state
   const userRole = getStoredRole();
@@ -62,8 +65,13 @@ export default function DiscountTab({ leadId }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.originalAmount || !form.amount || !form.reason) {
-      toast.error('All fields are required');
+    if (!form.woodworkValue || !form.totalValue || !form.discountPct || !form.reason) {
+      toast.error('Woodwork value, total project value, discount % and reason are required');
+      return;
+    }
+    const pct = Number(form.discountPct);
+    if (isNaN(pct) || pct <= 0 || pct >= 100) {
+      toast.error('Discount % must be between 0 and 100');
       return;
     }
     setConfirm({ open: true });
@@ -73,13 +81,19 @@ export default function DiscountTab({ leadId }: Props) {
     setConfirm({ open: false });
     setSubmitting(true);
     try {
+      const total = Number(form.totalValue);
+      const pct = Number(form.discountPct);
       await api.post(`/leads/${leadId}/discount-request`, {
-        originalAmount: Number(form.originalAmount),
-        amount: Number(form.amount),
+        originalAmount: total,
+        amount: +(total * (1 - pct / 100)).toFixed(2),
+        discountPct: pct,
         reason: form.reason,
+        woodworkValueExGst: Number(form.woodworkValue),
+        totalValueExGst: total,
+        quoteLink: form.quoteLink.trim() || undefined,
       });
       toast.success('Discount request submitted for BL approval');
-      setForm({ originalAmount: '', amount: '', reason: '' });
+      setForm({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
       setShowForm(false);
       await loadRequests();
     } catch (e: any) {
@@ -116,8 +130,8 @@ export default function DiscountTab({ leadId }: Props) {
   const formatINR = (n: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
-  const discountPct = form.originalAmount && form.amount
-    ? (((Number(form.originalAmount) - Number(form.amount)) / Number(form.originalAmount)) * 100).toFixed(1)
+  const discountPct = form.totalValue && form.discountPct && Number(form.discountPct) > 0
+    ? Number(form.discountPct).toFixed(1)
     : null;
 
   const hasPending = requests.some((r) => r.status === 'PENDING');
@@ -219,32 +233,56 @@ export default function DiscountTab({ leadId }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Original Amount (₹) <span className="text-red-500">*</span>
+                Woodwork Value ex-GST (₹) <span className="text-red-500">*</span>
               </label>
               <input
-                type="number" min="0" value={form.originalAmount}
-                onChange={(e) => setForm({ ...form, originalAmount: e.target.value })}
-                required placeholder="500000"
+                type="number" min="0" value={form.woodworkValue}
+                onChange={(e) => setForm({ ...form, woodworkValue: e.target.value })}
+                required placeholder="350000"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Proposed Amount (₹) <span className="text-red-500">*</span>
+                Total Project Value ex-GST (₹) <span className="text-red-500">*</span>
               </label>
               <input
-                type="number" min="0" value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                required placeholder="450000"
+                type="number" min="0" value={form.totalValue}
+                onChange={(e) => setForm({ ...form, totalValue: e.target.value })}
+                required placeholder="500000"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
           </div>
-          {discountPct && Number(discountPct) > 0 && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Proposed Discount % <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number" min="0.1" max="99.9" step="0.1" value={form.discountPct}
+                onChange={(e) => setForm({ ...form, discountPct: e.target.value })}
+                required placeholder="10"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Quote Attachment / Link
+              </label>
+              <input
+                type="url" value={form.quoteLink}
+                onChange={(e) => setForm({ ...form, quoteLink: e.target.value })}
+                placeholder="https://…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+          </div>
+          {discountPct && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center gap-2">
               <span className="font-semibold text-amber-700">{discountPct}% discount</span>
               <span className="text-amber-600 text-sm">
-                (₹{(Number(form.originalAmount) - Number(form.amount)).toLocaleString('en-IN')} off)
+                (₹{(Number(form.totalValue) * Number(form.discountPct) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} off → ₹{(Number(form.totalValue) * (1 - Number(form.discountPct) / 100)).toLocaleString('en-IN', { maximumFractionDigits: 0 })})
               </span>
             </div>
           )}
@@ -303,6 +341,17 @@ export default function DiscountTab({ leadId }: Props) {
                   <p>{new Date(req.createdAt).toLocaleDateString('en-IN')}</p>
                 </div>
               </div>
+              {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteLink) && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
+                  {req.woodworkValueExGst != null && <span>Woodwork ex-GST: <span className="text-gray-700 font-medium">{formatINR(Number(req.woodworkValueExGst))}</span></span>}
+                  {req.totalValueExGst != null && <span>Total ex-GST: <span className="text-gray-700 font-medium">{formatINR(Number(req.totalValueExGst))}</span></span>}
+                  {req.quoteLink && (
+                    <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
+                      View quote
+                    </a>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-gray-600 mb-2">{req.reason}</p>
 
               {/* BL action buttons on PENDING requests */}

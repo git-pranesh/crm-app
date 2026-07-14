@@ -28,12 +28,26 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
     const { leadId } = req.params as { leadId: string };
     const user = req.user!;
 
-    const { originalAmount, amount, discountPct, reason } = req.body as {
+    const { originalAmount, amount, discountPct, reason, woodworkValueExGst, totalValueExGst, quoteLink } = req.body as {
       originalAmount?: number; amount?: number; discountPct?: number; reason?: string;
+      woodworkValueExGst?: number; totalValueExGst?: number; quoteLink?: string;
     };
 
     if (!originalAmount || !amount || !reason) {
       res.status(400).json({ error: 'originalAmount, amount, and reason are required' });
+      return;
+    }
+    if (!woodworkValueExGst || !totalValueExGst) {
+      res.status(400).json({ error: 'Woodwork value (ex-GST) and total project value (ex-GST) are required' });
+      return;
+    }
+    if (
+      typeof originalAmount !== 'number' || typeof amount !== 'number' ||
+      typeof woodworkValueExGst !== 'number' || typeof totalValueExGst !== 'number' ||
+      originalAmount <= 0 || amount <= 0 || woodworkValueExGst <= 0 || totalValueExGst <= 0 ||
+      amount >= originalAmount
+    ) {
+      res.status(400).json({ error: 'Amounts must be positive numbers and the discounted amount must be less than the original amount' });
       return;
     }
 
@@ -49,7 +63,13 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
       return;
     }
 
-    const computed = discountPct ?? +(((originalAmount - amount) / originalAmount) * 100).toFixed(2);
+    // Canonical discount % is always derived server-side from the amounts —
+    // never trust client-supplied discountPct (approval thresholds depend on it).
+    const computed = +(((originalAmount - amount) / originalAmount) * 100).toFixed(2);
+    if (discountPct != null && Math.abs(discountPct - computed) > 0.1) {
+      res.status(400).json({ error: 'discountPct does not match the provided amounts' });
+      return;
+    }
 
     const request = await prisma.discountRequest.create({
       data: {
@@ -59,6 +79,9 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
         amount,
         discountPct: computed,
         reason,
+        woodworkValueExGst,
+        totalValueExGst,
+        quoteLink: quoteLink?.trim() || null,
         status: 'PENDING',
       },
       include: discountInclude,

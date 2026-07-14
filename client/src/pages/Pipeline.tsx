@@ -232,7 +232,10 @@ export default function Pipeline() {
 
   const byStage = (stage: string) => filtered.filter((l) => l.stage === stage);
 
-  const pipelineValue = filtered
+  const totalValue = leads
+    .reduce((sum, l) => sum + parseFloat(String(l.estimatedValue ?? 0)), 0);
+
+  const activeValue = leads
     .filter((l) => activeStages.has(l.stage))
     .reduce((sum, l) => sum + parseFloat(String(l.estimatedValue ?? 0)), 0);
 
@@ -364,11 +367,19 @@ export default function Pipeline() {
           />
         </div>
 
-        {/* Summary */}
-        <div className="ml-auto text-xs text-gray-500 shrink-0">
-          <span className="font-medium text-gray-800">{counts.active} leads</span>
-          {' · Pipeline value '}
-          <span className="font-medium text-gray-800">{fmtPipeline(pipelineValue)}</span>
+        {/* Summary: total vs active */}
+        <div className="ml-auto text-xs text-gray-500 shrink-0 flex items-center gap-3">
+          <span>
+            Total <span className="font-medium text-gray-800">{counts.all} leads</span>
+            {' · '}
+            <span className="font-medium text-gray-800">{fmtPipeline(totalValue)}</span>
+          </span>
+          <span className="text-gray-300">|</span>
+          <span>
+            Active <span className="font-medium text-green-700">{counts.active} leads</span>
+            {' · '}
+            <span className="font-medium text-green-700">{fmtPipeline(activeValue)}</span>
+          </span>
         </div>
       </div>
 

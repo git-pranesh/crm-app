@@ -382,13 +382,16 @@ async function offerPerformance(q: Record<string, string>) {
   const where = buildLeadWhere(q);
   const offers = await prisma.offer.findMany({ select: { id: true, name: true } });
   return Promise.all(offers.map(async (o) => {
-    const oWhere = { ...where, currentOfferId: o.id };
-    const [total, onboarded] = await Promise.all([
+    // A lead counts for this offer if it was EVER applied (LeadOffer history),
+    // not just if it is the lead's current offer.
+    const oWhere = { ...where, leadOffers: { some: { offerId: o.id } } };
+    const [total, current, onboarded] = await Promise.all([
       prisma.lead.count({ where: oWhere }),
-      prisma.lead.count({ where: { ...oWhere, stage: 'ONBOARDING' } }),
+      prisma.lead.count({ where: { ...where, currentOfferId: o.id } }),
+      prisma.lead.count({ where: { ...oWhere, stage: { in: ['ONBOARDING', 'HANDED_OVER'] } } }),
     ]);
     return {
-      offer: o.name, total, onboarded,
+      offer: o.name, total, current, onboarded,
       conversionPct: total > 0 ? +(onboarded / total * 100).toFixed(1) : 0,
     };
   }));
