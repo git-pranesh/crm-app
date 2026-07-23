@@ -1,0 +1,132 @@
+Reg: Pricing Software – Pricing Version Queries
+
+1.⁠ ⁠Generic Pricing Version Engine
+
+Instead of building a one-time V1/V2 feature, are we building a generic Pricing Version Engine that can support unlimited future pricing revisions without requiring code changes every time prices are updated?
+
+Since our pricing revisions are expected to happen approximately once every year, I’d like to ensure the solution is scalable.
+
+2.⁠ ⁠Pricing Versions
+
+The system should support multiple pricing versions, for example:
+
+•⁠  ⁠V1
+•⁠  ⁠V2
+•⁠  ⁠V3
+•⁠  ⁠V4
+•⁠  ⁠…
+
+There should be no limit to the number of pricing versions.
+
+Each version should have:
+
+•⁠  ⁠Version Name
+•⁠  ⁠Created Date
+•⁠  ⁠Effective Date
+•⁠  ⁠Status (Draft / Active / Archived)
+
+Only one Pricing Version should be Active at any given time for newly created quotations.
+
+3.⁠ ⁠New Quotations
+
+Whenever a new quotation is created from scratch, the software should automatically use the currently Active Pricing Version.
+
+Example:
+
+•⁠  ⁠Active Version = V2
+•⁠  ⁠Every newly created quotation automatically uses V2.
+
+Users should not manually choose V1, V2, V3, etc., during normal quotation creation. This avoids accidental or intentional misuse.
+
+4.⁠ ⁠Existing Quotations
+
+Every quotation should permanently store the Pricing Version that was used when it was originally created.
+
+Example:
+
+Quote #1001
+
+•⁠  ⁠Created on: 10 July
+•⁠  ⁠Pricing Version: V1
+
+Even if V2 or V3 becomes active later, Quote #1001 should always continue using V1 pricing whenever it is reopened, edited or revised.
+
+Historical quotations should never automatically switch to a newer Pricing Version.
+
+5.⁠ ⁠Existing Quotation Revisions & Duplications
+
+Once a quotation is created, its Pricing Version should remain permanently associated with that quotation.
+
+Any subsequent action performed on that quotation, including:
+
+•⁠  ⁠Editing the quotation
+•⁠  ⁠Duplicating the whole quotation
+•⁠  ⁠Adding new line items
+•⁠  ⁠Removing line items
+•⁠  ⁠Measurement revisions
+•⁠  ⁠Design discussion revisions
+•⁠  ⁠Sign-off revisions
+
+should continue using the same Pricing Version as the original quotation.
+
+Example:
+
+Quote Q1001 is created in July using V1.
+
+During the project lifecycle:
+
+•⁠  ⁠Measurement revision
+•⁠  ⁠Design revision
+•⁠  ⁠Sign-off revision
+•⁠  ⁠Addition of new line items
+
+Even if the quotation is duplicated or modified multiple times, all newly added line items should continue to fetch pricing from V1, since they belong to the same commercial commitment.
+
+The software should not automatically fetch pricing from the currently Active Pricing Version (e.g., V2) for duplicated or revised quotations.
+
+Only brand-new quotations created from scratch should use the latest Active Pricing Version.
+
+6.⁠ ⁠Version Availability
+
+Once a Pricing Version becomes inactive:
+
+•⁠  ⁠Users should not be able to create new quotations using that version.
+•⁠  ⁠Existing quotations linked to that version should continue functioning normally.
+
+Example:
+
+If V1 becomes inactive:
+
+•⁠  ⁠New quotations → V2
+•⁠  ⁠Existing V1 quotations → Continue using V1
+
+7.⁠ ⁠User Permissions
+
+Normal Users
+
+•⁠  ⁠Can create new quotations only using the Active Pricing Version.
+•⁠  ⁠Cannot manually select older Pricing Versions.
+
+Admin / Management
+
+•⁠  ⁠Can create new Pricing Versions.
+•⁠  ⁠Can activate a Pricing Version.
+•⁠  ⁠Can archive old Pricing Versions.
+
+8.⁠ ⁠Future Pricing Updates
+
+Whenever prices are revised, the Admin should simply:
+
+1.⁠ ⁠Create a new Pricing Version.
+2.⁠ ⁠Upload/Import the revised pricing.
+3.⁠ ⁠Mark the new version as Active.
+
+From that point onwards:
+
+•⁠  ⁠All newly created quotations should automatically use the latest Active Pricing Version.
+•⁠  ⁠Existing quotations should continue using their original Pricing Version.
+
+This way, future annual pricing revisions can be managed without requiring additional software development.
+
+
+Please lemme know if this is how it’s being built and if I’ve understood it right Pranesh
