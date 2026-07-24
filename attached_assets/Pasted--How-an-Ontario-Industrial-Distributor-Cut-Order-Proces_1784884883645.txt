@@ -1,0 +1,1003 @@
+# How an Ontario Industrial Distributor Cut Order Processing Time by 78%—and Absorbed 21% Growth Without Hiring
+
+**Wholesale and distribution | Ontario, Canada**
+
+### The outcome
+
+**78% faster order processing**
+
+**354 staff hours reclaimed every month**
+
+**C$182,000 in annual operational capacity**
+
+**74% fewer order corrections**
+
+**21% order-volume growth without another coordinator**
+
+---
+
+## The client
+
+A family-owned distributor supplying industrial consumables, safety products, tools and maintenance materials to contractors, facilities teams and small manufacturers across Ontario.
+
+### Company profile
+
+* **Industry:** Industrial wholesale and distribution
+* **Location:** Greater Toronto Area
+* **Employees:** 42
+* **Annual revenue:** Approximately C$14.8 million
+* **Active business customers:** 640
+* **Products:** Approximately 4,600 SKUs
+* **Monthly orders:** Approximately 1,850
+* **Warehouse locations:** Two
+* **Sales channels:** Email, telephone, sales representatives and counter orders
+* **Existing systems:** ERP, accounting software, shared inboxes and spreadsheets
+
+The company had grown steadily through responsive service and long-standing customer relationships.
+
+Customers knew they could email a purchase order, call an account representative or send a photograph of the part they needed. The sales team would work out the product, check the customer’s price, confirm availability and get the order moving.
+
+That flexibility helped build the business.
+
+It also created an operation that depended heavily on people remembering:
+
+* Which customer received which price
+* Which products could be substituted
+* Which warehouse had stock
+* Which orders needed approval
+* Which account was on hold
+* Which delivery promise had been made
+* Which spreadsheet contained the latest information
+
+The company had an ERP.
+
+But the ERP was not where most orders began.
+
+---
+
+# The problem
+
+Approximately 72% of orders arrived through email, PDF purchase orders, telephone calls or messages sent directly to sales representatives.
+
+Every one of those orders had to be interpreted and entered manually.
+
+A typical order required an employee to:
+
+1. Open the customer’s email or purchase order.
+2. Identify the correct customer account.
+3. Search for each product code.
+4. Resolve incomplete or outdated SKUs.
+5. Check the customer’s contract price.
+6. Verify available inventory.
+7. Check credit status.
+8. Confirm delivery requirements.
+9. Enter the order into the ERP.
+10. Send confirmation to the customer.
+11. Notify the warehouse of any exception.
+
+When the purchase order contained a discontinued code, ambiguous description or incorrect price, the process stopped.
+
+The coordinator emailed the customer.
+
+The customer contacted the sales representative.
+
+The representative checked an old quotation or pricing spreadsheet.
+
+The coordinator updated the order.
+
+By then, the same transaction might have passed through four people and three systems.
+
+---
+
+## The business had software—but not one dependable workflow
+
+Digital adoption was not the issue.
+
+BDC reported in 2026 that 96% of Canadian SMEs used at least one digital technology. Its research also distinguished basic technology adoption from digital maturity: the ability to use technology in a structured, integrated and effective way.
+
+That distinction described this distributor precisely.
+
+The business used:
+
+* ERP software
+* Accounting software
+* Inventory tools
+* Email
+* Shared drives
+* CRM records
+* Spreadsheets
+* Supplier portals
+
+Each system performed a function.
+
+Employees still had to connect the functions manually.
+
+---
+
+# The complete pain points
+
+## 1. Orders entered through too many channels
+
+Customers could order by:
+
+* Email
+* PDF purchase order
+* Telephone
+* Sales representative
+* Counter request
+* Repeated previous order
+* Spreadsheet attachment
+
+The company valued customer flexibility and did not want to force every buyer into a rigid e-commerce process.
+
+But the absence of a common intake workflow meant every channel created different work.
+
+An order sent to an account representative’s personal inbox might not reach operations until the representative returned from a customer visit.
+
+A purchase order sent to the general inbox might be opened by two coordinators.
+
+A telephone order might contain a product description but no SKU.
+
+There was no controlled queue showing:
+
+* What had arrived
+* Who owned it
+* Whether it had been entered
+* What information was missing
+* Whether the customer had received confirmation
+
+---
+
+## 2. Customer pricing lived partly outside the ERP
+
+The company served customers with different:
+
+* Contract prices
+* Volume discounts
+* Product-group discounts
+* Freight arrangements
+* Project-specific quotations
+* Promotional terms
+* Payment terms
+
+Some rules were stored in the ERP.
+
+Others were recorded in spreadsheets, previous quotations, account notes or the sales representative’s memory.
+
+This caused two kinds of error.
+
+### Underpricing
+
+The order was accepted at an outdated or overly generous price.
+
+The customer was unlikely to complain, so the error could remain invisible.
+
+### Overpricing
+
+The customer received a price that did not match an earlier agreement.
+
+The result was:
+
+* Delayed approval
+* A correction request
+* A credit note
+* An unhappy customer
+* Additional work for sales, operations and finance
+
+The problem became more serious when supplier costs changed quickly.
+
+Statistics Canada found that 43% of Canadian wholesale businesses were affected by Canada–US trade tensions in April 2025. Common effects included price increases and higher raw-material, shipping and labour costs.
+
+For a distributor importing products or sourcing from US suppliers, slow pricing updates were therefore not just an administrative problem. They created margin exposure.
+
+---
+
+## 3. Inventory availability was not the same as order availability
+
+An employee could see inventory in the ERP.
+
+That did not always answer whether the order could be fulfilled.
+
+Stock might be:
+
+* Reserved for another customer
+* At the second warehouse
+* Waiting for inspection
+* Part of an incomplete kit
+* Allocated to an open project
+* Available only in a substitute brand
+* Due from a supplier but not yet received
+
+Sales representatives sometimes promised delivery based on the quantity displayed on screen without seeing these operational conditions.
+
+The warehouse then had to manage the exception.
+
+---
+
+## 4. Product codes created avoidable friction
+
+Customers frequently reordered using:
+
+* Their own internal part numbers
+* Old distributor product codes
+* Supplier codes
+* Descriptions copied from previous invoices
+* Informal names used by site teams
+
+Experienced coordinators knew how to translate these into the correct products.
+
+New employees did not.
+
+The knowledge required to process an order was concentrated in a small number of long-serving staff.
+
+---
+
+## 5. Status questions consumed the customer-service team
+
+Customers regularly contacted the company to ask:
+
+* Was the purchase order received?
+* Has the order been entered?
+* Is everything in stock?
+* When will it ship?
+* Is one item holding up the order?
+* Has the back-ordered product arrived?
+* Can the shipment be split?
+* What is the tracking number?
+
+The information existed somewhere.
+
+Answering the question still required an employee to find it, interpret it and respond manually.
+
+---
+
+## 6. Management reporting was always retrospective
+
+At the end of each week, the operations manager assembled reports from:
+
+* ERP exports
+* Open-order reports
+* Warehouse spreadsheets
+* Customer-service records
+* Sales-team updates
+* Back-order reports
+
+The leadership team could see sales already booked.
+
+It could not easily see:
+
+* Orders waiting to be entered
+* Revenue sitting in incomplete purchase orders
+* Orders blocked by pricing questions
+* Orders delayed by credit approval
+* Customers repeatedly experiencing exceptions
+* Products generating the most corrections
+* Accounts receiving inconsistent pricing
+* Workload by order coordinator
+
+The company could measure what had been processed.
+
+It could not see everything waiting before processing.
+
+---
+
+# Why the problem had become urgent
+
+The distributor’s order volume had grown faster than its operating process.
+
+At 1,000 orders per month, experienced employees could compensate for inconsistency.
+
+At 1,850 orders per month, the same habits created:
+
+* A growing shared inbox
+* Longer confirmation times
+* More pricing checks
+* Repeated interruptions
+* Increased dependence on senior employees
+* More exceptions reaching the warehouse
+* Pressure to hire another order coordinator
+
+The leadership team initially assumed the answer was more staff.
+
+Pressense investigated whether the business first needed less manual work.
+
+---
+
+# How Pressense diagnosed the operation
+
+The diagnostic followed actual orders from receipt through invoicing.
+
+Rather than interviewing management alone, the process examined how coordinators, sales representatives, warehouse employees and finance staff handled the same transaction.
+
+## We mapped six connected workflows
+
+### 1. Order intake
+
+How orders arrived, how they were acknowledged and how responsibility was assigned.
+
+### 2. Product identification
+
+How customer descriptions and product numbers were matched to the correct SKU.
+
+### 3. Pricing
+
+How customer-specific terms, quotations, discounts and supplier-cost changes were applied.
+
+### 4. Inventory and fulfilment
+
+How stock, substitutes, split deliveries and warehouse availability were confirmed.
+
+### 5. Exception management
+
+How incomplete, incorrect or blocked orders were resolved.
+
+### 6. Customer communication
+
+How confirmations, back-order updates, shipment notifications and status requests were handled.
+
+---
+
+## The central finding
+
+The company did not have an order-entry problem.
+
+It had an exception-management problem.
+
+Straightforward orders were relatively easy.
+
+The cost came from orders containing one or more uncertainties:
+
+* Unknown product code
+* Outdated price
+* Missing delivery instruction
+* Insufficient stock
+* Credit hold
+* Customer-specific substitution rule
+* Minimum-order restriction
+* Split-shipment decision
+* Freight approval
+* Unapproved discount
+
+Every exception created a new conversation.
+
+The order disappeared into email until someone resolved it.
+
+Pressense therefore did not propose a conventional online store.
+
+A conventional store would have forced every customer to search a large catalogue and understand the distributor’s SKU structure.
+
+Instead, the company needed an operational layer capable of receiving orders in familiar formats, identifying straightforward transactions and routing only genuine exceptions to employees.
+
+---
+
+# The baseline
+
+The diagnostic established the monthly effort required to process and support the existing order volume.
+
+| Activity                           |   Monthly volume | Average time |            Monthly effort |
+| ---------------------------------- | ---------------: | -----------: | ------------------------: |
+| Manual order entry                 |     1,332 orders |   11 minutes |               244.2 hours |
+| Pricing and stock verification     |       870 checks |    6 minutes |                  87 hours |
+| Order clarification and correction |   255 exceptions |   15 minutes |                63.8 hours |
+| Customer status enquiries          |    420 enquiries |    5 minutes |                  35 hours |
+| Invoice and credit-note rework     |         68 cases |   20 minutes |                22.7 hours |
+| Operations reporting               | 6 hours per week |            — |                  26 hours |
+| **Total**                          |                  |              | **478.7 hours per month** |
+
+Almost **479 staff hours every month** were being spent entering, checking, correcting and reporting on orders.
+
+That was equivalent to the monthly working time of approximately 2.8 full-time employees, using a 40-hour week and 4.33 weeks per month.
+
+The time was distributed across order coordinators, sales representatives, warehouse supervisors, finance employees and management. It did not appear as a single obvious cost centre.
+
+---
+
+# What Pressense built
+
+## A customer-order and operations control system
+
+The system created one workflow between incoming customer demand and the company’s existing ERP.
+
+It did not replace the ERP.
+
+The ERP remained responsible for:
+
+* Financial records
+* Confirmed sales orders
+* Inventory transactions
+* Invoicing
+* Customer balances
+* Accounting
+
+The new system managed everything required to turn an incoming request into a clean, validated order.
+
+---
+
+## 1. One order queue across every channel
+
+Orders from approved email addresses, uploaded purchase orders, sales representatives and customer forms entered one controlled queue.
+
+Each order received:
+
+* A unique reference
+* Customer account
+* Date and time received
+* Intake channel
+* Assigned coordinator
+* Processing status
+* Exception status
+* Requested delivery date
+* Next action
+
+The queue showed orders that were:
+
+* New
+* Being validated
+* Waiting for customer information
+* Waiting for sales approval
+* Waiting for credit approval
+* Ready for ERP submission
+* Confirmed
+* Partially fulfilled
+* Complete
+
+Nothing depended on whether the correct employee happened to see an email.
+
+---
+
+## 2. Purchase-order capture
+
+The system extracted structured information from emailed and uploaded purchase orders:
+
+* Customer purchase-order number
+* Product code
+* Description
+* Quantity
+* Requested price
+* Delivery address
+* Requested delivery date
+* Special instructions
+
+The extracted information was checked against business rules.
+
+Any field with low confidence was highlighted for employee review.
+
+The system did not silently convert uncertain information into an order.
+
+It reduced data entry while keeping a person responsible for exceptions.
+
+---
+
+## 3. Customer-product mapping
+
+The company created a translation layer connecting:
+
+* Customer product codes
+* Previous product codes
+* Supplier product codes
+* Distributor SKUs
+* Approved substitute products
+
+Once an employee resolved an unfamiliar customer code, the relationship was saved.
+
+The next order from that customer could be recognised automatically.
+
+This reduced the company’s dependence on employees remembering thousands of informal product relationships.
+
+---
+
+## 4. Pricing-rules engine
+
+The pricing layer brought the company’s commercial rules into one controlled structure.
+
+Rules could be set by:
+
+* Customer
+* Customer group
+* Product
+* Product category
+* Quantity
+* Contract
+* Project
+* Sales region
+* Effective date
+* Expiry date
+
+The system compared the price on the incoming purchase order against the valid price.
+
+### When the price matched
+
+The order continued without intervention.
+
+### When the price differed
+
+The order was classified according to the reason:
+
+* Customer using an expired price
+* New supplier cost not yet reflected
+* Discount outside approved range
+* Project quotation still valid
+* Customer contract requiring review
+* Possible internal pricing error
+
+Only the appropriate person was asked to decide.
+
+---
+
+## 5. Inventory and substitution rules
+
+The system checked:
+
+* Available stock
+* Stock reserved for other orders
+* Stock at each warehouse
+* Incoming purchase orders
+* Approved substitutes
+* Customer substitution restrictions
+* Partial-shipment rules
+* Expected replenishment date
+
+For common shortages, the coordinator could immediately see the approved next action.
+
+Instead of beginning another internal email chain, the system presented options such as:
+
+* Ship available quantity now
+* Transfer from second warehouse
+* Offer approved substitute
+* Hold for complete shipment
+* Escalate to account representative
+
+---
+
+## 6. Exception routing
+
+Each exception had:
+
+* A category
+* An owner
+* A deadline
+* A required decision
+* An escalation path
+
+Pricing questions went to the appropriate sales representative.
+
+Credit issues went to finance.
+
+Product questions went to the product specialist.
+
+Inventory exceptions went to the warehouse or purchasing team.
+
+The order coordinator could see the entire status without repeatedly chasing each department.
+
+---
+
+## 7. Customer ordering portal
+
+Repeat customers received access to a focused B2B portal.
+
+It was not a public catalogue.
+
+Each customer saw:
+
+* Products previously purchased
+* Customer-specific prices
+* Frequently reordered items
+* Approved substitutes
+* Saved delivery locations
+* Open orders
+* Back-order status
+* Previous invoices
+* Shipment tracking
+* Quick reorder options
+
+Customers who preferred email could continue using email.
+
+The system improved the email workflow rather than using the portal as a condition of service.
+
+---
+
+## 8. Sales-representative workspace
+
+Sales representatives received a mobile-friendly view showing:
+
+* Customer pricing
+* Product availability
+* Open orders
+* Exceptions requiring approval
+* Current quotations
+* Account status
+* Recent purchases
+
+Representatives could create a structured order while visiting a customer instead of sending informal instructions to the order desk.
+
+---
+
+## 9. Operations dashboard
+
+Management could see:
+
+* Orders received today
+* Orders awaiting entry
+* Orders blocked by exception
+* Orders waiting for customer response
+* Orders waiting for internal approval
+* Average order-processing time
+* Orders approaching cut-off
+* Corrections by category
+* Pricing exceptions by account
+* Back orders by value
+* Coordinator workload
+* Customer-service enquiries
+* Order volume by channel
+
+The dashboard showed work before it became an invoice.
+
+---
+
+# The redesigned workflow
+
+## Before
+
+**Purchase order arrives by email**
+
+↓
+
+Coordinator identifies customer and products
+
+↓
+
+Pricing spreadsheet or previous quotation is checked
+
+↓
+
+ERP stock is reviewed
+
+↓
+
+Questions are emailed to sales or warehouse
+
+↓
+
+Order waits in the inbox
+
+↓
+
+Employee follows up
+
+↓
+
+Order is entered manually
+
+↓
+
+Confirmation is emailed
+
+↓
+
+Customer later calls for status
+
+## After
+
+**Purchase order enters the order queue**
+
+↓
+
+Customer and order fields are captured
+
+↓
+
+Product codes are matched
+
+↓
+
+Pricing and stock rules are checked
+
+↓
+
+Only exceptions are assigned to employees
+
+↓
+
+Approved order is sent to the ERP
+
+↓
+
+Customer receives confirmation
+
+↓
+
+Order and shipment status remain visible
+
+The company’s employees stopped manually processing every line as though every order were unusual.
+
+They focused on the lines that genuinely required judgement.
+
+---
+
+# The outcome
+
+## Order-processing time fell by 78%
+
+Before the change, a manually received order took an average of approximately 18 minutes of active employee time across intake, validation and entry.
+
+After the new workflow, straightforward orders required approximately four minutes.
+
+[
+\frac{18 - 4}{18} \times 100 = 77.8%
+]
+
+The result was a **78% reduction in active processing time per straightforward order**.
+
+Complex orders still required human involvement. The system made those exceptions visible earlier and sent them directly to the person capable of resolving them.
+
+---
+
+## 354 staff hours were reclaimed every month
+
+| Activity                       |          Before |         After |  Time reclaimed |
+| ------------------------------ | --------------: | ------------: | --------------: |
+| Order entry                    |     244.2 hours |      62 hours |     182.2 hours |
+| Pricing and stock verification |        87 hours |      18 hours |        69 hours |
+| Clarification and correction   |      63.8 hours |      22 hours |      41.8 hours |
+| Customer status enquiries      |        35 hours |      10 hours |        25 hours |
+| Invoice and credit-note rework |      22.7 hours |       7 hours |      15.7 hours |
+| Operations reporting           |        26 hours |       6 hours |        20 hours |
+| **Total**                      | **478.7 hours** | **125 hours** | **353.7 hours** |
+
+[
+\frac{478.7 - 125}{478.7} \times 100 = 73.9%
+]
+
+The company reduced the administrative workload attached to order processing by approximately **74%**.
+
+That released:
+
+* **353.7 hours per month**
+* **4,244 hours per year**
+* Approximately **2.04 full-time working years**, based on 40 hours a week for 52 weeks
+
+The capacity was spread across several departments rather than removed from one role.
+
+---
+
+## C$182,000 in annual operational capacity
+
+Using a blended loaded employment cost of **C$43 per hour**:
+
+[
+353.7 \times C$43 \times 12
+===========================
+
+C$182,509
+]
+
+Rounded, the workflow released approximately **C$182,000 in annual staff capacity**.
+
+This was not automatically equivalent to cash savings.
+
+The company used the capacity to:
+
+* Process more orders
+* Respond to customers faster
+* Reduce overtime
+* Give sales representatives more selling time
+* Delay an additional order-coordinator hire
+* Improve purchasing and inventory planning
+
+---
+
+## Order corrections fell by 74%
+
+Before the change, an average of 74 orders per month required a material correction involving product, quantity, price, delivery or customer terms.
+
+After validation rules and customer-product mapping were introduced, the number fell to 19.
+
+[
+\frac{74 - 19}{74} \times 100 = 74.3%
+]
+
+The business achieved a **74% reduction in orders requiring material correction**.
+
+This reduced:
+
+* Credit notes
+* Reissued invoices
+* Warehouse rework
+* Customer complaints
+* Sales-team interruptions
+
+---
+
+## Orders waiting more than 24 hours fell by 87%
+
+Before the new workflow, approximately 310 orders per month remained unconfirmed for more than 24 hours.
+
+After implementation, the number fell to 41.
+
+[
+\frac{310 - 41}{310} \times 100 = 86.8%
+]
+
+That produced an **87% reduction in orders waiting more than one business day for confirmation**.
+
+---
+
+## Same-day confirmations increased from 54% to 94%
+
+Before the system, only 54% of incoming orders received confirmation on the same business day.
+
+After implementation, 94% were confirmed the same day.
+
+The remaining 6% typically involved:
+
+* Customer clarification
+* Credit approval
+* Unavailable products
+* Complex project pricing
+* Special procurement requirements
+
+The company could also tell the customer why an order was waiting rather than leaving the purchase order unacknowledged.
+
+---
+
+## Status enquiries fell by 71%
+
+Monthly “where is my order?” and “did you receive my purchase order?” enquiries fell from approximately 420 to 120.
+
+[
+\frac{420 - 120}{420} \times 100 = 71.4%
+]
+
+Customer-service staff reclaimed approximately 25 hours each month from status enquiries alone.
+
+More importantly, customers received information without needing to ask.
+
+---
+
+# What happened over the next six months
+
+The company’s order volume increased from approximately 1,850 to 2,240 orders per month.
+
+[
+\frac{2,240 - 1,850}{1,850} \times 100 = 21.1%
+]
+
+That was a **21% increase in monthly order volume**.
+
+The company did not add the order coordinator it had previously expected to recruit.
+
+The existing team absorbed the higher volume because routine entry, pricing checks and status communication no longer consumed the same amount of time.
+
+---
+
+## Customers gradually changed how they ordered
+
+The company did not force an immediate migration.
+
+Customers could continue ordering through familiar channels.
+
+Over six months:
+
+* Larger repeat customers began using saved order templates.
+* Purchasing teams used customer-specific product lists.
+* Sales representatives entered structured orders during customer visits.
+* Email purchase orders continued to enter the same operational queue.
+* Smaller customers used quick-reorder links rather than searching the full catalogue.
+
+The portal succeeded because it reflected how B2B customers already purchased.
+
+It did not try to turn every industrial buyer into a retail e-commerce shopper.
+
+---
+
+## The order desk became an exception team
+
+Before the change, coordinators spent most of their day entering information.
+
+Afterwards, their role shifted towards:
+
+* Resolving unusual requirements
+* Helping customers identify products
+* Coordinating urgent fulfilment
+* Reviewing pricing exceptions
+* Managing high-value orders
+* Improving customer records
+* Supporting sales representatives
+
+The company retained the human service that differentiated it.
+
+It removed the repetitive work surrounding that service.
+
+---
+
+## Pricing became an operational discipline
+
+Management could now see:
+
+* How often employees overrode prices
+* Which customers relied on expired quotations
+* Which product groups generated disputes
+* Which supplier-cost increases had not reached customer pricing
+* Which sales representatives requested the most exceptions
+* Where agreed discounts were no longer commercially viable
+
+Pricing stopped being a collection of individual decisions.
+
+It became a controlled process with clear ownership.
+
+---
+
+# The next phase
+
+Once order intake was stable, the company identified three further opportunities.
+
+## Purchasing recommendations
+
+Using order demand, open purchase orders, supplier lead times and current inventory to identify replenishment priorities.
+
+## Slow-moving inventory
+
+Highlighting products with declining demand, excess stock or limited customer concentration.
+
+## Customer growth signals
+
+Identifying customers whose order frequency, product range or average order value was increasing or declining.
+
+These were not added during the first build.
+
+Pressense kept the initial system focused on the bottleneck already consuming hundreds of hours each month.
+
+---
+
+# Why the company did not replace its ERP
+
+The ERP was not failing.
+
+It remained capable of recording clean orders, inventory movements, invoices and financial transactions.
+
+The weakness existed before information reached the ERP and after customers needed an update.
+
+Replacing the ERP would have created:
+
+* A longer implementation
+* Greater migration risk
+* More staff training
+* Higher cost
+* Disruption to finance and warehouse operations
+* No guarantee that incoming orders would become more structured
+
+Pressense therefore built the missing layer around the existing system.
+
+That allowed the company to improve the workflow without rebuilding the entire technology stack.
+
+---
+
+# The result
+
+A distribution operation held together by email, pricing spreadsheets and employee memory became visible, controlled and scalable.
+
+### Business impact
+
+* **78% faster order processing**
+* **74% reduction in order-related administration**
+* **354 staff hours reclaimed every month**
+* **C$182,000 in annual operational capacity**
+* **74% fewer material order corrections**
+* **87% fewer orders waiting over 24 hours**
+* **94% of orders confirmed on the same day**
+* **71% fewer customer status enquiries**
+* **21% order-volume growth without another coordinator**
+
+The company did not have to choose between personal customer service and operational efficiency.
+
+It used a custom internal system to preserve the service customers valued while removing the manual work they never saw.
+
+---
+
+# Is your order desk acting as the integration between every system?
+
+Pressense helps growing wholesalers and distributors identify the process slowing down orders, consuming margin and making growth dependent on additional headcount.
+
+We map the workflow, retain the systems that work and build the operational layer the business is missing.
+
+**Fewer manual touches. Faster orders. More room to grow.**
