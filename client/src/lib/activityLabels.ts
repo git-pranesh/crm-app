@@ -20,11 +20,14 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
   const m = meta ?? {};
   switch (action) {
     case 'STAGE_CHANGED':
-      return `Moved stage from ${stageLabel(m.from)} to ${stageLabel(m.to)}`;
+      return `${m.isBackward ? '↩ Moved backward: ' : 'Moved stage: '}${stageLabel(m.from)} → ${stageLabel(m.to)}`;
     case 'NOTE_ADDED':
       return `Added a note: ${m.note ?? ''}`;
-    case 'INTENT_RATING_UPDATED':
-      return `Set intent rating to ${m.rating ?? '—'}${m.reason ? ` (${m.reason})` : ''}`;
+    case 'INTENT_RATING_UPDATED': {
+      const dir = m.direction === 'increase' ? ' ↑' : m.direction === 'decrease' ? ' ↓' : '';
+      const oldPart = m.oldRating != null ? ` (${m.oldRating} → ${m.rating ?? '—'}${dir})` : ` to ${m.rating ?? '—'}${dir}`;
+      return `${m.isAuto ? 'Auto-set' : 'Updated'} intent rating${oldPart}${m.reason ? ` — ${m.reason}` : ''}`;
+    }
     case 'CALL_LOGGED': {
       const secs = Number(m.duration);
       const dur = m.duration && !isNaN(secs)

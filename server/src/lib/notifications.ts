@@ -11,7 +11,9 @@ export type NotificationType =
   | 'DESIGNER_ASSIGNED'
   | 'ONBOARDING_DIP_REQUIRED'
   | 'DQL_QUESTIONNAIRE'
-  | 'DIP_CHECKLIST_COMPLETE';
+  | 'DIP_CHECKLIST_COMPLETE'
+  | 'STAGE_MOVED_BACKWARD'
+  | 'INTENT_RATING_CHANGED';
 
 export async function createNotification(
   userId: string,

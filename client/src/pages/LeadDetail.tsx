@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
-  ChevronDown, Upload, ExternalLink, Pencil,
+  ChevronDown, Upload, ExternalLink, Pencil, Info, Check,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
@@ -44,6 +44,15 @@ interface ActivityEntry {
 interface Quote {
   id: string; quoteNumber?: string; totalAmount?: number; status?: string;
   createdAt: string;
+}
+
+interface FollowUpTask {
+  id: string; dueDate: string; dueTime?: string | null;
+  isCompleted: boolean; isOverdue: boolean;
+}
+
+interface StageVisit {
+  stage: string; enteredAt: string; exitedAt?: string; tatDays?: number;
 }
 
 interface AppUser { id: string; name: string; role: string; }
@@ -176,6 +185,50 @@ const SOURCE_OPTIONS = [
   'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Other',
 ];
 
+/** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */
+const STAGE_GATE_INFO: Record<string, string[]> = {
+  EFFECTIVE_LEAD: ['Client budget', 'Project type', 'Lead source', 'Location', 'Builder', 'Scope of work', 'Expected move-in date'],
+  MQL: ['Scheduled DQL meeting'],
+  DQL: ['Floor plan uploaded'],
+  PROPOSAL_READY: ['Scheduled PP (Proposal Presentation) meeting'],
+  PROPOSAL_PRESENTED: ['Generated quote'],
+  ONBOARDING: ['Completed DIP checklist'],
+  HANDED_OVER: [],
+};
+
+/** Funnel stages shown in the horizontal roadmap */
+const FUNNEL_STAGES = [
+  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER',
+];
+
+const FUNNEL_ABBREV: Record<string, string> = {
+  EFFECTIVE_LEAD: 'EL', MQL: 'MQL', DQL: 'DQL',
+  PROPOSAL_READY: 'PR', PROPOSAL_PRESENTED: 'PP',
+  ONBOARDING: 'OB', HANDED_OVER: 'HO',
+};
+
+/** Priority bucket for activity log grouping (lower = shown first) */
+const ACTIVITY_BUCKET: Record<string, number> = {
+  CALL_LOGGED: 0,
+  MEETING_SCHEDULED: 1,
+  STAGE_CHANGED: 2,
+  INTENT_RATING_UPDATED: 3,
+  MEETING_COMPLETED: 4,
+  MEETING_RESCHEDULED: 5,
+  MEETING_CANCELLED: 6,
+  MEETING_NO_SHOW: 6,
+};
+
+function fmtDate(iso?: string) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+function fmtDateTime(iso?: string) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+}
+
 export default function LeadDetail() {
   const { leadId } = useParams<{ leadId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -208,6 +261,10 @@ export default function LeadDetail() {
   const [uploadingFloorPlan, setUploadingFloorPlan] = useState(false);
   const floorPlanInputRef = useRef<HTMLInputElement>(null);
 
+  const [stageHistory, setStageHistory] = useState<StageVisit[]>([]);
+  const [leadFollowUpTasks, setLeadFollowUpTasks] = useState<FollowUpTask[]>([]);
+  const [gateInfoStage, setGateInfoStage] = useState<string | null>(null); // popover target
+
   const loadLead = useCallback(() => {
     if (!leadId) return;
     setLoadingLead(true);
@@ -234,9 +291,25 @@ export default function LeadDetail() {
       .catch(() => {});
   }, [leadId]);
 
+  const loadStageHistory = useCallback(() => {
+    if (!leadId) return;
+    api.get<{ history: StageVisit[] }>(`/leads/${leadId}/stage-history`)
+      .then((d) => setStageHistory(d.history ?? []))
+      .catch(() => {});
+  }, [leadId]);
+
+  const loadFollowUpTasks = useCallback(() => {
+    if (!leadId) return;
+    api.get<{ tasks: FollowUpTask[] }>(`/leads/${leadId}/tasks`)
+      .then((d) => setLeadFollowUpTasks(d.tasks ?? []))
+      .catch(() => {});
+  }, [leadId]);
+
   useEffect(() => { loadLead(); }, [loadLead]);
   useEffect(() => { loadActivities(); }, [loadActivities]);
   useEffect(() => { loadSidebarData(); }, [loadSidebarData]);
+  useEffect(() => { loadStageHistory(); }, [loadStageHistory]);
+  useEffect(() => { loadFollowUpTasks(); }, [loadFollowUpTasks]);
 
   useEffect(() => {
     const t = searchParams.get('tab') as Tab | null;
@@ -763,6 +836,119 @@ export default function LeadDetail() {
           <div className="bg-white rounded-b-2xl p-5" style={{ border: '1px solid #EDE8E3' }}>
             {activeTab === 'overview' && lead && (
               <div className="space-y-6">
+                {/* ── Stage Roadmap ─────────────────────────────────────────── */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Stage Roadmap</h3>
+                    <span className="text-[10px] text-gray-400">Allocated {fmtDateTime(lead.createdAt)}</span>
+                  </div>
+                  <div className="relative overflow-x-auto pb-2">
+                    <div className="flex items-start gap-0 min-w-max">
+                      {FUNNEL_STAGES.map((stage, idx) => {
+                        // Find all visits to this stage
+                        const visits = stageHistory.filter((v) => v.stage === stage);
+                        const isCurrent = lead.stage === stage;
+                        const wasVisited = visits.length > 0;
+                        const visit = visits[visits.length - 1]; // most recent visit
+                        const isGateInfoOpen = gateInfoStage === stage;
+                        const gates = STAGE_GATE_INFO[stage] ?? [];
+
+                        return (
+                          <div key={stage} className="flex items-center">
+                            {idx > 0 && (
+                              <div className={`h-0.5 w-8 ${wasVisited || isCurrent ? 'bg-brand-300' : 'bg-gray-100'}`} />
+                            )}
+                            <div className="relative flex flex-col items-center">
+                              {/* Node */}
+                              <button
+                                onClick={openStageModal}
+                                title={`Click to change stage`}
+                                className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-center transition-all border-2 ${
+                                  isCurrent
+                                    ? 'bg-brand-500 border-brand-600 text-white shadow-md'
+                                    : wasVisited
+                                    ? 'bg-brand-50 border-brand-200 text-brand-700'
+                                    : 'bg-gray-50 border-gray-100 text-gray-300'
+                                }`}
+                              >
+                                <span className="text-[10px] font-bold leading-none">{FUNNEL_ABBREV[stage]}</span>
+                                {wasVisited && visit?.tatDays !== undefined && (
+                                  <span className="text-[8px] leading-tight mt-0.5 opacity-80">{visit.tatDays}d</span>
+                                )}
+                              </button>
+
+                              {/* Entry date */}
+                              {(wasVisited || isCurrent) && visit?.enteredAt && (
+                                <span className="text-[9px] text-gray-400 mt-1 text-center w-16 leading-tight">
+                                  {fmtDate(visit.enteredAt)}
+                                </span>
+                              )}
+
+                              {/* Gate info button + popover */}
+                              {gates.length > 0 && (
+                                <div className="relative mt-0.5">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setGateInfoStage(isGateInfoOpen ? null : stage); }}
+                                    className="text-gray-300 hover:text-brand-400 transition-colors"
+                                    title="Gate requirements"
+                                  >
+                                    <Info size={10} strokeWidth={2} />
+                                  </button>
+                                  {isGateInfoOpen && (
+                                    <div
+                                      className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 z-20 w-40 text-left"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+                                        Gate to {FUNNEL_ABBREV[FUNNEL_STAGES[idx + 1] ?? stage]}
+                                      </p>
+                                      {gates.map((g, gi) => (
+                                        <div key={gi} className="flex items-start gap-1 mb-0.5">
+                                          <span className="text-green-400 mt-px shrink-0"><Check size={8} strokeWidth={3} /></span>
+                                          <span className="text-[9px] text-gray-600 leading-tight">{g}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Close popover on outside click */}
+                  {gateInfoStage && (
+                    <div className="fixed inset-0 z-10" onClick={() => setGateInfoStage(null)} />
+                  )}
+                </div>
+
+                {/* ── Follow-up Tasks ───────────────────────────────────────── */}
+                {leadFollowUpTasks.filter((t) => !t.isCompleted).length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-gray-800">Follow-up Tasks</h3>
+                      <button onClick={() => handleTabChange('followups')} className="text-xs text-brand-500 hover:underline">View all →</button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {leadFollowUpTasks.filter((t) => !t.isCompleted).map((t) => {
+                        const color = t.isOverdue
+                          ? 'bg-red-50 border-red-200 text-red-700'
+                          : 'bg-green-50 border-green-200 text-green-700';
+                        const label = t.isOverdue ? 'Overdue' : 'Upcoming';
+                        const dueStr = fmtDate(t.dueDate) + (t.dueTime ? ` ${t.dueTime}` : '');
+                        return (
+                          <div key={t.id} className={`flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs ${color}`}>
+                            <span className="font-medium">{label}</span>
+                            <span className="opacity-80">{dueStr}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* ── Client Details ────────────────────────────────────────── */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -857,32 +1043,91 @@ export default function LeadDetail() {
                       <p className="text-xs text-gray-700 whitespace-pre-wrap">{lead.notes}</p>
                     </div>
                   )}
+
+                  {/* Latest Quote */}
+                  {latestQuote && (
+                    <div className="mt-3 flex items-center gap-2 py-1.5 border-b border-gray-50">
+                      <span className="text-xs text-gray-400 w-32 shrink-0">Latest Quote</span>
+                      <button
+                        onClick={() => handleTabChange('quotes')}
+                        className="inline-flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
+                      >
+                        <ExternalLink size={11} strokeWidth={2} />
+                        {latestQuote.quoteNumber ?? `#${latestQuote.id.slice(-6)}`}
+                        {latestQuote.totalAmount ? ` — ${fmtVal(latestQuote.totalAmount)}` : ''}
+                        <span className="ml-1 text-gray-400 font-normal">({latestQuote.status ?? 'Draft'})</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {activeTab === 'activity' && (
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Full Activity Log</h3>
-                {activities.length === 0 ? (
-                  <p className="text-xs text-gray-400 py-8 text-center">No activity yet</p>
-                ) : (
-                  activities.map((a) => (
-                    <div key={a.id} className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                      <span className="text-base mt-0.5">{ACTION_ICONS[a.action] ?? '•'}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-gray-700">
-                          <span className="font-medium">{a.user?.name ?? 'System'}</span>
-                          {' — '}
-                          {describeActivity(a.action, a.meta)}
+            {activeTab === 'activity' && (() => {
+              // Group activities by type bucket, preserving chronological order within each group
+              const BUCKET_LABELS: Record<number, string> = {
+                0: 'Calls',
+                1: 'Meetings Scheduled',
+                2: 'Stage Movements',
+                3: 'Intent Rating',
+                4: 'Meeting Completions',
+                5: 'Meetings Rescheduled',
+                6: 'Meetings No-Show / Cancelled',
+              };
+              const OTHER_BUCKET = 99;
+              const getBucket = (action: string) => ACTIVITY_BUCKET[action] ?? OTHER_BUCKET;
+              const grouped = new Map<number, ActivityEntry[]>();
+              for (const a of [...activities].sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime())) {
+                const b = getBucket(a.action);
+                if (!grouped.has(b)) grouped.set(b, []);
+                grouped.get(b)!.push(a);
+              }
+              const sortedBuckets = [...grouped.entries()].sort(([a], [b]) => a - b);
+              return (
+                <div className="space-y-5">
+                  <h3 className="text-sm font-semibold text-gray-700">Full Activity Log</h3>
+                  {activities.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-8 text-center">No activity yet</p>
+                  ) : sortedBuckets.map(([bucket, entries]) => (
+                    <div key={bucket}>
+                      {bucket !== OTHER_BUCKET && (
+                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">
+                          {BUCKET_LABELS[bucket] ?? 'Other'}
                         </p>
+                      )}
+                      <div className="space-y-0">
+                        {entries.map((a) => {
+                          const isBackward = a.action === 'STAGE_CHANGED' && a.meta?.isBackward;
+                          const direction = a.action === 'INTENT_RATING_UPDATED' ? a.meta?.direction : null;
+                          const rowColor = isBackward
+                            ? 'bg-red-50 border-red-100'
+                            : direction === 'increase'
+                            ? 'bg-green-50 border-green-100'
+                            : direction === 'decrease'
+                            ? 'bg-red-50 border-red-100'
+                            : '';
+                          return (
+                            <div key={a.id} className={`flex items-start gap-3 py-2.5 border-b last:border-0 rounded-lg px-1 ${rowColor || 'border-gray-50'}`}>
+                              <span className="text-base mt-0.5 shrink-0">
+                                {isBackward ? '↩' : direction === 'increase' ? '▲' : direction === 'decrease' ? '▼' : (ACTION_ICONS[a.action] ?? '•')}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-700">
+                                  <span className="font-medium">{a.user?.name ?? 'System'}</span>
+                                  {' — '}
+                                  {describeActivity(a.action, a.meta)}
+                                </p>
+                              </div>
+                              <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
                     </div>
-                  ))
-                )}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
 
             {activeTab === 'calls' && <CallLogTab leadId={leadId!} />}
             {activeTab === 'followups' && <FollowUpTab leadId={leadId!} />}

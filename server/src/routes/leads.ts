@@ -7,7 +7,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
-import { sendEmail, inactivationEmail, onHoldEmail } from '../lib/email.js';
+import { sendEmail, inactivationEmail, onHoldEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
@@ -507,10 +507,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // INACTIVE remain allowed).
       const fromIdx = FUNNEL_ORDER.indexOf(prevStage as any);
       const toIdx = FUNNEL_ORDER.indexOf(stage as any);
-      const dqlIdx = FUNNEL_ORDER.indexOf('DQL');
-      if (fromIdx >= dqlIdx && fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
+      const isBackwardFunnelMove = fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx;
+      // Only MQL → EL backward move is permitted; all other backward funnel moves are blocked.
+      const isMQLtoEL = prevStage === 'MQL' && stage === 'EFFECTIVE_LEAD';
+      if (isBackwardFunnelMove && !isMQLtoEL) {
         res.status(400).json({
-          error: `Cannot move this lead backward from ${prevStage} — leads that have reached DQL cannot go back in the funnel`,
+          error: `Backward stage moves are not permitted except MQL → Effective Lead. The lead cannot be moved backward from ${prevStage}.`,
         });
         return;
       }
@@ -596,7 +598,42 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     }
 
     if (stage && stage !== prevStage) {
-      await logActivity(user.id, 'STAGE_CHANGED', id, { from: prevStage, to: stage });
+      await logActivity(user.id, 'STAGE_CHANGED', id, {
+        from: prevStage,
+        to: stage,
+        isBackward: (() => {
+          const fi = FUNNEL_ORDER.indexOf(prevStage as any);
+          const ti = FUNNEL_ORDER.indexOf(stage as any);
+          return fi !== -1 && ti !== -1 && ti < fi;
+        })(),
+      });
+
+      // ── MQL → EL backward move: notify designer + BL ──────────────────────
+      if (prevStage === 'MQL' && stage === 'EFFECTIVE_LEAD') {
+        const notifyTargets: { id: string; name: string; email: string }[] = [];
+        const targetIds = [existing.assignedDesignerId, existing.assignedBLId].filter(Boolean) as string[];
+        if (targetIds.length) {
+          const targetUsers = await prisma.user.findMany({
+            where: { id: { in: targetIds } },
+            select: { id: true, name: true, email: true },
+          });
+          notifyTargets.push(...targetUsers);
+        }
+        const msg = `Lead ${existing.leadId} (${existing.name}) moved backward: MQL → Effective Lead by ${user.name}`;
+        for (const t of notifyTargets) {
+          await createNotification(t.id, 'STAGE_MOVED_BACKWARD', msg, id).catch(() => {});
+          const emailPayload = stageMoveBackwardEmail({
+            recipientName: t.name,
+            leadId: existing.leadId,
+            leadName: existing.name,
+            fromStage: 'MQL',
+            toStage: 'Effective Lead',
+            movedByName: user.name,
+          });
+          emailPayload.to = t.email;
+          sendEmail(emailPayload).catch(() => {});
+        }
+      }
 
       // BUG-009 Part B: auto-resolve open SLA breaches when moving to a terminal stage
       if (stage === 'HANDED_OVER' || stage === 'INACTIVE') {
@@ -920,6 +957,7 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
 
+    const oldRating = lead.intentRating;
     const systemRating = computeSystemRating(lead);
 
     // Reason required when manually overriding the system-computed rating
@@ -940,9 +978,93 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
       },
     });
 
-    await logActivity(user.id, 'INTENT_RATING_UPDATED', id, { rating, systemRating, reason });
+    // Determine change direction for activity log + notifications
+    const direction =
+      rating > (oldRating ?? 0) ? 'increase'
+      : rating < (oldRating ?? 0) ? 'decrease'
+      : 'unchanged';
+
+    await logActivity(user.id, 'INTENT_RATING_UPDATED', id, {
+      rating, systemRating, reason, oldRating, direction,
+    });
+
+    // Notify designer and BL when intent rating actually changes
+    if (direction !== 'unchanged') {
+      const targetIds = [lead.assignedDesignerId, lead.assignedBLId].filter(Boolean) as string[];
+      if (targetIds.length) {
+        const targetUsers = await prisma.user.findMany({
+          where: { id: { in: targetIds } },
+          select: { id: true, name: true, email: true },
+        });
+        const notifMsg = `Lead ${lead.leadId} (${lead.name}) intent rating ${direction}d: ${oldRating ?? '—'} → ${rating} ★ (by ${user.name})`;
+        for (const t of targetUsers) {
+          createNotification(t.id, 'INTENT_RATING_CHANGED', notifMsg, id).catch(() => {});
+          const emailPayload = intentRatingChangedEmail({
+            recipientName: t.name,
+            leadId: lead.leadId,
+            leadName: lead.name,
+            oldRating,
+            newRating: rating,
+            direction: direction as 'increase' | 'decrease',
+            changedByName: user.name,
+            reason: reason?.trim(),
+          });
+          emailPayload.to = t.email;
+          sendEmail(emailPayload).catch(() => {});
+        }
+      }
+    }
 
     res.json({ rating, systemRating, log });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/:id/stage-history — derive per-stage TAT from activity logs ─
+leadsRouter.get('/:id/stage-history', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, stage: true, createdAt: true },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    const stageLogs = await prisma.activityLog.findMany({
+      where: { leadId: id, action: 'STAGE_CHANGED' },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Reconstruct stage visit history from activity log
+    type StageVisit = { stage: string; enteredAt: Date; exitedAt?: Date; tatDays?: number };
+    const history: StageVisit[] = [];
+    let currentStage = 'EFFECTIVE_LEAD';
+    let currentEnteredAt = lead.createdAt;
+
+    for (const log of stageLogs) {
+      const meta = log.meta as { from?: string; to?: string } | null;
+      if (!meta?.to) continue;
+      const tatMs = log.createdAt.getTime() - currentEnteredAt.getTime();
+      history.push({
+        stage: currentStage,
+        enteredAt: currentEnteredAt,
+        exitedAt: log.createdAt,
+        tatDays: Math.max(0, Math.floor(tatMs / (1000 * 60 * 60 * 24))),
+      });
+      currentStage = meta.to;
+      currentEnteredAt = log.createdAt;
+    }
+
+    // Current stage (not yet exited)
+    const nowMs = Date.now() - currentEnteredAt.getTime();
+    history.push({
+      stage: currentStage,
+      enteredAt: currentEnteredAt,
+      tatDays: Math.max(0, Math.floor(nowMs / (1000 * 60 * 60 * 24))),
+    });
+
+    res.json({ history });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

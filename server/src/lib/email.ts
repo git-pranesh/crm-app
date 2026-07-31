@@ -100,6 +100,48 @@ ${opts.reason ? `<p>We understand that the project may not have moved forward at
   };
 }
 
+export function stageMoveBackwardEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  fromStage: string;
+  toStage: string;
+  movedByName: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Lead Moved Backward: ${opts.fromStage} → ${opts.toStage} — Interiors by DeX`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has been moved backward in the sales funnel:</p>
+<p><strong>${opts.fromStage} → ${opts.toStage}</strong></p>
+<p>Moved by: ${opts.movedByName}</p>
+<p>Please review this lead and take appropriate action.<br/><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
+export function intentRatingChangedEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  oldRating: number | null;
+  newRating: number;
+  direction: 'increase' | 'decrease';
+  changedByName: string;
+  reason?: string;
+}): EmailPayload {
+  const dirWord = opts.direction === 'increase' ? 'increased' : 'decreased';
+  return {
+    to: '',
+    subject: `Intent Rating ${opts.direction === 'increase' ? 'Increased ↑' : 'Decreased ↓'}: Lead ${opts.leadId} — Interiors by DeX`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>The intent rating for lead <strong>${opts.leadId} — ${opts.leadName}</strong> has been <strong>${dirWord}</strong>:</p>
+<p>${opts.oldRating ?? '—'} ★ → ${opts.newRating} ★</p>
+${opts.reason ? `<p>Reason: ${opts.reason}</p>` : ''}
+<p>Updated by: ${opts.changedByName}</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
 export function onHoldEmail(opts: {
   clientName: string;
   revivalDate: string;
