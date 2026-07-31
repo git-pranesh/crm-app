@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 
@@ -30,7 +30,14 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps';
+
+interface NpsRow {
+  leadDbId: string; leadId: string; leadName: string;
+  designerId: string | null; designerName: string;
+  scores: Record<string, number>;
+  avgNps: number | null;
+}
 
 export default function Admin() {
   const [tab, setTab] = useState<AdminTab>('users');
@@ -47,6 +54,14 @@ export default function Admin() {
   const [deactivateLoading, setDeactivateLoading] = useState(false);
   const [reassignDesignerId, setReassignDesignerId] = useState('');
   const [deactivating, setDeactivating] = useState(false);
+
+  const [npsRows, setNpsRows] = useState<NpsRow[]>([]);
+  const [npsLoading, setNpsLoading] = useState(false);
+  const [npsDesignerFilter, setNpsDesignerFilter] = useState('');
+  const [npsDateFrom, setNpsDateFrom] = useState('');
+  const [npsDateTo, setNpsDateTo] = useState('');
+  const [npsSortCol, setNpsSortCol] = useState<string>('avgNps');
+  const [npsSortDir, setNpsSortDir] = useState<'asc' | 'desc'>('desc');
 
   const bls = users.filter((u) => u.role === 'BL' && u.isActive);
   const activeDesigners = users.filter((u) => u.role === 'DESIGNER' && u.isActive);
@@ -154,10 +169,68 @@ export default function Admin() {
     }
   };
 
+  const loadNps = async (opts?: { designerId?: string; from?: string; to?: string }) => {
+    setNpsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (opts?.designerId) params.set('designerId', opts.designerId);
+      if (opts?.from) params.set('from', opts.from);
+      if (opts?.to) params.set('to', opts.to);
+      const qs = params.toString() ? `?${params}` : '';
+      const data = await api.get<{ rows: NpsRow[] }>(`/admin/nps-tracker${qs}`);
+      setNpsRows(data.rows);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setNpsLoading(false);
+    }
+  };
+
+  const handleNpsSortClick = (col: string) => {
+    if (npsSortCol === col) {
+      setNpsSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setNpsSortCol(col);
+      setNpsSortDir('desc');
+    }
+  };
+
+  const sortedNpsRows = [...npsRows].sort((a, b) => {
+    let av: number | string | null, bv: number | string | null;
+    if (npsSortCol === 'leadName') { av = a.leadName; bv = b.leadName; }
+    else if (npsSortCol === 'designerName') { av = a.designerName; bv = b.designerName; }
+    else if (npsSortCol === 'avgNps') { av = a.avgNps; bv = b.avgNps; }
+    else {
+      av = a.scores[npsSortCol] ?? null;
+      bv = b.scores[npsSortCol] ?? null;
+    }
+    // nulls last
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'string' && typeof bv === 'string') {
+      return npsSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    }
+    return npsSortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
+
+  const NPS_STAGES = ['SALE', 'ONBOARDING', 'DESIGN_FREEZE', 'SIGN_OFF'];
+  const NPS_LABELS: Record<string, string> = {
+    SALE: 'Sales', ONBOARDING: 'OB', DESIGN_FREEZE: 'DF', SIGN_OFF: 'Sign Off',
+  };
+
+  const npsColor = (score: number | undefined) => {
+    if (score == null) return 'text-stone-300';
+    if (score >= 9) return 'text-green-600 font-bold';
+    if (score >= 7) return 'text-amber-500 font-bold';
+    return 'text-red-500 font-bold';
+  };
+
   const tabs: { id: AdminTab; label: string; Icon: LucideIcon }[] = [
     { id: 'users', label: 'Users', Icon: Users2 },
     { id: 'schedules', label: 'Report Schedules', Icon: CalendarDays },
     { id: 'health', label: 'System Health', Icon: Activity },
+    { id: 'nps', label: 'NPS Tracker', Icon: Star },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -259,7 +332,7 @@ export default function Admin() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <nav className="flex gap-1 overflow-x-auto">
             {tabs.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)}
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'nps') loadNps({ designerId: npsDesignerFilter || undefined, from: npsDateFrom || undefined, to: npsDateTo || undefined }); }}
                 className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -425,6 +498,116 @@ export default function Admin() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── NPS TRACKER TAB ───────────────────────────────────────────────── */}
+        {tab === 'nps' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              {/* Filters row */}
+              <div className="flex items-end flex-wrap gap-3 mb-5">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Designer</label>
+                  <select
+                    value={npsDesignerFilter}
+                    onChange={(e) => setNpsDesignerFilter(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  >
+                    <option value="">All designers</option>
+                    {activeDesigners.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Responded from</label>
+                  <input
+                    type="date"
+                    value={npsDateFrom}
+                    onChange={(e) => setNpsDateFrom(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Responded to</label>
+                  <input
+                    type="date"
+                    value={npsDateTo}
+                    onChange={(e) => setNpsDateTo(e.target.value)}
+                    className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+                <button
+                  onClick={() => loadNps({ designerId: npsDesignerFilter || undefined, from: npsDateFrom || undefined, to: npsDateTo || undefined })}
+                  className="px-4 py-1.5 bg-brand-500 text-white text-sm rounded-lg hover:bg-brand-600 transition-colors"
+                >
+                  Apply
+                </button>
+                {(npsDesignerFilter || npsDateFrom || npsDateTo) && (
+                  <button
+                    onClick={() => { setNpsDesignerFilter(''); setNpsDateFrom(''); setNpsDateTo(''); loadNps(); }}
+                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {npsLoading ? (
+                <div className="text-center py-10 text-gray-400 animate-pulse text-sm">Loading NPS data…</div>
+              ) : npsRows.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 text-sm">
+                  No NPS responses yet. Surveys are sent automatically when leads reach key milestones.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        {[
+                          { key: 'leadName', label: 'Lead', align: 'left' },
+                          { key: 'designerName', label: 'Designer', align: 'left' },
+                          ...NPS_STAGES.map((s) => ({ key: s, label: NPS_LABELS[s], align: 'center' })),
+                          { key: 'avgNps', label: 'Avg', align: 'center' },
+                        ].map(({ key, label, align }) => (
+                          <th
+                            key={key}
+                            onClick={() => handleNpsSortClick(key)}
+                            className={`py-2.5 px-3 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-gray-800 transition-colors ${align === 'center' ? 'text-center' : 'text-left'}`}
+                          >
+                            {label}
+                            {npsSortCol === key && (
+                              <span className="ml-1 text-brand-500">{npsSortDir === 'asc' ? '↑' : '↓'}</span>
+                            )}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {sortedNpsRows.map((row) => (
+                        <tr key={row.leadDbId} className="hover:bg-gray-50 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-mono text-xs text-brand-600 font-bold">{row.leadId}</div>
+                            <div className="text-xs text-gray-700">{row.leadName}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-gray-600">{row.designerName}</td>
+                          {NPS_STAGES.map((s) => (
+                            <td key={s} className={`py-2.5 px-3 text-center text-sm ${npsColor(row.scores[s])}`}>
+                              {row.scores[s] != null ? row.scores[s] : <span className="text-gray-300">—</span>}
+                            </td>
+                          ))}
+                          <td className={`py-2.5 px-3 text-center text-sm font-bold ${npsColor(row.avgNps ?? undefined)}`}>
+                            {row.avgNps != null ? row.avgNps : <span className="text-gray-300">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-xs text-gray-400 mt-3 px-1">{sortedNpsRows.length} lead{sortedNpsRows.length !== 1 ? 's' : ''} with NPS responses. Click any column header to sort.</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ── HEALTH TAB ────────────────────────────────────────────────────── */}

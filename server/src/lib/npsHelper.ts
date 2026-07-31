@@ -1,0 +1,145 @@
+/**
+ * NPS helper — creates an NPSResponse record and queues the survey email.
+ *
+ * Idempotency contract:
+ * - A unique constraint on (leadId, stage) guarantees at most one record per lead/stage.
+ * - sentAt IS NULL  → record exists but email not yet queued (retryable).
+ * - sentAt IS NOT NULL → email was successfully enqueued; skip completely.
+ * - sentAt is only written AFTER the BullMQ job is accepted, so queue failures
+ *   leave sentAt null and the next trigger will retry.
+ * - BullMQ job ID is deterministic (nps-<leadId>-<stage>) so concurrent enqueues
+ *   produce at most one queued job even if the DB write races.
+ */
+import { randomUUID } from 'crypto';
+import { prisma } from './prisma.js';
+import { npsEmail } from './email.js';
+import { queues } from '../jobs/index.js';
+
+const NPS_STAGE_LABELS: Record<string, string> = {
+  SALE: 'Sales',
+  ONBOARDING: 'Onboarding',
+  DESIGN_FREEZE: 'Design Freeze',
+  SIGN_OFF: 'Sign Off',
+};
+
+/**
+ * Resolve the absolute public base URL from available environment variables.
+ * Priority: BASE_URL (explicit config) → REPLIT_DEV_DOMAIN (Replit-injected dev URL).
+ * Returns null only when no usable absolute URL exists.
+ */
+function resolveBaseUrl(): string | null {
+  const explicit = (process.env.BASE_URL ?? '').trim().replace(/\/$/, '');
+  if (explicit.startsWith('http://') || explicit.startsWith('https://')) return explicit;
+
+  const devDomain = (process.env.REPLIT_DEV_DOMAIN ?? '').trim();
+  if (devDomain) return `https://${devDomain}`;
+
+  console.warn('[nps] Neither BASE_URL nor REPLIT_DEV_DOMAIN is configured — NPS survey email will not be sent.');
+  return null;
+}
+
+/**
+ * Create an NPS record (if needed) and queue the survey email.
+ *
+ * The (leadId, stage) unique constraint enforces one record per milestone.
+ * An upsert-style approach is used: find the existing record, or create one, then
+ * enqueue if sentAt is still null. The deterministic BullMQ job ID prevents
+ * duplicate emails even when concurrent requests race past the DB check.
+ */
+export async function createAndSendNps(leadId: string, npsStage: string): Promise<void> {
+  try {
+    // ── 1. Find or create the record (unique constraint prevents duplicates) ───
+    let record = await prisma.nPSResponse.findUnique({
+      where: { leadId_stage: { leadId, stage: npsStage } },
+      select: { id: true, formToken: true, sentAt: true },
+    });
+
+    if (!record) {
+      try {
+        record = await prisma.nPSResponse.create({
+          data: { leadId, stage: npsStage, formToken: randomUUID() },
+          select: { id: true, formToken: true, sentAt: true },
+        });
+      } catch (createErr: any) {
+        // Unique constraint violation: a concurrent request created the record first.
+        // Re-fetch and continue — do not abort.
+        if (createErr.code === 'P2002') {
+          record = await prisma.nPSResponse.findUnique({
+            where: { leadId_stage: { leadId, stage: npsStage } },
+            select: { id: true, formToken: true, sentAt: true },
+          });
+          if (!record) return; // Unexpected; give up.
+        } else {
+          throw createErr;
+        }
+      }
+    }
+
+    // ── 2. Idempotency: skip if email was already successfully enqueued ────────
+    if (record.sentAt != null) return;
+
+    // ── 3. Resolve lead contact details ───────────────────────────────────────
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        name: true,
+        email: true,
+        assignedDesigner: { select: { name: true } },
+      },
+    });
+    if (!lead) return;
+
+    if (!lead.email) {
+      console.warn(`[nps] Lead ${leadId} has no email; NPS record created but survey email not sent`);
+      return;
+    }
+
+    const baseUrl = resolveBaseUrl();
+    if (!baseUrl) {
+      // Record created / exists — email cannot be sent without a public URL.
+      // sentAt remains null so the next trigger will retry.
+      return;
+    }
+
+    // ── 4. Build email payload ─────────────────────────────────────────────────
+    const ratingUrl = `${baseUrl}/nps/${record.formToken}`;
+    const stageName = NPS_STAGE_LABELS[npsStage] ?? npsStage;
+
+    const emailPayload = npsEmail({
+      clientName: lead.name,
+      stageName,
+      ratingUrl,
+      designerName: lead.assignedDesigner?.name ?? 'your designer',
+    });
+    emailPayload.to = lead.email;
+
+    // ── 5. Enqueue with a deterministic job ID to prevent BullMQ duplicates ───
+    // BullMQ's `jobId` option deduplicates: a job with the same ID that is already
+    // waiting/active will not be added again, even under concurrent callers.
+    await queues.emails.add(
+      `nps-survey-${npsStage.toLowerCase()}`,
+      { emailPayload, leadId },
+      { jobId: `nps-${leadId}-${npsStage}` },
+    );
+
+    // ── 6. Mark sentAt only after successful enqueue (retry gate) ─────────────
+    await prisma.nPSResponse.update({
+      where: { formToken: record.formToken },
+      data: { sentAt: new Date() },
+    });
+
+    // ── 7. Audit log ───────────────────────────────────────────────────────────
+    await prisma.emailLog.create({
+      data: {
+        leadId,
+        type: `NPS_${npsStage}`,
+        sentTo: lead.email,
+        subject: emailPayload.subject,
+      },
+    });
+  } catch (e) {
+    // Log the error so operators can observe and retry; do not swallow silently.
+    // sentAt remains null, so the next completion trigger will retry automatically.
+    console.error(`[nps] Failed to queue NPS survey for lead ${leadId} stage ${npsStage}:`, (e as Error).message);
+  }
+}

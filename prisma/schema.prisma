@@ -48,6 +48,8 @@ enum MeetingType {
   DQL
   PP
   ONBOARDING
+  DESIGN_FREEZE
+  SIGN_OFF
 }
 
 enum MeetingMode {
@@ -695,10 +697,12 @@ model NPSResponse {
   /// 0-10, null until responded
   score       Int?
   formToken   String    @unique
-  sentAt      DateTime  @default(now())
+  /// Set only after email is successfully queued; null = email not yet sent (retryable)
+  sentAt      DateTime?
   respondedAt DateTime?
   createdAt   DateTime  @default(now())
 
+  @@unique([leadId, stage])
   @@map("nps_responses")
 }
 

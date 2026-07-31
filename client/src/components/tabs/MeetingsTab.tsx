@@ -13,6 +13,8 @@ const TYPES = [
   { value: 'DQL', label: 'DQL (Initial Meeting)' },
   { value: 'PP', label: 'PP (Proposal Presentation)' },
   { value: 'ONBOARDING', label: 'OB (Onboarding)' },
+  { value: 'DESIGN_FREEZE', label: 'Design Freeze' },
+  { value: 'SIGN_OFF', label: 'Sign Off' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {

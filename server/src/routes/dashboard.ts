@@ -112,13 +112,13 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       },
       _sum: { estimatedValue: true },
     }),
-    // NPS responses with scores (for avgNPS)
+    // NPS responses with scores — filtered by respondedAt so the dashboard period
+    // reflects when clients actually rated (not when the survey was sent).
     prisma.nPSResponse.findMany({
       where: {
         lead: leadWhere,
-        respondedAt: { not: null },
+        respondedAt: { not: null, gte: rangeFrom, lte: rangeTo },
         score: { not: null },
-        sentAt: { gte: rangeFrom, lte: rangeTo },
       },
       select: { stage: true, score: true },
     }),
@@ -184,6 +184,16 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   const avgNPS = stageAverages.length > 0
     ? +(stageAverages.reduce((a, b) => a + b, 0) / stageAverages.length).toFixed(1)
     : null;
+
+  const stageNpsAvg = (stage: string) => {
+    const scores = npsGrouped[stage];
+    if (!scores || scores.length === 0) return null;
+    return +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+  };
+  const salesNps = stageNpsAvg('SALE');
+  const obNps = stageNpsAvg('ONBOARDING');
+  const designFreezeNps = stageNpsAvg('DESIGN_FREEZE');
+  const signOffNps = stageNpsAvg('SIGN_OFF');
 
   // ── Pipeline value ────────────────────────────────────────────────────────────
   const pipelineValue = pipelineValueRaw._sum.estimatedValue
@@ -303,6 +313,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     leadsThisMonth,
     pipelineValue,
     avgNPS,
+    npsBreakdown: { salesNps, obNps, designFreezeNps, signOffNps },
     collectedThisMonth,
     outstanding,
     stageFunnel,

@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { createAndSendNps } from '../lib/npsHelper.js';
 import { notifyManagers } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
 import { recalculateMilestones } from '../lib/milestones.js';
@@ -36,11 +37,11 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const validTypes = ['DQL', 'PP', 'ONBOARDING'];
+  const validTypes = ['DQL', 'PP', 'ONBOARDING', 'DESIGN_FREEZE', 'SIGN_OFF'];
   const validModes = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE'];
 
   if (!validTypes.includes(type)) {
-    res.status(400).json({ error: `type must be DQL, PP, or ONBOARDING` });
+    res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
     return;
   }
   if (!validModes.includes(mode)) {
@@ -548,19 +549,17 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
   await recalculateMilestones(lead.id);
 
-  // Auto-create NPS request when DQL or PP meeting is COMPLETED (G2)
-  if (status === 'COMPLETED' && (meeting.type === 'DQL' || meeting.type === 'PP')) {
-    try {
-      const formToken = randomUUID();
-      await prisma.nPSResponse.create({
-        data: {
-          leadId: lead.id,
-          stage: 'SALE',
-          formToken,
-        },
-      });
-    } catch (e) {
-      console.warn('[meetings:nps:create]', (e as Error).message);
+  // NPS email triggers on meeting completion
+  if (status === 'COMPLETED') {
+    if (meeting.type === 'DQL' || meeting.type === 'PP') {
+      // Sales NPS — triggered when first real sales meeting completes
+      createAndSendNps(lead.id, 'SALE').catch(() => {});
+    }
+    if (meeting.type === 'DESIGN_FREEZE') {
+      createAndSendNps(lead.id, 'DESIGN_FREEZE').catch(() => {});
+    }
+    if (meeting.type === 'SIGN_OFF') {
+      createAndSendNps(lead.id, 'SIGN_OFF').catch(() => {});
     }
   }
 

@@ -1,7 +1,9 @@
 /**
- * Email helper — stubs for development.
- * Replace with Resend / SendGrid / Nodemailer in production.
+ * Email helper — Nodemailer-backed delivery.
+ * Uses SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS env vars when configured.
+ * Falls back to a dev preview (jsonTransport — logs to console) when unconfigured.
  */
+import nodemailer from 'nodemailer';
 
 export interface EmailPayload {
   to: string;
@@ -9,15 +11,42 @@ export interface EmailPayload {
   html: string;
 }
 
+let _transporter: nodemailer.Transporter | null = null;
+
+function getTransporter(): nodemailer.Transporter {
+  if (_transporter) return _transporter;
+
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT ?? 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) {
+    _transporter = nodemailer.createTransport({ jsonTransport: true });
+    return _transporter;
+  }
+
+  _transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+  return _transporter;
+}
+
 export async function sendEmail(payload: EmailPayload): Promise<void> {
-  if (process.env.NODE_ENV === 'production') {
-    // TODO: integrate Resend / SendGrid
-    console.warn('[email] Production email not yet configured. Payload:', payload);
+  const transporter = getTransporter();
+  const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
+  const isSmtpConfigured = !!process.env.SMTP_HOST;
+
+  if (isSmtpConfigured) {
+    await transporter.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html });
+    console.log(`[email] Sent "${payload.subject}" → ${payload.to}`);
   } else {
-    console.log('[email:dev] Would send email:', {
-      to: payload.to,
-      subject: payload.subject,
-    });
+    // Dev / unconfigured: jsonTransport logs without network I/O
+    const info = await transporter.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html });
+    console.log(`[email:dev] Would send "${payload.subject}" → ${payload.to}`, JSON.parse(info.message).subject);
   }
 }
 
@@ -197,6 +226,32 @@ export function inactiveInternalEmail(opts: {
 <strong>Actioned by:</strong> ${opts.movedByName}</p>
 <p>A feedback email and SMS have been sent to the client automatically.</p>
 <p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
+export function npsEmail(opts: {
+  clientName: string;
+  stageName: string;
+  ratingUrl: string;
+  designerName: string;
+}): EmailPayload {
+  const scores = Array.from({ length: 11 }, (_, i) => i);
+  const scoreLinks = scores.map((i) => {
+    const bg = i <= 6 ? '#f0ece8' : i <= 8 ? '#f59e0b' : '#22c55e';
+    const color = i <= 6 ? '#6b7280' : '#fff';
+    return `<a href="${opts.ratingUrl}?score=${i}" style="display:inline-block;width:34px;height:34px;line-height:34px;text-align:center;background:${bg};color:${color};border-radius:8px;text-decoration:none;margin:2px;font-size:13px;font-weight:700">${i}</a>`;
+  }).join('');
+
+  return {
+    to: '',
+    subject: `Quick feedback on your ${opts.stageName} experience — Interiors by DeX`,
+    html: `<p>Dear ${opts.clientName},</p>
+<p>Your <strong>${opts.stageName}</strong> milestone with Interiors by DeX is complete — congratulations! 🎉</p>
+<p>We'd love to know: on a scale of <strong>0–10</strong>, how likely are you to recommend us to a friend or family?</p>
+<p style="text-align:center;margin:24px 0;">${scoreLinks}</p>
+<p style="text-align:center;font-size:12px;color:#9ca3af;">0 = Not at all likely &nbsp;&nbsp;&nbsp; 10 = Extremely likely</p>
+<p>Or tap here to open the survey: <a href="${opts.ratingUrl}" style="color:#d95f32">${opts.ratingUrl}</a></p>
+<p>Thank you for trusting us with your space!<br/><em>Team Interiors by DeX</em></p>`,
   };
 }
 

@@ -8,10 +8,18 @@ import {
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
 
+interface NpsBreakdown {
+  salesNps: number | null;
+  obNps: number | null;
+  designFreezeNps: number | null;
+  signOffNps: number | null;
+}
+
 interface DashboardData {
   totalLeads: number;
   pipelineValue: number;
   avgNPS: number | null;
+  npsBreakdown?: NpsBreakdown;
   collectedThisMonth: number;
   outstanding: number;
   inDelivery: { count: number; contractValueSum: number };
@@ -142,6 +150,30 @@ function BHDashboard({ data }: { data: DashboardData }) {
           sub="Avg across touchpoints"
         />
       </div>
+
+      {/* NPS breakdown by stage */}
+      {data.npsBreakdown && (
+        <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Client Satisfaction by Stage</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Sales', value: data.npsBreakdown.salesNps },
+              { label: 'Onboarding', value: data.npsBreakdown.obNps },
+              { label: 'Design Freeze', value: data.npsBreakdown.designFreezeNps },
+              { label: 'Sign Off', value: data.npsBreakdown.signOffNps },
+            ].map(({ label, value }) => {
+              const color = value == null ? 'text-stone-300' : value >= 9 ? 'text-green-600' : value >= 7 ? 'text-amber-500' : 'text-red-500';
+              return (
+                <div key={label} className="text-center p-3 rounded-xl" style={{ background: '#FAF6F2' }}>
+                  <p className={`text-2xl font-extrabold ${color}`}>{value != null ? value.toFixed(1) : '—'}</p>
+                  <p className="text-xs text-stone-500 mt-1 font-medium">{label}</p>
+                  <p className="text-[10px] text-stone-400">NPS · 0–10</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Row 2 – Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -339,6 +371,29 @@ function BLDashboard({ data }: { data: DashboardData }) {
           sub="Avg score"
         />
       </div>
+
+      {/* NPS breakdown by stage */}
+      {data.npsBreakdown && (
+        <div className="bg-white rounded-2xl p-4 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
+          <h3 className="font-bold text-stone-900 mb-3 text-sm tracking-tight">Client Satisfaction by Stage</h3>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: 'Sales', value: data.npsBreakdown.salesNps },
+              { label: 'Onboarding', value: data.npsBreakdown.obNps },
+              { label: 'Design Freeze', value: data.npsBreakdown.designFreezeNps },
+              { label: 'Sign Off', value: data.npsBreakdown.signOffNps },
+            ].map(({ label, value }) => {
+              const color = value == null ? 'text-stone-300' : value >= 9 ? 'text-green-600' : value >= 7 ? 'text-amber-500' : 'text-red-500';
+              return (
+                <div key={label} className="text-center p-2 rounded-xl" style={{ background: '#FAF6F2' }}>
+                  <p className={`text-xl font-extrabold ${color}`}>{value != null ? value.toFixed(1) : '—'}</p>
+                  <p className="text-[10px] text-stone-500 mt-0.5 font-medium">{label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <SectionHeader title="Delivery" />
 

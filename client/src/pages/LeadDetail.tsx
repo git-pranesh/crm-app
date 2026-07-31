@@ -269,11 +269,14 @@ export default function LeadDetail() {
   const [leadFollowUpTasks, setLeadFollowUpTasks] = useState<FollowUpTask[]>([]);
   const [gateInfoStage, setGateInfoStage] = useState<string | null>(null); // popover target
 
+  const [avgNps, setAvgNps] = useState<number | null>(null);
+  const [npsPerStage, setNpsPerStage] = useState<Record<string, { stage: string; score: number | null; sentAt: string; respondedAt: string | null }>>({});
+
   const loadLead = useCallback(() => {
     if (!leadId) return;
     setLoadingLead(true);
-    api.get<{ lead: Lead }>(`/leads/${leadId}`)
-      .then((d) => setLead(d.lead))
+    api.get<{ lead: Lead; avgNps: number | null; npsPerStage: Record<string, any> }>(`/leads/${leadId}`)
+      .then((d) => { setLead(d.lead); setAvgNps(d.avgNps ?? null); setNpsPerStage(d.npsPerStage ?? {}); })
       .catch(() => toast.error('Could not load lead'))
       .finally(() => setLoadingLead(false));
   }, [leadId]);
@@ -825,6 +828,14 @@ export default function LeadDetail() {
                 {lead.currentOffer && (
                   <span className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">
                     <Gift size={10} strokeWidth={2} /> {lead.currentOffer.name}
+                  </span>
+                )}
+                {avgNps != null && (
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold ${avgNps >= 9 ? 'bg-green-100 text-green-700' : avgNps >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}
+                    title={`NPS: ${avgNps}/10 (average of ${Object.keys(npsPerStage).length} survey${Object.keys(npsPerStage).length !== 1 ? 's' : ''})`}
+                  >
+                    ★ NPS {avgNps}
                   </span>
                 )}
               </div>

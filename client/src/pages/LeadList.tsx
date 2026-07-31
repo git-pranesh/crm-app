@@ -12,10 +12,17 @@ interface Lead {
   onHoldRevivalDate?: string | null;
   firstOpenedAt?: string | null;
   isUnread?: boolean;
+  avgNps?: number | null;
   createdAt: string; updatedAt: string;
   assignedDesigner?: { id: string; name: string } | null;
   assignedBL?: { id: string; name: string } | null;
   _count: { calls: number; meetings: number; followUpTasks: number };
+}
+
+function NpsBadge({ score }: { score: number | null | undefined }) {
+  if (score == null) return <span className="text-stone-300 text-xs">—</span>;
+  const color = score >= 9 ? 'bg-green-100 text-green-700' : score >= 7 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${color}`}>{score}</span>;
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -351,7 +358,7 @@ export default function LeadList() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ background: '#FAF6F2', borderBottom: '1px solid #EDE8E3' }}>
-                      {['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'Updated'].map((h) => (
+                      {['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'NPS', 'Updated'].map((h) => (
                         <th key={h} className="text-left py-2.5 px-4 text-xs font-bold text-stone-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -396,6 +403,7 @@ export default function LeadList() {
                           <td className="py-3 px-4 text-stone-500 text-xs whitespace-nowrap">{lead.source?.replace(/_/g, ' ') ?? '—'}</td>
                           <td className={`py-3 px-4 text-xs ${intentColor(lead.intentRating)}`}>{intentLabel(lead.intentRating)}</td>
                           <td className="py-3 px-4"><Stars rating={lead.intentRating} /></td>
+                          <td className="py-3 px-4"><NpsBadge score={lead.avgNps} /></td>
                           <td className="py-3 px-4 text-stone-400 text-xs whitespace-nowrap">{relTime(lead.updatedAt)}</td>
                         </tr>
                       );

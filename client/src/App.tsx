@@ -19,6 +19,7 @@ import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
 import Calendar from './pages/Calendar';
 import FeedbackForm from './pages/FeedbackForm';
+import NpsForm from './pages/NpsForm';
 import AcceptInvite from './pages/AcceptInvite';
 
 
@@ -89,6 +90,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/feedback/:token" element={<FeedbackForm />} />
+          <Route path="/nps/:token" element={<NpsForm />} />
           <Route path="/accept-invite/:token" element={<AcceptInvite />} />
           <Route
             path="/*"

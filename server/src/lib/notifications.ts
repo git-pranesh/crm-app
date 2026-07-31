@@ -14,7 +14,8 @@ export type NotificationType =
   | 'DIP_CHECKLIST_COMPLETE'
   | 'STAGE_MOVED_BACKWARD'
   | 'INTENT_RATING_CHANGED'
-  | 'ON_HOLD_REOPEN';
+  | 'ON_HOLD_REOPEN'
+  | 'NPS_SUBMITTED';
 
 export async function createNotification(
   userId: string,

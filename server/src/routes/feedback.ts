@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
+import { createNotification } from '../lib/notifications.js';
 
 export const feedbackRouter = Router();
 
@@ -38,10 +39,25 @@ feedbackRouter.post('/nps/:token', async (req, res) => {
     if (!nps) { res.status(404).json({ error: 'Invalid or expired NPS link' }); return; }
     if (nps.respondedAt) { res.status(409).json({ error: 'NPS score already submitted' }); return; }
 
-    await prisma.nPSResponse.update({
+    const updated = await prisma.nPSResponse.update({
       where: { id: nps.id },
       data: { score: Math.round(score), respondedAt: new Date() },
+      include: {
+        lead: {
+          select: {
+            id: true, leadId: true, name: true,
+            assignedDesignerId: true,
+          },
+        },
+      },
     });
+
+    // Notify assigned designer about the NPS submission (fire-and-forget)
+    if (updated.lead?.assignedDesignerId) {
+      const stageName = { SALE: 'Sales', ONBOARDING: 'Onboarding', DESIGN_FREEZE: 'Design Freeze', SIGN_OFF: 'Sign Off' }[updated.stage] ?? updated.stage;
+      const msg = `Client ${updated.lead.name} (${updated.lead.leadId}) rated you ${Math.round(score)}/10 for ${stageName}.`;
+      createNotification(updated.lead.assignedDesignerId, 'NPS_SUBMITTED', msg, updated.lead.id).catch(() => {});
+    }
 
     res.json({ message: 'Thank you for your feedback!' });
   } catch (err: any) {

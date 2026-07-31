@@ -8,6 +8,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
 import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
+import { createAndSendNps } from '../lib/npsHelper.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
@@ -134,12 +135,31 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       prisma.lead.count({ where }),
     ]);
 
+    // Batch-fetch NPS averages for this page of leads
+    const leadIds = leads.map((l: any) => l.id);
+    let npsAvgMap: Record<string, number | null> = {};
+    if (leadIds.length > 0) {
+      const npsData = await prisma.nPSResponse.findMany({
+        where: { leadId: { in: leadIds }, score: { not: null } },
+        select: { leadId: true, score: true },
+      });
+      const npsScores = new Map<string, number[]>();
+      for (const n of npsData) {
+        if (!npsScores.has(n.leadId)) npsScores.set(n.leadId, []);
+        npsScores.get(n.leadId)!.push(n.score!);
+      }
+      for (const [lId, scores] of npsScores) {
+        npsAvgMap[lId] = +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+      }
+    }
+
     // Augment each lead with isUnread flag — only meaningful for the assigned designer.
     // Other roles (BL, CRE, Branch Head) always receive isUnread:false so the badge
     // never appears for users who cannot clear it.
     const viewerIsDesigner = user.role === 'DESIGNER';
     const leadsWithMeta = leads.map((l: any) => ({
       ...l,
+      avgNps: npsAvgMap[l.id] ?? null,
       isUnread: viewerIsDesigner && l.assignedDesignerId === user.id && !l.firstOpenedAt,
     }));
 
@@ -471,7 +491,19 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
       prisma.lead.update({ where: { id: req.params.id }, data: { firstOpenedAt: new Date() } }).catch(() => {});
     }
 
-    res.json({ lead });
+    // NPS: per-stage scores and average for this lead
+    const npsRows = await prisma.nPSResponse.findMany({
+      where: { leadId: req.params.id },
+      select: { stage: true, score: true, sentAt: true, respondedAt: true },
+      orderBy: { sentAt: 'asc' },
+    });
+    const respondedNps = npsRows.filter((r) => r.score !== null);
+    const avgNps = respondedNps.length > 0
+      ? +(respondedNps.reduce((acc, r) => acc + r.score!, 0) / respondedNps.length).toFixed(1)
+      : null;
+    const npsPerStage = npsRows.reduce((acc, r) => ({ ...acc, [r.stage]: r }), {} as Record<string, typeof npsRows[0]>);
+
+    res.json({ lead, avgNps, npsPerStage });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -715,6 +747,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             id,
           );
         }
+        // NPS: trigger onboarding survey
+        createAndSendNps(id, 'ONBOARDING').catch(() => {});
+      }
+
+      // NPS: trigger sign-off survey when lead reaches HANDED_OVER
+      if (stage === 'HANDED_OVER') {
+        createAndSendNps(id, 'SIGN_OFF').catch(() => {});
       }
 
       // G5: Auto-assign BL when CRE moves lead to MQL and no BL is set

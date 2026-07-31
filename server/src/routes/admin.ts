@@ -614,6 +614,78 @@ adminRouter.get('/whatsapp-templates', async (_req, res) => {
 });
 
 // ── POST /api/admin/jobs/trigger — run a background job immediately ────────────
+// ── GET /admin/nps-tracker — NPS responses table for admin ────────────────────
+adminRouter.get('/nps-tracker', async (req, res) => {
+  try {
+    const { designerId, from, to } = req.query as Record<string, string>;
+
+    const where: any = { score: { not: null } };
+    if (designerId) {
+      where.lead = { assignedDesignerId: designerId };
+    }
+    if (from || to) {
+      where.respondedAt = {};
+      if (from) where.respondedAt.gte = new Date(from); // start of that calendar day (UTC)
+      if (to) {
+        // Make the end date inclusive: advance to midnight of the *next* day so
+        // every response submitted during `to` (any time) is included.
+        const toDate = new Date(to);
+        toDate.setUTCDate(toDate.getUTCDate() + 1);
+        where.respondedAt.lt = toDate;
+      }
+    }
+
+    const responses = await prisma.nPSResponse.findMany({
+      where,
+      include: {
+        lead: {
+          select: {
+            id: true,
+            leadId: true,
+            name: true,
+            assignedDesigner: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: { respondedAt: 'desc' },
+      take: 500,
+    });
+
+    // Group by lead
+    const grouped = new Map<string, {
+      leadDbId: string; leadId: string; leadName: string;
+      designerId: string | null; designerName: string;
+      scores: Record<string, number>;
+    }>();
+
+    for (const r of responses) {
+      if (!grouped.has(r.leadId)) {
+        grouped.set(r.leadId, {
+          leadDbId: r.lead.id,
+          leadId: r.lead.leadId,
+          leadName: r.lead.name,
+          designerId: r.lead.assignedDesigner?.id ?? null,
+          designerName: r.lead.assignedDesigner?.name ?? '—',
+          scores: {},
+        });
+      }
+      grouped.get(r.leadId)!.scores[r.stage] = r.score!;
+    }
+
+    const rows = Array.from(grouped.values()).map((row) => {
+      const allScores = Object.values(row.scores);
+      const avgNps = allScores.length > 0
+        ? +(allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1)
+        : null;
+      return { ...row, avgNps };
+    });
+
+    res.json({ rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 adminRouter.post('/jobs/trigger', async (req, res) => {
   try {
     const { job } = req.body as { job?: string };
