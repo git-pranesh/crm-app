@@ -93,6 +93,15 @@ enum FieldType {
   SELECT
 }
 
+enum LeadFileType {
+  FLOOR_PLAN
+  LIFESTYLE_CAPTURE
+  PITCH_PRESENTATION
+  QUOTATION
+  GENERATED_QUOTE
+  OTHER
+}
+
 enum ProjectPhase {
   DESIGN
   TECHNICAL
@@ -154,6 +163,7 @@ model User {
   sentInvites              UserInvite[]      @relation("InvitedBy")
   intentRatingOverrides    IntentRatingLog[]
   designerProjects         Project[]
+  uploadedFiles            LeadFile[]
 
   @@map("users")
 }
@@ -258,6 +268,7 @@ model Lead {
   intentRatingLogs     IntentRatingLog[]
   npsResponses         NPSResponse[]
   project              Project?
+  leadFiles            LeadFile[]
 
   @@map("leads")
 }
@@ -595,6 +606,24 @@ model UserInvite {
   invitedBy User @relation("InvitedBy", fields: [invitedById], references: [id])
 
   @@map("user_invites")
+}
+
+model LeadFile {
+  id           String       @id @default(cuid())
+  leadId       String
+  stage        LeadStage
+  fileType     LeadFileType
+  fileName     String
+  /// Supabase Storage path in private bucket crm-lead-files
+  storagePath  String
+  uploadedById String
+  createdAt    DateTime     @default(now())
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([leadId, stage])
+  @@map("lead_files")
 }
 
 model DIPChecklist {

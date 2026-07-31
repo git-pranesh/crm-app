@@ -28,7 +28,13 @@ export type StageRequirement =
     }
   | { type: 'meeting'; meetingType: 'DQL' | 'PP'; label: string }
   | { type: 'quote'; label: string }
-  | { type: 'dip'; label: string };
+  | { type: 'dip'; label: string }
+  /**
+   * File gate: a LeadFile with the given fileType must exist in one of the
+   * listed stages. For FLOOR_PLAN the legacy `floorPlanUrl` field on the lead
+   * is also accepted as a fallback so existing leads are not broken.
+   */
+  | { type: 'file'; fileType: string; stages: string[]; label: string };
 
 export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   /**
@@ -46,28 +52,37 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   ],
   'MQL->DQL': [
     { type: 'meeting', meetingType: 'DQL', label: 'Scheduled DQL meeting' },
-    { type: 'field', field: 'floorPlanUrl', label: 'Floor plan uploaded' },
+    /**
+     * Floor plan accepted from either EL or MQL stage folder, or the legacy
+     * floorPlanUrl field (backward-compatible).
+     */
+    { type: 'file', fileType: 'FLOOR_PLAN', stages: ['EFFECTIVE_LEAD', 'MQL'], label: 'Floor plan uploaded (Files tab)' },
   ],
   'DQL->PROPOSAL_READY': [
-    { type: 'field', field: 'floorPlanUrl', label: 'Floor plan' },
+    { type: 'file', fileType: 'FLOOR_PLAN', stages: ['EFFECTIVE_LEAD', 'MQL', 'DQL'], label: 'Floor plan' },
+    { type: 'file', fileType: 'LIFESTYLE_CAPTURE', stages: ['DQL'], label: 'Lifestyle capture sheet (Files → DQL)' },
   ],
   'PROPOSAL_READY->PROPOSAL_PRESENTED': [
     { type: 'meeting', meetingType: 'PP', label: 'Scheduled proposal presentation (PP) meeting' },
+    { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_READY'], label: 'Pitch presentation (Files → PR)' },
   ],
   'PROPOSAL_PRESENTED->ONBOARDING': [
     { type: 'quote', label: 'Generated quote' },
+    { type: 'file', fileType: 'QUOTATION', stages: ['PROPOSAL_PRESENTED'], label: 'Quotation document (Files → PP)' },
   ],
   'ONBOARDING->HANDED_OVER': [
     { type: 'dip', label: 'Completed DIP checklist' },
+    { type: 'file', fileType: 'GENERATED_QUOTE', stages: ['ONBOARDING'], label: 'Generated quote document (Files → OB)' },
   ],
   /**
    * DQL → PROPOSAL_PRESENTED (direct skip of Proposal Ready).
-   * Confirmed as valid transition; requires the same items as the two-step
-   * DQL→PR→PP path: floor plan AND a scheduled PP meeting.
+   * Requires floor plan + lifestyle capture + PP meeting + pitch presentation.
    */
   'DQL->PROPOSAL_PRESENTED': [
-    { type: 'field', field: 'floorPlanUrl', label: 'Floor plan uploaded' },
+    { type: 'file', fileType: 'FLOOR_PLAN', stages: ['EFFECTIVE_LEAD', 'MQL', 'DQL'], label: 'Floor plan' },
+    { type: 'file', fileType: 'LIFESTYLE_CAPTURE', stages: ['DQL'], label: 'Lifestyle capture sheet (Files → DQL)' },
     { type: 'meeting', meetingType: 'PP', label: 'Scheduled proposal presentation (PP) meeting' },
+    { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_READY', 'DQL'], label: 'Pitch presentation (Files → DQL or PR)' },
   ],
 };
 
@@ -175,6 +190,22 @@ export async function checkStageRequirements(
           select: { completedAt: true },
         });
         satisfied = !!dip?.completedAt;
+        break;
+      }
+      case 'file': {
+        const fileRecord = await prisma.leadFile.findFirst({
+          where: {
+            leadId: lead.id,
+            fileType: r.fileType as any,
+            ...(r.stages?.length ? { stage: { in: r.stages as any } } : {}),
+          },
+          select: { id: true },
+        });
+        satisfied = !!fileRecord;
+        // Backward-compat: floor plan field on the lead also satisfies FLOOR_PLAN check
+        if (!satisfied && r.fileType === 'FLOOR_PLAN') {
+          satisfied = hasValue(lead.floorPlanUrl);
+        }
         break;
       }
     }

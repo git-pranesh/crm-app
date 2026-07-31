@@ -36,6 +36,7 @@ import { acceptInviteRouter } from './routes/acceptInvite.js';
 import { dipChecklistRouter } from './routes/dipChecklist.js';
 import { calendarRouter } from './routes/calendar.js';
 import { projectsRouter } from './routes/projects.js';
+import { filesRouter } from './routes/files.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
@@ -119,6 +120,7 @@ app.use('/api/leads/:leadId/offer', leadOfferRouter);
 app.use('/api/leads/:leadId/discount-request', leadDiscountRouter);
 app.use('/api/leads/:leadId/questionnaire', questionnaireRouter);
 app.use('/api/leads/:leadId/dip-checklist', dipChecklistRouter);
+app.use('/api/leads/:leadId/files', filesRouter);
 
 // Bulk import
 app.use('/api/leads/import', importRouter);

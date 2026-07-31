@@ -13,9 +13,10 @@ import MeetingsTab from '../components/tabs/MeetingsTab';
 import WhatsAppTab from '../components/tabs/WhatsAppTab';
 import DiscountTab from '../components/tabs/DiscountTab';
 import QuoteTab from '../components/tabs/QuoteTab';
+import FilesTab from '../components/tabs/FilesTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 
-type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount';
+type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount' | 'files';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; phone2?: string;
@@ -517,6 +518,7 @@ export default function LeadDetail() {
     { id: 'whatsapp', label: 'WhatsApp' },
     { id: 'quotes', label: 'Quotes' },
     { id: 'discount', label: 'Discount' },
+    { id: 'files', label: 'Files' },
   ];
 
   const latestQuote = quotes[0];
@@ -1196,6 +1198,9 @@ export default function LeadDetail() {
             {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
             {activeTab === 'quotes' && lead && <QuoteTab leadId={leadId!} leadRef={lead.leadId} />}
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
+            {activeTab === 'files' && lead && (
+              <FilesTab leadId={leadId!} currentStage={lead.stage} />
+            )}
           </div>
         </div>
 
