@@ -244,6 +244,8 @@ export default function LeadDetail() {
   const [stageModal, setStageModal] = useState(false);
   const [newStage, setNewStage] = useState('');
   const [inactivationReason, setInactivationReason] = useState('');
+  const [onHoldReason, setOnHoldReason] = useState('');
+  const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
   const [changingStage, setChangingStage] = useState(false);
 
   const [intentModal, setIntentModal] = useState(false);
@@ -347,9 +349,10 @@ export default function LeadDetail() {
     setSearchParams({ tab });
   };
 
-  const openStageModal = () => { setNewStage(lead?.stage ?? ''); setInactivationReason(''); setStageModal(true); };
+  const resetStageModalFields = () => { setInactivationReason(''); setOnHoldReason(''); setOnHoldReopenDate(''); };
+  const openStageModal = () => { setNewStage(lead?.stage ?? ''); resetStageModalFields(); setStageModal(true); };
   /** Opens the stage modal pre-selected to a specific target stage */
-  const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); setInactivationReason(''); setStageModal(true); };
+  const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); resetStageModalFields(); setStageModal(true); };
 
   const toLocalDatetimeInput = (iso: string) => {
     const d = new Date(iso);
@@ -428,9 +431,21 @@ export default function LeadDetail() {
     if (newStage === 'INACTIVE' && !inactivationReason.trim()) {
       toast.error('Please provide a reason for inactivation'); return;
     }
+    if (newStage === 'ON_HOLD') {
+      if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
+      if (!onHoldReopenDate) { toast.error('Please select a reopen date'); return; }
+      if (new Date(onHoldReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
+    }
     setChangingStage(true);
     try {
-      await api.patch(`/leads/${leadId}`, { stage: newStage, ...(newStage === 'INACTIVE' && { inactivationReason }) });
+      await api.patch(`/leads/${leadId}`, {
+        stage: newStage,
+        ...(newStage === 'INACTIVE' && { inactivationReason }),
+        ...(newStage === 'ON_HOLD' && {
+          reason: onHoldReason,
+          onHoldRevivalDate: onHoldReopenDate,
+        }),
+      });
       toast.success(`Stage → ${STAGE_LABELS[newStage] ?? newStage}`);
       setStageModal(false);
       loadLead(); loadActivities();
@@ -577,7 +592,30 @@ export default function LeadDetail() {
                     required placeholder="e.g. Budget mismatch, not interested"
                     className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                     style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-                  <p className="text-xs text-stone-400 mt-1">Feedback email + SMS sent automatically.</p>
+                  <p className="text-xs text-stone-400 mt-1">Feedback email + SMS sent automatically to client and internal team.</p>
+                </div>
+              )}
+              {newStage === 'ON_HOLD' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                      Reason <span className="text-brand-500">*</span>
+                    </label>
+                    <textarea rows={2} value={onHoldReason} onChange={(e) => setOnHoldReason(e.target.value)}
+                      required placeholder="e.g. Client travelling, budget review pending"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                      Reopen date <span className="text-brand-500">*</span>
+                    </label>
+                    <input type="date" value={onHoldReopenDate} onChange={(e) => setOnHoldReopenDate(e.target.value)}
+                      required min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                    <p className="text-xs text-stone-400 mt-1">Client + internal team notified. Designer alerted on this date.</p>
+                  </div>
                 </div>
               )}
               <div className="flex gap-3">

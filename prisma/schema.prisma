@@ -208,6 +208,12 @@ model Lead {
   floorPlanUrl       String?
   stage              LeadStage      @default(EFFECTIVE_LEAD)
   onHoldRevivalDate  DateTime?
+  /// Reason for placing on hold — required when stage moves to ON_HOLD
+  onHoldReason       String?
+  /// Reason for marking inactive — required when stage moves to INACTIVE
+  inactiveReason     String?
+  /// Timestamp when the assigned designer first opened this lead's detail page
+  firstOpenedAt      DateTime?
   isDuplicate        Boolean        @default(false)
   assignedDesignerId String?
   assignedBLId       String?

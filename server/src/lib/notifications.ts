@@ -13,7 +13,8 @@ export type NotificationType =
   | 'DQL_QUESTIONNAIRE'
   | 'DIP_CHECKLIST_COMPLETE'
   | 'STAGE_MOVED_BACKWARD'
-  | 'INTENT_RATING_CHANGED';
+  | 'INTENT_RATING_CHANGED'
+  | 'ON_HOLD_REOPEN';
 
 export async function createNotification(
   userId: string,

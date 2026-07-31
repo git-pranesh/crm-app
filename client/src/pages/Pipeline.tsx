@@ -24,9 +24,21 @@ interface Lead {
   _count?: { calls: number; meetings: number; followUpTasks: number };
 }
 
-const KANBAN_STAGES = [
+const KANBAN_STAGES_ALL = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING',
 ] as const;
+
+const KANBAN_STAGES_DESIGNER = [
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING',
+] as const;
+
+function getCurrentUserRole(): string {
+  try {
+    const raw = localStorage.getItem('crm_user');
+    if (!raw) return '';
+    return JSON.parse(raw)?.role ?? '';
+  } catch { return ''; }
+}
 
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead',
@@ -194,6 +206,15 @@ export default function Pipeline() {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const dragCounters = useRef<Record<string, number>>({});
 
+  const userRole = getCurrentUserRole();
+  const KANBAN_STAGES = userRole === 'DESIGNER' ? KANBAN_STAGES_DESIGNER : KANBAN_STAGES_ALL;
+
+  // ── Pending-drop modal state (ON_HOLD / INACTIVE require extra fields) ─────
+  const [pendingDrop, setPendingDrop] = useState<{ lead: Lead; targetStage: string } | null>(null);
+  const [dropReason, setDropReason] = useState('');
+  const [dropReopenDate, setDropReopenDate] = useState('');
+  const [submittingDrop, setSubmittingDrop] = useState(false);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -272,7 +293,35 @@ export default function Pipeline() {
     }
   };
 
-  const handleDrop = async (e: React.DragEvent, targetStage: string) => {
+  /** Perform the actual PATCH after all required fields are collected. */
+  const commitDrop = async (lead: Lead, targetStage: string, extraFields: Record<string, string>) => {
+    const originalStage = lead.stage;
+    setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: targetStage } : l));
+    try {
+      const token = localStorage.getItem('crm_token');
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ stage: targetStage, ...extraFields }),
+      });
+      if (res.ok) {
+        toast.success(`${lead.name} → ${STAGE_LABELS[targetStage] ?? targetStage}`);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: originalStage } : l));
+        const stageLabel = STAGE_LABELS[targetStage] ?? targetStage;
+        const msg = body.missing?.length
+          ? `Cannot move to ${stageLabel} — missing: ${body.missing.join(', ')}`
+          : (body.error ?? `Stage update failed (${res.status})`);
+        toast.error(msg, { duration: 6000 });
+      }
+    } catch {
+      setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: originalStage } : l));
+      toast.error('Stage update failed — network error', { duration: 6000 });
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetStage: string) => {
     e.preventDefault();
     dragCounters.current[targetStage] = 0;
     setDragOverStage(null);
@@ -282,39 +331,40 @@ export default function Pipeline() {
       return;
     }
 
-    const originalStage = draggedLead.stage;
-
-    setLeads((prev) =>
-      prev.map((l) => l.id === draggedLead.id ? { ...l, stage: targetStage } : l)
-    );
+    const lead = draggedLead;
     setDraggedLead(null);
 
-    try {
-      const token = localStorage.getItem('crm_token');
-      const res = await fetch(`/api/leads/${draggedLead.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ stage: targetStage }),
-      });
-      if (res.ok) {
-        toast.success(`${draggedLead.name} → ${STAGE_LABELS[targetStage] ?? targetStage}`);
-      } else {
-        const body = await res.json().catch(() => ({}));
-        setLeads((prev) =>
-          prev.map((l) => l.id === draggedLead.id ? { ...l, stage: originalStage } : l)
-        );
-        const stageLabel = STAGE_LABELS[targetStage] ?? targetStage;
-        const msg = body.missing?.length
-          ? `Cannot move to ${stageLabel} — missing: ${body.missing.join(', ')}`
-          : (body.error ?? `Stage update failed (${res.status})`);
-        toast.error(msg, { duration: 6000 });
-      }
-    } catch {
-      setLeads((prev) =>
-        prev.map((l) => l.id === draggedLead.id ? { ...l, stage: originalStage } : l)
-      );
-      toast.error('Stage update failed — network error', { duration: 6000 });
+    // ON_HOLD and INACTIVE require mandatory fields — show collection modal first.
+    if (targetStage === 'ON_HOLD' || targetStage === 'INACTIVE') {
+      setDropReason('');
+      setDropReopenDate('');
+      setPendingDrop({ lead, targetStage });
+      return;
     }
+
+    // All other stage moves can proceed immediately.
+    commitDrop(lead, targetStage, {});
+  };
+
+  const handleDropModalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingDrop) return;
+    const { lead, targetStage } = pendingDrop;
+
+    if (!dropReason.trim()) { toast.error('A reason is required'); return; }
+    if (targetStage === 'ON_HOLD') {
+      if (!dropReopenDate) { toast.error('A reopen date is required'); return; }
+      if (new Date(dropReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
+    }
+
+    setSubmittingDrop(true);
+    const extra: Record<string, string> = { reason: dropReason.trim() };
+    if (targetStage === 'ON_HOLD') extra.onHoldRevivalDate = dropReopenDate;
+    if (targetStage === 'INACTIVE') extra.inactivationReason = dropReason.trim();
+
+    setPendingDrop(null);
+    await commitDrop(lead, targetStage, extra);
+    setSubmittingDrop(false);
   };
 
   const handleDragEnd = () => {
@@ -498,6 +548,79 @@ export default function Pipeline() {
 
       {/* Invisible drag-end capture */}
       <div onDragEnd={handleDragEnd} className="fixed inset-0 pointer-events-none z-0" />
+
+      {/* ── ON_HOLD / INACTIVE drop-collection modal ─────────────────────────── */}
+      {pendingDrop && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">
+              Move to {STAGE_LABELS[pendingDrop.targetStage] ?? pendingDrop.targetStage}
+            </h3>
+            <p className="text-xs text-stone-400 mb-4">{pendingDrop.lead.name}</p>
+            <form onSubmit={handleDropModalSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={dropReason}
+                  onChange={(e) => setDropReason(e.target.value)}
+                  required
+                  placeholder={
+                    pendingDrop.targetStage === 'ON_HOLD'
+                      ? 'e.g. Client travelling, budget review pending'
+                      : 'e.g. Budget mismatch, not interested'
+                  }
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                />
+              </div>
+              {pendingDrop.targetStage === 'ON_HOLD' && (
+                <div>
+                  <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                    Reopen date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={dropReopenDate}
+                    onChange={(e) => setDropReopenDate(e.target.value)}
+                    required
+                    min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                  />
+                  <p className="text-xs text-stone-400 mt-1">
+                    Client notified automatically. Designer alerted on this date.
+                  </p>
+                </div>
+              )}
+              {pendingDrop.targetStage === 'INACTIVE' && (
+                <p className="text-xs text-stone-400">
+                  Feedback email + SMS sent to client automatically.
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingDrop(null)}
+                  className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingDrop}
+                  className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {submittingDrop ? 'Saving…' : 'Confirm'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

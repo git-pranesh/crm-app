@@ -10,6 +10,8 @@ interface Lead {
   source?: string; stage: string; isSLABreached: boolean;
   estimatedValue?: string | null; intentRating?: number | null;
   onHoldRevivalDate?: string | null;
+  firstOpenedAt?: string | null;
+  isUnread?: boolean;
   createdAt: string; updatedAt: string;
   assignedDesigner?: { id: string; name: string } | null;
   assignedBL?: { id: string; name: string } | null;
@@ -35,10 +37,22 @@ const STAGE_LABELS: Record<string, string> = {
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 
-const STAGE_OPTIONS = [
+const STAGE_OPTIONS_ALL = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
   'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
 ];
+const STAGE_OPTIONS_DESIGNER = [
+  'MQL', 'DQL', 'PROPOSAL_READY',
+  'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+];
+
+function getCurrentUserRole(): string {
+  try {
+    const raw = localStorage.getItem('crm_user');
+    if (!raw) return '';
+    return JSON.parse(raw)?.role ?? '';
+  } catch { return ''; }
+}
 
 const SOURCE_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
 
@@ -119,6 +133,9 @@ export default function LeadList() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '' });
+
+  const userRole = getCurrentUserRole();
+  const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
 
   const load = useCallback(async () => {
@@ -342,20 +359,28 @@ export default function LeadList() {
                   <tbody>
                     {leads.map((lead) => {
                       const status = deriveStatus(lead.stage);
+                      const isUnread = lead.isUnread && lead.assignedDesigner;
                       return (
                         <tr
                           key={lead.id}
                           onClick={() => navigate(`/leads/${lead.id}`)}
                           className="cursor-pointer transition-colors"
-                          style={{ borderBottom: '1px solid #F5F0EB' }}
+                          style={{
+                            borderBottom: '1px solid #F5F0EB',
+                            borderLeft: isUnread ? '3px solid #d95f32' : '3px solid transparent',
+                            background: isUnread ? '#FDFAF7' : undefined,
+                          }}
                           onMouseEnter={(e) => (e.currentTarget.style.background = '#FAF6F2')}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = isUnread ? '#FDFAF7' : '')}
                         >
                           <td className="py-3 px-4">
                             <span className="text-brand-600 font-mono text-xs font-bold">{lead.leadId}</span>
                             {lead.isSLABreached && <AlertTriangle size={10} strokeWidth={2.5} className="ml-1 text-red-400 inline" />}
+                            {isUnread && <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full">NEW</span>}
                           </td>
-                          <td className="py-3 px-4 font-semibold text-stone-900 whitespace-nowrap">{lead.name}</td>
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className={isUnread ? 'font-extrabold text-stone-900' : 'font-semibold text-stone-900'}>{lead.name}</span>
+                          </td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}>
                               {STAGE_LABELS[lead.stage] ?? lead.stage}

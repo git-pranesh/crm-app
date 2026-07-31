@@ -7,7 +7,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
-import { sendEmail, inactivationEmail, onHoldEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
+import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
@@ -134,7 +134,16 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       prisma.lead.count({ where }),
     ]);
 
-    res.json({ leads, total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) });
+    // Augment each lead with isUnread flag — only meaningful for the assigned designer.
+    // Other roles (BL, CRE, Branch Head) always receive isUnread:false so the badge
+    // never appears for users who cannot clear it.
+    const viewerIsDesigner = user.role === 'DESIGNER';
+    const leadsWithMeta = leads.map((l: any) => ({
+      ...l,
+      isUnread: viewerIsDesigner && l.assignedDesignerId === user.id && !l.firstOpenedAt,
+    }));
+
+    res.json({ leads: leadsWithMeta, total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) });
   } catch (err: any) {
     console.error('[leads:list]', err.message);
     res.status(500).json({ error: err.message });
@@ -431,6 +440,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
 // ── GET /api/leads/:id — get lead detail ──────────────────────────────────────
 leadsRouter.get('/:id', verifyToken, async (req, res) => {
   try {
+    const viewer = req.user!;
     const lead = await prisma.lead.findUnique({
       where: { id: req.params.id },
       include: {
@@ -451,6 +461,16 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
       },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    // Track first open by the assigned designer (fire-and-forget)
+    if (
+      viewer.role === 'DESIGNER' &&
+      lead.assignedDesignerId === viewer.id &&
+      !lead.firstOpenedAt
+    ) {
+      prisma.lead.update({ where: { id: req.params.id }, data: { firstOpenedAt: new Date() } }).catch(() => {});
+    }
+
     res.json({ lead });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -468,8 +488,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       estimatedValue, intentRating, possessionTimeline,
       nextMeetingDate, floorPlanUrl,
       assignedDesignerId, assignedBLId,
-      onHoldRevivalDate, customFields,
-      inactivationReason,
+      onHoldRevivalDate, onHoldReason,
+      customFields,
+      inactivationReason, inactiveReason,
       reason,
       // Task #20 — new key-facts fields
       builder, offer1, offer2, offer3, expectedMoveIn,
@@ -498,6 +519,31 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
 
     const prevStage = existing.stage;
+
+    // ── ON_HOLD / INACTIVE mandatory fields ───────────────────────────────────
+    if (stage === 'ON_HOLD' && stage !== prevStage) {
+      if (!onHoldRevivalDate) {
+        res.status(400).json({ error: 'A reopen date is required when placing a lead on hold.' });
+        return;
+      }
+      const reopenDate = new Date(onHoldRevivalDate);
+      if (isNaN(reopenDate.getTime()) || reopenDate <= new Date()) {
+        res.status(400).json({ error: 'The reopen date must be a future date.' });
+        return;
+      }
+      const resolvedOnHoldReason = onHoldReason?.trim() || reason?.trim() || '';
+      if (!resolvedOnHoldReason) {
+        res.status(400).json({ error: 'A reason is required when placing a lead on hold.' });
+        return;
+      }
+    }
+    if (stage === 'INACTIVE' && stage !== prevStage) {
+      const resolvedInactiveReason = inactiveReason?.trim() || inactivationReason?.trim() || '';
+      if (!resolvedInactiveReason) {
+        res.status(400).json({ error: 'A reason is required when marking a lead as inactive.' });
+        return;
+      }
+    }
 
     // ── Stage-gate: every configured transition must satisfy its required
     //    fields/actions (single source of truth in config/stageRequirements). ─
@@ -565,9 +611,19 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(possessionTimeline !== undefined && { possessionTimeline: possessionTimeline?.trim() || null }),
         ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
         ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
-        ...(assignedDesignerId !== undefined && { assignedDesignerId: assignedDesignerId || null }),
+        ...(assignedDesignerId !== undefined && {
+          assignedDesignerId: assignedDesignerId || null,
+          // Reset firstOpenedAt when designer changes so the new assignee starts unread.
+          ...(assignedDesignerId !== existing.assignedDesignerId && { firstOpenedAt: null }),
+        }),
         ...(assignedBLId !== undefined && { assignedBLId: assignedBLId || null }),
         ...(onHoldRevivalDate && { onHoldRevivalDate: new Date(onHoldRevivalDate) }),
+        ...(stage === 'ON_HOLD' && stage !== prevStage && {
+          onHoldReason: (onHoldReason?.trim() || reason?.trim() || ''),
+        }),
+        ...(stage === 'INACTIVE' && stage !== prevStage && {
+          inactiveReason: (inactiveReason?.trim() || inactivationReason?.trim() || ''),
+        }),
         ...(customFields && {
           customFields: { ...(existing.customFields as Record<string, unknown> ?? {}), ...customFields },
         }),
@@ -744,12 +800,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
+      // ── Canonical reasons — resolved once, used by every outbound path ────────
+      const canonicalHoldReason   = onHoldReason?.trim()     || reason?.trim()             || 'To be confirmed';
+      const canonicalInactiveReason = inactiveReason?.trim() || inactivationReason?.trim() || 'Not specified';
+
       // ON_HOLD notifications — SMS, Email, WhatsApp (all independent)
       if (stage === 'ON_HOLD' && existing.phone) {
         const revivalStr = onHoldRevivalDate
           ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
           : 'a future date';
-        const holdReason = reason ?? 'To be confirmed';
 
         sendSms(
           existing.phone,
@@ -763,7 +822,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             const emailPayload = onHoldEmail({
               clientName: existing.name,
               revivalDate: revivalStr,
-              reason: holdReason,
+              reason: canonicalHoldReason,
             });
             emailPayload.to = existing.email;
             await sendEmail(emailPayload);
@@ -787,7 +846,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           const waBody = fillTemplate('on_hold_notification', {
             clientName: existing.name,
             revivalDate: revivalStr,
-            reason: holdReason,
+            reason: canonicalHoldReason,
           });
           const twilioSid = await sendWhatsAppMessage(existing.phone, waBody);
           if (twilioSid) {
@@ -806,6 +865,32 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
+      // ON_HOLD — internal team notification
+      if (stage === 'ON_HOLD') {
+        const revivalStr2 = onHoldRevivalDate
+          ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
+          : 'a future date';
+        const internalTargetIds = [existing.assignedBLId, existing.assignedDesignerId].filter(Boolean) as string[];
+        if (internalTargetIds.length) {
+          const internalTargets = await prisma.user.findMany({
+            where: { id: { in: internalTargetIds } },
+            select: { id: true, name: true, email: true },
+          });
+          for (const t of internalTargets) {
+            const payload = onHoldInternalEmail({
+              recipientName: t.name,
+              leadId: existing.leadId,
+              leadName: existing.name,
+              revivalDate: revivalStr2,
+              reason: canonicalHoldReason,
+              movedByName: user.name,
+            });
+            payload.to = t.email;
+            sendEmail(payload).catch(() => {});
+          }
+        }
+      }
+
       // INACTIVE — create feedback record, send email + SMS
       if (stage === 'INACTIVE') {
         const formToken = randomUUID();
@@ -816,12 +901,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           where: { leadId: id },
           create: {
             leadId: id,
-            reason: inactivationReason ?? 'Not specified',
+            reason: canonicalInactiveReason,
             formToken,
             feedbackFormSentAt: new Date(),
           },
           update: {
-            reason: inactivationReason ?? 'Not specified',
+            reason: canonicalInactiveReason,
             formToken,
             feedbackFormSentAt: new Date(),
             respondedAt: null,
@@ -833,7 +918,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           const emailPayload = inactivationEmail({
             clientName: existing.name,
             feedbackUrl,
-            reason: inactivationReason,
+            reason: canonicalInactiveReason,
           });
           emailPayload.to = existing.email;
           sendEmail(emailPayload).catch((e) => console.warn('[leads:email:inactive]', e.message));
@@ -854,6 +939,26 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             `Hi ${existing.name}, thank you for your interest in Interiors by DeX. We'd love your feedback: ${feedbackUrl} - Interiors by DeX`,
             id,
           ).catch((e) => console.warn('[leads:sms:inactive]', e.message));
+        }
+
+        // INACTIVE — internal team notification
+        const inactiveTargetIds = [existing.assignedBLId, existing.assignedDesignerId].filter(Boolean) as string[];
+        if (inactiveTargetIds.length) {
+          const inactiveTargets = await prisma.user.findMany({
+            where: { id: { in: inactiveTargetIds } },
+            select: { id: true, name: true, email: true },
+          });
+          for (const t of inactiveTargets) {
+            const payload = inactiveInternalEmail({
+              recipientName: t.name,
+              leadId: existing.leadId,
+              leadName: existing.name,
+              reason: canonicalInactiveReason,
+              movedByName: user.name,
+            });
+            payload.to = t.email;
+            sendEmail(payload).catch(() => {});
+          }
         }
       }
     }

@@ -160,6 +160,46 @@ export function noShowNoPlanEmail(opts: {
   };
 }
 
+export function onHoldInternalEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  revivalDate: string;
+  reason: string;
+  movedByName: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Lead ${opts.leadId} placed On Hold — Interiors by DeX CRM`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has been placed <strong>On Hold</strong>.</p>
+<p><strong>Reason:</strong> ${opts.reason}<br/>
+<strong>Revival Date:</strong> ${opts.revivalDate}<br/>
+<strong>Actioned by:</strong> ${opts.movedByName}</p>
+<p>The client has been notified automatically. No further action is needed until the revival date.</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
+export function inactiveInternalEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  reason: string;
+  movedByName: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Lead ${opts.leadId} marked Inactive — Interiors by DeX CRM`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has been marked <strong>Inactive</strong>.</p>
+<p><strong>Reason:</strong> ${opts.reason}<br/>
+<strong>Actioned by:</strong> ${opts.movedByName}</p>
+<p>A feedback email and SMS have been sent to the client automatically.</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
 export function onHoldEmail(opts: {
   clientName: string;
   revivalDate: string;
