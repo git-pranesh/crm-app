@@ -59,6 +59,13 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       isSLABreached, page = '1', limit = '50',
       projectType, location, dateRange, intent,
       status,
+      // New pipeline filters (task #27)
+      originDateFrom, originDateTo, originMonth,
+      budgetMin, budgetMax,
+      possessionDateFrom, possessionDateTo,
+      intentMin,
+      projectedObFrom, projectedObTo,
+      pipelineMode,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -112,12 +119,94 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.createdAt = { gte: new Date(from), lte: new Date(to) };
     }
     if (search) {
-      where.OR = [
+      // Use AND so we never overwrite an existing where.OR set by role scoping
+      // (e.g. CRE has where.OR = [assignedDesignerId, createdById]).
+      // Appending to AND means: (role_scope) AND (name|phone|leadId|email match).
+      const searchOr = [
         { name: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search } },
         { leadId: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
       ];
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOr }];
+    }
+
+    // ── Task #27 new pipeline filters ────────────────────────────────────────
+    // pipelineMode: hide EFFECTIVE_LEAD for designer/CRE views when no explicit
+    // stage filter is already applied.
+    if (
+      pipelineMode === '1' &&
+      (user.role === 'DESIGNER' || user.role === 'CRE') &&
+      !stage && !status
+    ) {
+      where.stage = { not: 'EFFECTIVE_LEAD' as any };
+    }
+
+    // Origin date range / billing-cycle month (16th–15th).
+    // originDateFrom/To take precedence over originMonth.
+    if (originDateFrom || originDateTo) {
+      const existingCat = where.createdAt ?? {};
+      if (originDateFrom) (existingCat as any).gte = new Date(originDateFrom);
+      if (originDateTo) {
+        // include full end day
+        const end = new Date(originDateTo);
+        end.setHours(23, 59, 59, 999);
+        (existingCat as any).lte = end;
+      }
+      where.createdAt = existingCat;
+    } else if (originMonth && !dateRange) {
+      // originMonth = "YYYY-MM"; billing cycle: the 16th of that month →
+      // the 15th of the following month.
+      const [y, m] = originMonth.split('-').map(Number);
+      const from = new Date(y, m - 1, 16);             // e.g. Jul 16
+      const to   = new Date(y, m, 15, 23, 59, 59, 999); // e.g. Aug 15
+      where.createdAt = { gte: from, lte: to };
+    }
+
+    // Budget / estimated value range.
+    if (budgetMin || budgetMax) {
+      const ev: any = {};
+      if (budgetMin) {
+        const n = parseFloat(budgetMin);
+        if (!isNaN(n)) ev.gte = n;
+      }
+      if (budgetMax) {
+        const n = parseFloat(budgetMax);
+        if (!isNaN(n)) ev.lte = n;
+      }
+      where.estimatedValue = ev;
+    }
+
+    // Possession / expected move-in date range.
+    if (possessionDateFrom || possessionDateTo) {
+      const em: any = {};
+      if (possessionDateFrom) em.gte = new Date(possessionDateFrom);
+      if (possessionDateTo) {
+        const end = new Date(possessionDateTo);
+        end.setHours(23, 59, 59, 999);
+        em.lte = end;
+      }
+      where.expectedMoveIn = em;
+    }
+
+    // Intent minimum rating (star selector — "at least N stars").
+    // Takes precedence over the existing exact-match `intent` param.
+    if (intentMin) {
+      const min = parseInt(intentMin);
+      if (!isNaN(min)) where.intentRating = { gte: min };
+    }
+
+    // Projected OB date range: mapped to nextMeetingDate (closest available
+    // field; a dedicated projectedObDate column can be added in future).
+    if (projectedObFrom || projectedObTo) {
+      const pb: any = {};
+      if (projectedObFrom) pb.gte = new Date(projectedObFrom);
+      if (projectedObTo) {
+        const end = new Date(projectedObTo);
+        end.setHours(23, 59, 59, 999);
+        pb.lte = end;
+      }
+      where.nextMeetingDate = pb;
     }
 
     const pageNum = Math.max(1, parseInt(page));
@@ -403,12 +492,14 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
     if (projectType) where.projectType = projectType;
     if (location) where.location = { contains: location, mode: 'insensitive' };
     if (search) {
-      where.OR = [
+      // Same AND-wrap as the list handler — never overwrite role-scope OR clauses.
+      const searchOr = [
         { name: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search } },
         { email: { contains: search, mode: 'insensitive' } },
         { leadId: { contains: search, mode: 'insensitive' } },
       ];
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : []), { OR: searchOr }];
     }
     if (intent) {
       const intentVal = parseInt(intent);

@@ -53,6 +53,76 @@ projectsRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/projects/pipeline — designer's active project pipeline ──────────
+// Must be placed BEFORE /:id to avoid the param matcher swallowing "pipeline".
+projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+
+    // Only DESIGNER and CRE have a Design Pipeline view.
+    // BL/BRANCH_HEAD can call /api/projects directly for team project lists.
+    if (user.role !== 'DESIGNER' && user.role !== 'CRE') {
+      res.status(403).json({ error: 'Design Pipeline is only available to DESIGNER and CRE roles' });
+      return;
+    }
+
+    const projects = await prisma.project.findMany({
+      where: {
+        designerId: user.id,
+        phase: { not: 'COMPLETED' },
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            leadId: true,
+            name: true,
+            phone: true,
+            expectedMoveIn: true,
+            estimatedValue: true,
+          },
+        },
+        attentionFlags: {
+          where: { resolvedAt: null },
+          select: { id: true, category: true, description: true },
+        },
+        _count: { select: { collections: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const now = Date.now();
+    const result = projects.map((p) => ({
+      id: p.id,
+      projectCode: p.projectCode,
+      phase: p.phase,
+      health: p.health,
+      progressPercent: p.progressPercent,
+      contractValue: p.contractValue != null ? Number(p.contractValue) : null,
+      outstandingAmount: p.outstandingAmount != null ? Number(p.outstandingAmount) : null,
+      handoverTargetDate: p.handoverTargetDate?.toISOString() ?? null,
+      createdAt: p.createdAt.toISOString(),
+      updatedAt: p.updatedAt.toISOString(),
+      totalActiveDays: Math.floor((now - p.createdAt.getTime()) / 86_400_000),
+      collectionsCount: p._count.collections,
+      attentionFlags: p.attentionFlags,
+      lead: {
+        id: p.lead.id,
+        leadId: p.lead.leadId,
+        name: p.lead.name,
+        phone: p.lead.phone,
+        expectedMoveIn: p.lead.expectedMoveIn?.toISOString() ?? null,
+        estimatedValue: p.lead.estimatedValue != null ? Number(p.lead.estimatedValue) : null,
+      },
+    }));
+
+    res.json({ projects: result, total: result.length });
+  } catch (err: any) {
+    console.error('[projects:pipeline]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/projects/:id — project detail ───────────────────────────────────
 projectsRouter.get('/:id', verifyToken, async (req, res) => {
   try {
