@@ -1087,6 +1087,30 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
   }
 });
 
+// ── GET /api/leads/:id/can-advance?toStage=STAGE — gate pre-check ────────────
+leadsRouter.get('/:id/can-advance', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { toStage } = req.query as { toStage?: string };
+    if (!toStage) {
+      res.status(400).json({ error: 'toStage query parameter is required' });
+      return;
+    }
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    // Scope check: same policy as lead detail access
+    const { isAuthorizedForLead } = await import('../lib/leadAuth.js');
+    if (!(await isAuthorizedForLead(lead, req.user!))) {
+      res.status(403).json({ error: 'Not authorised for this lead' });
+      return;
+    }
+    const result = await checkStageRequirements(lead as any, lead.stage, toStage);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/leads/:id/floor-plan — upload floor plan file to Supabase Storage ──
 // Multer errors (LIMIT_FILE_SIZE, malformed multipart) are handled by the inner
 // callback so they are always returned as JSON rather than Express's default HTML.

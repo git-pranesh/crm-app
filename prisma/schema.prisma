@@ -47,6 +47,7 @@ enum CallOutcome {
 enum MeetingType {
   DQL
   PP
+  ONBOARDING
 }
 
 enum MeetingMode {
@@ -275,15 +276,25 @@ model Contact {
 }
 
 model Call {
-  id           String      @id @default(cuid())
-  leadId       String
-  loggedById   String
-  outcome      CallOutcome
+  id                String      @id @default(cuid())
+  leadId            String
+  loggedById        String
+  outcome           CallOutcome
   /// Duration in seconds
-  duration     Int?
-  notes        String?
-  recordingUrl String?
-  createdAt    DateTime    @default(now())
+  duration          Int?
+  notes             String?
+  recordingUrl      String?
+  /// Free-text agenda / purpose of the call
+  agenda            String?
+  /// Meeting location or context (e.g. "Office", "Client's site")
+  location          String?
+  /// Actual date-time of the call (may differ from log createdAt)
+  calledAt          DateTime?
+  /// JSON array of { type: string; fileUrl?: string } for call attachments
+  attachments       Json?
+  /// Planned next action after this call
+  nextPlanOfAction  String?
+  createdAt         DateTime    @default(now())
 
   lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   loggedBy User @relation(fields: [loggedById], references: [id])
@@ -323,6 +334,10 @@ model Meeting {
   /// Minutes of Meeting — mandatory when status → COMPLETED
   mom               String?
   outcome           String?
+  /// Physical / virtual location of the meeting
+  location          String?
+  /// Array of { scheduledAt, reason, rescheduledAt } — appended on every reschedule
+  rescheduleHistory Json?
   confirmationSent  Boolean       @default(false)
   momSent           Boolean       @default(false)
   createdAt         DateTime      @default(now())

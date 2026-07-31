@@ -71,6 +71,11 @@ export interface CallRecord {
   duration?: number;
   notes?: string;
   recordingUrl?: string | null;
+  agenda?: string;
+  location?: string;
+  calledAt?: string;
+  attachments?: { type: string; fileUrl?: string }[];
+  nextPlanOfAction?: string;
   createdAt: string;
   loggedBy: { id: string; name: string; role: string };
 }
@@ -90,12 +95,16 @@ export interface FollowUpTask {
 
 export interface Meeting {
   id: string;
-  type: 'DQL' | 'PP';
+  type: 'DQL' | 'PP' | 'ONBOARDING';
   ppNumber?: number;
+  seqNumber?: number;
   mode: string;
   status: string;
   scheduledAt: string;
   rescheduledReason?: string;
+  noShowReason?: string;
+  location?: string;
+  rescheduleHistory?: { scheduledAt: string; reason: string; rescheduledAt: string }[];
   mom?: string;
   outcome?: string;
   confirmationSent: boolean;

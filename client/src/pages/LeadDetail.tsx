@@ -188,7 +188,7 @@ const SOURCE_OPTIONS = [
 /** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */
 const STAGE_GATE_INFO: Record<string, string[]> = {
   EFFECTIVE_LEAD: ['Client budget', 'Project type', 'Lead source', 'Location', 'Builder', 'Scope of work', 'Expected move-in date'],
-  MQL: ['Scheduled DQL meeting'],
+  MQL: ['Scheduled DQL meeting', 'Floor plan uploaded'],
   DQL: ['Floor plan uploaded'],
   PROPOSAL_READY: ['Scheduled PP (Proposal Presentation) meeting'],
   PROPOSAL_PRESENTED: ['Generated quote'],
@@ -260,6 +260,7 @@ export default function LeadDetail() {
 
   const [uploadingFloorPlan, setUploadingFloorPlan] = useState(false);
   const floorPlanInputRef = useRef<HTMLInputElement>(null);
+  const [stagePushPrompt, setStagePushPrompt] = useState<{ targetStage: string; label: string } | null>(null);
 
   const [stageHistory, setStageHistory] = useState<StageVisit[]>([]);
   const [leadFollowUpTasks, setLeadFollowUpTasks] = useState<FollowUpTask[]>([]);
@@ -311,6 +312,30 @@ export default function LeadDetail() {
   useEffect(() => { loadStageHistory(); }, [loadStageHistory]);
   useEffect(() => { loadFollowUpTasks(); }, [loadFollowUpTasks]);
 
+  /** Called by MeetingsTab after a meeting is marked COMPLETED */
+  const handleMeetingCompleted = useCallback(async (meetingType: string) => {
+    if (!lead) return;
+    const PROMPTS: Record<string, { from: string; label: string; targetStage: string }[]> = {
+      DQL: [{ from: 'MQL', targetStage: 'DQL', label: 'DQL' }],
+      PP: [
+        { from: 'PROPOSAL_READY', targetStage: 'PROPOSAL_PRESENTED', label: 'Proposal Presented' },
+        { from: 'DQL', targetStage: 'PROPOSAL_PRESENTED', label: 'Proposal Presented' }, // direct DQL→PP
+      ],
+      ONBOARDING: [{ from: 'PROPOSAL_PRESENTED', targetStage: 'ONBOARDING', label: 'Onboarding' }],
+    };
+    const candidates = (PROMPTS[meetingType] ?? []).filter((p) => p.from === lead.stage);
+    if (!candidates.length) return;
+    const p = candidates[0];
+    try {
+      // Pre-check gate requirements — only show the prompt if the server will accept the move
+      const result = await api.get<{ ok: boolean }>(`/leads/${lead.id}/can-advance?toStage=${p.targetStage}`);
+      if (!result.ok) return; // gate not satisfied — don't prompt
+    } catch {
+      return; // endpoint unavailable — don't prompt
+    }
+    setStagePushPrompt({ targetStage: p.targetStage, label: p.label });
+  }, [lead]);
+
   useEffect(() => {
     const t = searchParams.get('tab') as Tab | null;
     if (t) setActiveTab(t);
@@ -322,6 +347,8 @@ export default function LeadDetail() {
   };
 
   const openStageModal = () => { setNewStage(lead?.stage ?? ''); setInactivationReason(''); setStageModal(true); };
+  /** Opens the stage modal pre-selected to a specific target stage */
+  const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); setInactivationReason(''); setStageModal(true); };
 
   const toLocalDatetimeInput = (iso: string) => {
     const d = new Date(iso);
@@ -498,6 +525,34 @@ export default function LeadDetail() {
 
   return (
     <div className="min-h-screen">
+      {/* ── Auto Stage-Advance Prompt (after meeting completed) ─────────────── */}
+      {stagePushPrompt && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="text-3xl mb-3">🎉</div>
+            <h3 className="font-semibold text-gray-900 text-lg mb-2">Meeting Completed!</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Would you like to advance this lead to <strong>{stagePushPrompt.label}</strong>?
+              The server will verify all gate requirements before accepting the move.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStagePushPrompt(null)}
+                className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50 transition-colors"
+              >
+                Not yet
+              </button>
+              <button
+                onClick={() => { const t = stagePushPrompt!.targetStage; setStagePushPrompt(null); openStageModalTo(t); }}
+                className="flex-1 bg-brand-500 text-white py-2 rounded-xl text-sm font-medium hover:bg-brand-600 transition-colors"
+              >
+                Advance Stage →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Stage-change modal ────────────────────────────────────────────────── */}
       {stageModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1131,7 +1186,13 @@ export default function LeadDetail() {
 
             {activeTab === 'calls' && <CallLogTab leadId={leadId!} />}
             {activeTab === 'followups' && <FollowUpTab leadId={leadId!} />}
-            {activeTab === 'meetings' && <MeetingsTab leadId={leadId!} onMeetingCreated={loadLead} />}
+            {activeTab === 'meetings' && (
+              <MeetingsTab
+                leadId={leadId!}
+                onMeetingCreated={loadLead}
+                onMeetingCompleted={handleMeetingCompleted}
+              />
+            )}
             {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
             {activeTab === 'quotes' && lead && <QuoteTab leadId={leadId!} leadRef={lead.leadId} />}
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}

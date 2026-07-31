@@ -46,6 +46,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   ],
   'MQL->DQL': [
     { type: 'meeting', meetingType: 'DQL', label: 'Scheduled DQL meeting' },
+    { type: 'field', field: 'floorPlanUrl', label: 'Floor plan uploaded' },
   ],
   'DQL->PROPOSAL_READY': [
     { type: 'field', field: 'floorPlanUrl', label: 'Floor plan' },
@@ -58,6 +59,15 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   ],
   'ONBOARDING->HANDED_OVER': [
     { type: 'dip', label: 'Completed DIP checklist' },
+  ],
+  /**
+   * DQL → PROPOSAL_PRESENTED (direct skip of Proposal Ready).
+   * Confirmed as valid transition; requires the same items as the two-step
+   * DQL→PR→PP path: floor plan AND a scheduled PP meeting.
+   */
+  'DQL->PROPOSAL_PRESENTED': [
+    { type: 'field', field: 'floorPlanUrl', label: 'Floor plan uploaded' },
+    { type: 'meeting', meetingType: 'PP', label: 'Scheduled proposal presentation (PP) meeting' },
   ],
 };
 
@@ -84,6 +94,12 @@ export const FUNNEL_ORDER = [
  * (currently none), i.e. they are ungated.
  */
 function requirementsForTransition(fromStage: string, toStage: string): StageRequirement[] {
+  // An explicit STAGE_REQUIREMENTS entry always takes precedence. This allows
+  // special-cased transitions (e.g. DQL→PROPOSAL_PRESENTED direct skip) to
+  // override the default accumulation logic.
+  const explicit = STAGE_REQUIREMENTS[`${fromStage}->${toStage}`];
+  if (explicit !== undefined) return explicit;
+
   const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
   const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
 
@@ -96,7 +112,7 @@ function requirementsForTransition(fromStage: string, toStage: string): StageReq
     return reqs;
   }
 
-  return STAGE_REQUIREMENTS[`${fromStage}->${toStage}`] ?? [];
+  return [];
 }
 
 const ACTIVE_MEETING_STATUSES = ['SCHEDULED', 'RESCHEDULED', 'COMPLETED'] as const;

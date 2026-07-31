@@ -4,11 +4,13 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
-import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, rescheduleEmail } from '../lib/email.js';
+import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { notifyManagers } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
 import { recalculateMilestones } from '../lib/milestones.js';
 import { queues } from '../jobs/index.js';
 import { computeAutoRatingFromMode } from '../services/intentScoring.js';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
 
 export const meetingsRouter = Router({ mergeParams: true });
 export const meetingStatusRouter = Router();
@@ -22,10 +24,11 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
   const user = req.user!;
 
-  const { type, mode, scheduledAt } = req.body as {
+  const { type, mode, scheduledAt, location } = req.body as {
     type?: string;
     mode?: string;
     scheduledAt?: string;
+    location?: string;
   };
 
   if (!type || !mode || !scheduledAt) {
@@ -33,11 +36,11 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const validTypes = ['DQL', 'PP'];
+  const validTypes = ['DQL', 'PP', 'ONBOARDING'];
   const validModes = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE'];
 
   if (!validTypes.includes(type)) {
-    res.status(400).json({ error: `type must be DQL or PP` });
+    res.status(400).json({ error: `type must be DQL, PP, or ONBOARDING` });
     return;
   }
   if (!validModes.includes(mode)) {
@@ -45,20 +48,51 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, leadId: true, name: true, email: true, phone: true, assignedDesignerId: true, assignedBLId: true, intentRating: true, intentRatingSource: true },
+  });
   if (!lead) {
     res.status(404).json({ error: 'Lead not found' });
     return;
   }
+  if (!(await isAuthorizedForLead(lead, user))) {
+    res.status(403).json({ error: 'Not authorised to create meetings for this lead' });
+    return;
+  }
 
-  // Auto-number PP meetings
+  // ── Duplicate-meeting guard ────────────────────────────────────────────────
+  const activeMeeting = await prisma.meeting.findFirst({
+    where: { leadId, status: 'SCHEDULED' },
+    select: { id: true, type: true, scheduledAt: true },
+  });
+  if (activeMeeting) {
+    const activeDate = new Date(activeMeeting.scheduledAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short',
+      hour: 'numeric', minute: '2-digit',
+    });
+    res.status(409).json({
+      error: `A ${activeMeeting.type} meeting is already scheduled for ${activeDate}. Reschedule or mark no-show before creating a new one.`,
+    });
+    return;
+  }
+
+  // Auto-number PP meetings — count only non-RESCHEDULED meetings so a
+  // reschedule of PP1 doesn't cause the next genuine PP to become PP3.
   let ppNumber: number | null = null;
   if (type === 'PP') {
     const existingPP = await prisma.meeting.count({
-      where: { leadId, type: 'PP' },
+      where: { leadId, type: 'PP', status: { not: 'RESCHEDULED' } },
     });
     ppNumber = existingPP + 1;
   }
+
+  // Compute per-type sequence number — exclude RESCHEDULED so a rescheduled
+  // DQL1 + its replacement both count as "DQL 1" in the active list.
+  const seqCount = await prisma.meeting.count({
+    where: { leadId, type: type as any, status: { not: 'RESCHEDULED' } },
+  });
+  const seqNumber = seqCount + 1;
 
   const meeting = await prisma.meeting.create({
     data: {
@@ -67,6 +101,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
       ppNumber,
       mode: mode as any,
       scheduledAt: new Date(scheduledAt),
+      location: location?.trim() || undefined,
       confirmationSent: true, // will be sent below
     },
     include: meetingInclude,
@@ -76,6 +111,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     meetingId: meeting.id,
     type,
     ppNumber,
+    seqNumber,
     scheduledAt,
   });
 
@@ -205,12 +241,54 @@ meetingStatusRouter.get('/', verifyToken, async (req, res) => {
 // ── GET /api/leads/:leadId/meetings ──────────────────────────────────────────
 meetingsRouter.get('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
+  const user = req.user!;
 
-  const meetings = await prisma.meeting.findMany({
+  // Lead-scope authorization
+  const scopeLead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, assignedDesignerId: true, assignedBLId: true },
+  });
+  if (!scopeLead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (!(await isAuthorizedForLead(scopeLead, user))) {
+    res.status(403).json({ error: 'Not authorised to view meetings for this lead' });
+    return;
+  }
+
+  const rawMeetings = await prisma.meeting.findMany({
     where: { leadId },
     include: meetingInclude,
     orderBy: { scheduledAt: 'desc' },
   });
+
+  // Compute per-type sequence numbers (1-based, by creation order).
+  // RESCHEDULED meetings are excluded from the counter so that a DQL which
+  // was rescheduled once still appears as "DQL 1" (not "DQL 2") in the UI.
+  // The RESCHEDULED record itself receives the same seqNumber as the active
+  // replacement (they share the same conceptual meeting identity).
+  const activeByType = new Map<string, number>();  // non-RESCHEDULED counter
+  const seqById = new Map<string, number>();
+
+  const sortedActive = [...rawMeetings]
+    .filter((m) => m.status !== 'RESCHEDULED')
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  sortedActive.forEach((m) => {
+    const n = (activeByType.get(m.type) ?? 0) + 1;
+    activeByType.set(m.type, n);
+    seqById.set(m.id, n);
+  });
+
+  // For RESCHEDULED records: assign seqNumber based on creation order among all
+  // meetings of that type (their original scheduled slot).
+  const sortedAll = [...rawMeetings].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const allByType = new Map<string, number>();
+  sortedAll.forEach((m) => {
+    const n = (allByType.get(m.type) ?? 0) + 1;
+    allByType.set(m.type, n);
+    if (!seqById.has(m.id)) seqById.set(m.id, n); // only sets for RESCHEDULED records
+  });
+
+  const meetings = rawMeetings.map((m) => ({ ...m, seqNumber: seqById.get(m.id) ?? 1 }));
 
   res.json({ meetings });
 });
@@ -263,28 +341,93 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     return;
   }
 
-  const updateData: any = { status, outcome };
-  if (status === 'COMPLETED') {
-    updateData.mom = mom;
-    updateData.momSent = true;
-  }
-  if (status === 'RESCHEDULED') {
-    // The meeting stays active: move it to the new time and keep it SCHEDULED
-    updateData.status = 'SCHEDULED';
-    updateData.rescheduledReason = rescheduledReason;
-    updateData.scheduledAt = new Date(newScheduledAt!);
-  }
-  if (status === 'NO_SHOW') {
-    updateData.noShowReason = noShowReason!.trim();
+  // Lead-scope authorization
+  if (!(await isAuthorizedForLead(meeting.lead, user))) {
+    res.status(403).json({ error: 'Not authorised to update this meeting' });
+    return;
   }
 
-  const updated = await prisma.meeting.update({
-    where: { id },
-    data: updateData,
-    include: meetingInclude,
-  });
+  // Enforce valid source status — only SCHEDULED meetings can be transitioned
+  if (meeting.status !== 'SCHEDULED') {
+    res.status(400).json({ error: `Cannot change status of a meeting that is already ${meeting.status}` });
+    return;
+  }
 
   const lead = meeting.lead;
+
+  // ── RESCHEDULED: atomic archive + replacement creation ───────────────────────
+  let updated: any;
+  let replacementMeeting: any = null;
+
+  if (status === 'RESCHEDULED') {
+    const previousHistory = (meeting.rescheduleHistory as any[]) ?? [];
+    const archiveData = {
+      status: 'RESCHEDULED' as const,
+      outcome,
+      rescheduledReason,
+      rescheduleHistory: [
+        ...previousHistory,
+        {
+          scheduledAt: meeting.scheduledAt.toISOString(),
+          reason: rescheduledReason,
+          rescheduledAt: new Date().toISOString(),
+        },
+      ],
+    };
+
+    const txResult = await prisma.$transaction(async (tx) => {
+      const archived = await tx.meeting.update({
+        where: { id },
+        data: archiveData,
+        include: meetingInclude,
+      });
+      const replacement = await tx.meeting.create({
+        data: {
+          leadId: lead.id,
+          type: meeting.type as any,
+          mode: meeting.mode as any,
+          location: meeting.location,
+          ppNumber: meeting.ppNumber,
+          scheduledAt: new Date(newScheduledAt!),
+          confirmationSent: true,
+        },
+        include: meetingInclude,
+      });
+      await tx.activityLog.create({
+        data: {
+          userId: user.id,
+          action: 'MEETING_RESCHEDULED',
+          leadId: lead.id,
+          meta: {
+            originalMeetingId: id,
+            replacementMeetingId: replacement.id,
+            rescheduledReason,
+            oldDate: meeting.scheduledAt.toISOString(),
+            newDate: new Date(newScheduledAt!).toISOString(),
+          },
+        },
+      });
+      return { archived, replacement };
+    });
+
+    updated = txResult.archived;
+    replacementMeeting = txResult.replacement;
+  } else {
+    // ── COMPLETED / NO_SHOW ──────────────────────────────────────────────────
+    const updateData: any = { status, outcome };
+    if (status === 'COMPLETED') {
+      updateData.mom = mom;
+      updateData.momSent = true;
+    }
+    if (status === 'NO_SHOW') {
+      updateData.noShowReason = noShowReason!.trim();
+    }
+    updated = await prisma.meeting.update({
+      where: { id },
+      data: updateData,
+      include: meetingInclude,
+    });
+  }
 
   // Auto-triggered emails
   if (lead.email) {
@@ -351,22 +494,57 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
   }
 
-  // In-app notification for NO_SHOW
-  if (status === 'NO_SHOW' && lead.assignedBLId) {
-    await createNotification(
-      lead.assignedBLId,
-      'MEETING_NO_SHOW',
-      `Client ${lead.name} (${lead.leadId}) was a no-show for the ${meeting.type} meeting.`,
-      lead.id,
-    );
+  // In-app notification + email for NO_SHOW — enhanced when no follow-up meeting is planned
+  if (status === 'NO_SHOW') {
+    const plannedMeeting = await prisma.meeting.findFirst({
+      where: { leadId: lead.id, status: 'SCHEDULED' },
+      select: { id: true },
+    });
+    const hasNoPlan = !plannedMeeting;
+    const noShowMsg = hasNoPlan
+      ? `⚠ Client ${lead.name} (${lead.leadId}) was a no-show for the ${meeting.type} meeting and has NO follow-up meeting scheduled. Immediate action required.`
+      : `Client ${lead.name} (${lead.leadId}) was a no-show for the ${meeting.type} meeting.`;
+
+    // In-app notifications
+    if (lead.assignedBLId) {
+      await createNotification(lead.assignedBLId, 'MEETING_NO_SHOW', noShowMsg, lead.id);
+    }
+    await notifyManagers('MEETING_NO_SHOW', noShowMsg, lead.id);
+
+    // Send email to BL + managers when no follow-up plan exists
+    if (hasNoPlan) {
+      const recipients: { name: string; email: string }[] = [];
+      if (lead.assignedBLId) {
+        const bl = await prisma.user.findUnique({ where: { id: lead.assignedBLId }, select: { name: true, email: true } });
+        if (bl?.email) recipients.push(bl);
+      }
+      const managers = await prisma.user.findMany({
+        where: { role: { in: ['BRANCH_HEAD'] }, isActive: true },
+        select: { name: true, email: true },
+      });
+      for (const mgr of managers) { if (mgr.email) recipients.push(mgr); }
+
+      for (const recipient of recipients) {
+        const emailPayload = noShowNoPlanEmail({
+          recipientName: recipient.name,
+          leadId: lead.leadId,
+          leadName: lead.name,
+          meetingType: meeting.type,
+          noShowReason: noShowReason!,
+        });
+        emailPayload.to = recipient.email!;
+        queues.emails.add('no-show-no-plan', { emailPayload, leadId: lead.id }).catch(() => {});
+      }
+    }
   }
 
-  await logActivity(user.id, `MEETING_${status}`, lead.id, {
-    meetingId: id,
-    mom,
-    rescheduledReason,
-    ...(status === 'RESCHEDULED' && { newDate: new Date(newScheduledAt!).toISOString() }),
-  });
+  // Log activity — RESCHEDULED already logged inside the reschedule block above
+  if (status !== 'RESCHEDULED') {
+    await logActivity(user.id, `MEETING_${status}`, lead.id, {
+      meetingId: id,
+      mom,
+    });
+  }
 
   await recalculateMilestones(lead.id);
 
@@ -386,5 +564,5 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
   }
 
-  res.json({ meeting: updated });
+  res.json({ meeting: updated, replacementMeeting: replacementMeeting ?? undefined });
 });

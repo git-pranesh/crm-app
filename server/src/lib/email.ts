@@ -142,6 +142,24 @@ ${opts.reason ? `<p>Reason: ${opts.reason}</p>` : ''}
   };
 }
 
+export function noShowNoPlanEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  meetingType: string;
+  noShowReason: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `⚠ Unplanned No-Show: Lead ${opts.leadId} — Interiors by DeX`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p><strong>${opts.leadName}</strong> (${opts.leadId}) was a no-show for their <strong>${opts.meetingType}</strong> meeting and has <strong>no follow-up meeting scheduled</strong>.</p>
+<p><strong>No-show reason recorded:</strong> ${opts.noShowReason}</p>
+<p>Please take immediate action — contact the client or rebook the meeting to keep the lead progressing.</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
 export function onHoldEmail(opts: {
   clientName: string;
   revivalDate: string;
