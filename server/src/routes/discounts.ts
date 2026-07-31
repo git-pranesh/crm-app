@@ -7,13 +7,49 @@ import { createNotification } from '../lib/notifications.js';
 export const discountsRouter = Router();
 export const leadDiscountRouter = Router({ mergeParams: true });
 
-// Discount authority ceilings (G7)
+// ── Discount approval authority ceiling (used in approve/reject check) ────────
 const AUTHORITY_CEILING: Record<string, number> = {
   DESIGNER: 10,
   CRE: 10,
   BL: 15,
   BRANCH_HEAD: 100,
 };
+
+// ── Threshold constants ───────────────────────────────────────────────────────
+const WOODWORK_SPECIAL_CASE_THRESHOLD = 500_000; // ₹5,00,000
+
+/**
+ * Compute approval routing from the discount % and post-discount woodwork value.
+ *
+ * Rules:
+ *  ≤ 10%                   → SELF (auto-approved, no request sent upstream)
+ *  11–15%                  → BL approval
+ *  16–20%                  → BRANCH_HEAD approval (direct, no BL step)
+ *  > 20%                   → BRANCH_HEAD, isSpecialCase = true
+ *  Post-discount woodwork
+ *    < ₹5L (any %)         → BRANCH_HEAD override, isSpecialCase = true
+ */
+function computeApprovalRouting(
+  discountPct: number,
+  woodworkValueExGst: number,
+): { approverRole: 'SELF' | 'BL' | 'BRANCH_HEAD'; isSpecialCase: boolean } {
+  const postDiscountWoodwork = woodworkValueExGst * (1 - discountPct / 100);
+  const woodworkBelowThreshold = postDiscountWoodwork < WOODWORK_SPECIAL_CASE_THRESHOLD;
+
+  if (woodworkBelowThreshold || discountPct > 20) {
+    return { approverRole: 'BRANCH_HEAD', isSpecialCase: true };
+  }
+  if (discountPct > 15) {
+    // 16–20%: BH direct, not a special case
+    return { approverRole: 'BRANCH_HEAD', isSpecialCase: false };
+  }
+  if (discountPct > 10) {
+    // 11–15%: BL approval
+    return { approverRole: 'BL', isSpecialCase: false };
+  }
+  // 0–10%: self-approve
+  return { approverRole: 'SELF', isSpecialCase: false };
+}
 
 const discountInclude = {
   lead: { select: { id: true, leadId: true, name: true } },
@@ -71,6 +107,12 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
       return;
     }
 
+    // ── Route by new thresholds ───────────────────────────────────────────────
+    const { approverRole, isSpecialCase } = computeApprovalRouting(computed, woodworkValueExGst);
+
+    // ≤ 10%: auto-approve (designer has authority; no upstream review needed)
+    const isAutoApproved = approverRole === 'SELF';
+
     const request = await prisma.discountRequest.create({
       data: {
         leadId,
@@ -82,21 +124,54 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
         woodworkValueExGst,
         totalValueExGst,
         quoteLink: quoteLink?.trim() || null,
-        status: 'PENDING',
+        approverRole: isAutoApproved ? 'SELF' : approverRole,
+        isSpecialCase,
+        status: isAutoApproved ? 'APPROVED' : 'PENDING',
+        ...(isAutoApproved && {
+          reviewedById: user.id,
+          reviewedAt: new Date(),
+          reviewerComment: 'Auto-approved: discount ≤ 10%',
+        }),
       },
       include: discountInclude,
     });
 
-    await logActivity(user.id, 'DISCOUNT_REQUESTED', leadId, { discountPct: computed, reason });
+    await logActivity(user.id, 'DISCOUNT_REQUESTED', leadId, {
+      discountPct: computed,
+      reason,
+      approverRole,
+      isSpecialCase,
+      autoApproved: isAutoApproved,
+    });
 
-    // Notify BL
-    if (lead.assignedBLId) {
-      await createNotification(
-        lead.assignedBLId,
-        'DISCOUNT_REQUEST',
-        `${user.name} raised a discount request for lead ${lead.leadId} (${lead.name}): ${computed.toFixed(1)}% off`,
-        leadId,
-      );
+    // ── Send notifications based on routing ───────────────────────────────────
+    if (!isAutoApproved) {
+      if (approverRole === 'BL') {
+        // 11–15%: notify the assigned BL
+        if (lead.assignedBLId) {
+          await createNotification(
+            lead.assignedBLId,
+            'DISCOUNT_REQUEST',
+            `${user.name} raised a discount request for lead ${lead.leadId} (${lead.name}): ${computed.toFixed(1)}% off — requires your approval`,
+            leadId,
+          );
+        }
+      } else {
+        // 16–20%, >20%, or woodwork < ₹5L: notify Branch Head(s) directly
+        const branchHeads = await prisma.user.findMany({
+          where: { role: 'BRANCH_HEAD', isActive: true },
+          select: { id: true },
+        });
+        const specialTag = isSpecialCase ? ' 🔴 SPECIAL CASE' : '';
+        for (const bh of branchHeads) {
+          await createNotification(
+            bh.id,
+            'DISCOUNT_REQUEST',
+            `${user.name} raised a ${computed.toFixed(1)}% discount request for lead ${lead.leadId} (${lead.name}) — requires Branch Head approval${specialTag}`,
+            leadId,
+          );
+        }
+      }
     }
 
     res.status(201).json({ request });
@@ -105,23 +180,29 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/discount-requests/pending — BL sees team; BH sees forwarded + >15% ─
+// ── GET /api/discount-requests/pending — scoped by role ───────────────────────
 discountsRouter.get('/pending', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
   try {
     const user = req.user!;
     let where: any = { status: 'PENDING' };
 
     if (user.role === 'BL') {
+      // BL sees requests intended for BL review (approverRole = 'BL' or null for legacy)
+      // scoped to their team's leads.
       const members = await prisma.user.findMany({
         where: { blId: user.id },
         select: { id: true },
       });
       where.lead = { assignedDesignerId: { in: members.map((m) => m.id) } };
-    } else {
-      // BRANCH_HEAD: show all forwarded OR discountPct > 15
       where.OR = [
+        { approverRole: 'BL' },
+        { approverRole: null }, // legacy requests created before approverRole existed
+      ];
+    } else {
+      // BRANCH_HEAD: see all BH-routed or manually forwarded requests
+      where.OR = [
+        { approverRole: 'BRANCH_HEAD' },
         { forwardedToRole: 'BRANCH_HEAD' },
-        { discountPct: { gt: 15 } },
       ];
     }
 
@@ -158,7 +239,10 @@ discountsRouter.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// ── PATCH /api/discount-requests/:id/forward — BL forwards >15% to BH ────────
+// ── PATCH /api/discount-requests/:id/forward — BL escalates to BH ────────────
+// Applicable for BL-routed (11–15%) requests only. Requests already routed to
+// BRANCH_HEAD do not require manual forwarding.
+// The acting BL must own the lead's team (same check as approve/reject).
 discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -167,7 +251,7 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
     const existing = await prisma.discountRequest.findUnique({
       where: { id },
       include: {
-        lead: { select: { id: true, leadId: true, name: true } },
+        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true } },
         requestedBy: { select: { id: true, name: true } },
       },
     });
@@ -176,12 +260,28 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
       res.status(409).json({ error: 'Request is no longer pending' });
       return;
     }
-    if (Number(existing.discountPct) <= 15) {
-      res.status(400).json({ error: 'Forward is only required for discount > 15%; you can approve this directly.' });
+    // Only BL-routed requests need forwarding; BH-direct ones are already routed.
+    if (existing.approverRole === 'BRANCH_HEAD') {
+      res.status(400).json({ error: 'This request is already routed to Branch Head — no forwarding needed.' });
+      return;
+    }
+    if (Number(existing.discountPct) <= 10) {
+      res.status(400).json({ error: 'This discount was auto-approved — no forwarding needed.' });
       return;
     }
     if (existing.forwardedToRole) {
       res.status(409).json({ error: 'Already forwarded to Branch Head' });
+      return;
+    }
+    // ── Team-ownership check ──────────────────────────────────────────────────
+    // A BL may only forward requests for leads assigned to their own team.
+    const teamMemberIds = (await prisma.user.findMany({
+      where: { blId: user.id },
+      select: { id: true },
+    })).map((m) => m.id);
+    const leadDesignerId = existing.lead.assignedDesignerId;
+    if (!leadDesignerId || !teamMemberIds.includes(leadDesignerId)) {
+      res.status(403).json({ error: 'This lead is not assigned to your team.' });
       return;
     }
 
@@ -190,6 +290,7 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
       data: {
         forwardedToRole: 'BRANCH_HEAD',
         forwardedById: user.id,
+        approverRole: 'BRANCH_HEAD',
       },
       include: discountInclude,
     });
@@ -218,7 +319,13 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
   }
 });
 
-// ── PATCH /api/discount-requests/:id — approve or reject (with ceiling check) ─
+// ── PATCH /api/discount-requests/:id — approve or reject ─────────────────────
+// Authorization rules:
+//   BL  — may approve/reject only requests with approverRole='BL' (or null legacy)
+//          AND where the lead's assignedDesignerId is on their team
+//   BH  — may approve/reject only requests with approverRole='BRANCH_HEAD'
+//          or forwardedToRole='BRANCH_HEAD'
+//   Percentage ceilings are enforced as a secondary guard on top of routing.
 discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -239,7 +346,7 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
     const existing = await prisma.discountRequest.findUnique({
       where: { id },
       include: {
-        lead: { select: { id: true, leadId: true, name: true } },
+        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true } },
         requestedBy: { select: { id: true, name: true } },
       },
     });
@@ -249,14 +356,39 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
       return;
     }
 
-    // G7: Enforce discount ceiling per role
     const discountPctNum = Number(existing.discountPct);
-    const ceiling = AUTHORITY_CEILING[user.role] ?? 0;
-    if (status === 'APPROVED' && discountPctNum > ceiling) {
-      res.status(403).json({
-        error: `Exceeds your approval authority (max ${ceiling}% for ${user.role}). Use /forward to escalate to Branch Head.`,
-      });
-      return;
+    const effectiveApproverRole = existing.approverRole ?? (discountPctNum <= 10 ? 'SELF' : discountPctNum <= 15 ? 'BL' : 'BRANCH_HEAD');
+    const isRoutedToBH = effectiveApproverRole === 'BRANCH_HEAD' || existing.forwardedToRole === 'BRANCH_HEAD';
+    const isRoutedToBL = !isRoutedToBH && (effectiveApproverRole === 'BL' || existing.approverRole === null);
+
+    if (user.role === 'BL') {
+      // BL can only act on BL-routed requests for their own team
+      if (!isRoutedToBL) {
+        res.status(403).json({ error: 'This request requires Branch Head approval — you cannot act on it.' });
+        return;
+      }
+      // Ownership check: lead must belong to a member of this BL's team
+      const teamMemberIds = (await prisma.user.findMany({
+        where: { blId: user.id },
+        select: { id: true },
+      })).map((m) => m.id);
+      const leadDesignerId = existing.lead.assignedDesignerId;
+      if (!leadDesignerId || !teamMemberIds.includes(leadDesignerId)) {
+        res.status(403).json({ error: 'This lead is not assigned to your team.' });
+        return;
+      }
+      // Percentage ceiling guard (secondary)
+      const ceiling = AUTHORITY_CEILING[user.role] ?? 0;
+      if (status === 'APPROVED' && discountPctNum > ceiling) {
+        res.status(403).json({ error: `Exceeds your approval authority (max ${ceiling}%). Use /forward to escalate.` });
+        return;
+      }
+    } else {
+      // BRANCH_HEAD — can only act on BH-routed or forwarded requests
+      if (!isRoutedToBH) {
+        res.status(403).json({ error: 'This request is routed for BL approval, not Branch Head.' });
+        return;
+      }
     }
 
     const updated = await prisma.discountRequest.update({

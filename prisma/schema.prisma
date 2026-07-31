@@ -399,10 +399,14 @@ model DiscountRequest {
   /// Link to the quote (quote builder link or attachment URL)
   quoteLink          String?
   status          DiscountStatus @default(PENDING)
+  /// Server-computed approval routing: SELF | BL | BRANCH_HEAD
+  approverRole    String?
+  /// True when discount > 20% OR post-discount woodwork value < ₹5,00,000
+  isSpecialCase   Boolean        @default(false)
   reviewedById    String?
   /// Mandatory on rejection
   reviewerComment String?
-  /// Set when BL forwards a >15% request to BRANCH_HEAD
+  /// Set when BL forwards a BL-routed request to BRANCH_HEAD
   forwardedToRole String?
   /// The BL who forwarded the request
   forwardedById   String?

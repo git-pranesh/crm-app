@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Tag } from 'lucide-react';
+import { Check, X, Tag, AlertTriangle, Info } from 'lucide-react';
 import { api } from '../../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -14,6 +14,8 @@ interface DiscountRequest {
   totalValueExGst?: number | null;
   quoteLink?: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approverRole?: string | null;  // 'SELF' | 'BL' | 'BRANCH_HEAD'
+  isSpecialCase?: boolean;
   reviewerComment?: string;
   createdAt: string;
   requestedBy: { id: string; name: string; role: string };
@@ -21,9 +23,69 @@ interface DiscountRequest {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-amber-100 text-amber-700',
+  PENDING:  'bg-amber-100 text-amber-700',
   APPROVED: 'bg-green-100 text-green-700',
   REJECTED: 'bg-red-100 text-red-700',
+};
+
+// ── Approval threshold helper ─────────────────────────────────────────────────
+const WOODWORK_THRESHOLD = 500_000; // ₹5 lakh
+
+interface ApprovalInfo {
+  label: string;
+  detail: string;
+  color: 'green' | 'amber' | 'orange' | 'red';
+  isSpecialCase: boolean;
+  approverRole: 'SELF' | 'BL' | 'BRANCH_HEAD';
+}
+
+function getApprovalInfo(pct: number, woodworkValue: number): ApprovalInfo {
+  const postDiscountWoodwork = woodworkValue * (1 - pct / 100);
+  const woodworkBelowThreshold = postDiscountWoodwork < WOODWORK_THRESHOLD;
+
+  if (woodworkBelowThreshold || pct > 20) {
+    return {
+      label: 'Special Case — Branch Head',
+      detail: woodworkBelowThreshold
+        ? `Post-discount woodwork (₹${Math.round(postDiscountWoodwork).toLocaleString('en-IN')}) falls below ₹5L threshold → Branch Head required`
+        : 'Discount above 20% → Special case requiring Branch Head approval',
+      color: 'red',
+      isSpecialCase: true,
+      approverRole: 'BRANCH_HEAD',
+    };
+  }
+  if (pct > 15) {
+    return {
+      label: 'Branch Head approval required',
+      detail: '16–20% discount → goes directly to Branch Head (no BL step)',
+      color: 'orange',
+      isSpecialCase: false,
+      approverRole: 'BRANCH_HEAD',
+    };
+  }
+  if (pct > 10) {
+    return {
+      label: 'BL approval required',
+      detail: '11–15% discount → your Business Lead will review',
+      color: 'amber',
+      isSpecialCase: false,
+      approverRole: 'BL',
+    };
+  }
+  return {
+    label: 'Self-approved (≤ 10%)',
+    detail: 'Discounts up to 10% are auto-approved — no review needed',
+    color: 'green',
+    isSpecialCase: false,
+    approverRole: 'SELF',
+  };
+}
+
+const APPROVAL_COLOR: Record<string, string> = {
+  green:  'bg-green-50 border-green-200 text-green-800',
+  amber:  'bg-amber-50 border-amber-200 text-amber-800',
+  orange: 'bg-orange-50 border-orange-200 text-orange-800',
+  red:    'bg-red-50 border-red-200 text-red-800',
 };
 
 interface Props { leadId: string }
@@ -35,6 +97,9 @@ function getStoredRole(): string | null {
   } catch { return null; }
 }
 
+const formatINR = (n: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
 export default function DiscountTab({ leadId }: Props) {
   const [requests, setRequests] = useState<DiscountRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +108,6 @@ export default function DiscountTab({ leadId }: Props) {
   const [confirm, setConfirm] = useState<{ open: boolean }>({ open: false });
   const [form, setForm] = useState({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
 
-  // BL review state
   const userRole = getStoredRole();
   const isBL = userRole === 'BL' || userRole === 'BRANCH_HEAD';
   const [reviewModal, setReviewModal] = useState<{ id: string; action: 'APPROVED' | 'REJECTED' } | null>(null);
@@ -63,14 +127,24 @@ export default function DiscountTab({ leadId }: Props) {
 
   useEffect(() => { loadRequests(); }, [leadId]);
 
+  // ── Computed approval preview ─────────────────────────────────────────────
+  const pctNum = Number(form.discountPct);
+  const woodworkNum = Number(form.woodworkValue);
+  const approvalInfo = form.discountPct && form.woodworkValue && pctNum > 0 && woodworkNum > 0
+    ? getApprovalInfo(pctNum, woodworkNum)
+    : null;
+
+  const discountedTotal = form.totalValue && pctNum > 0
+    ? Number(form.totalValue) * (1 - pctNum / 100)
+    : null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.woodworkValue || !form.totalValue || !form.discountPct || !form.reason) {
       toast.error('Woodwork value, total project value, discount % and reason are required');
       return;
     }
-    const pct = Number(form.discountPct);
-    if (isNaN(pct) || pct <= 0 || pct >= 100) {
+    if (isNaN(pctNum) || pctNum <= 0 || pctNum >= 100) {
       toast.error('Discount % must be between 0 and 100');
       return;
     }
@@ -82,17 +156,22 @@ export default function DiscountTab({ leadId }: Props) {
     setSubmitting(true);
     try {
       const total = Number(form.totalValue);
-      const pct = Number(form.discountPct);
       await api.post(`/leads/${leadId}/discount-request`, {
         originalAmount: total,
-        amount: +(total * (1 - pct / 100)).toFixed(2),
-        discountPct: pct,
+        amount: +(total * (1 - pctNum / 100)).toFixed(2),
+        discountPct: pctNum,
         reason: form.reason,
         woodworkValueExGst: Number(form.woodworkValue),
         totalValueExGst: total,
         quoteLink: form.quoteLink.trim() || undefined,
       });
-      toast.success('Discount request submitted for BL approval');
+
+      const info = getApprovalInfo(pctNum, Number(form.woodworkValue));
+      if (info.approverRole === 'SELF') {
+        toast.success('Discount auto-approved (≤ 10%) ✓');
+      } else {
+        toast.success(`Request submitted — sent to ${info.approverRole === 'BL' ? 'your BL' : 'Branch Head'} for approval`);
+      }
       setForm({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
       setShowForm(false);
       await loadRequests();
@@ -127,35 +206,33 @@ export default function DiscountTab({ leadId }: Props) {
     }
   };
 
-  const formatINR = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
-
-  const discountPct = form.totalValue && form.discountPct && Number(form.discountPct) > 0
-    ? Number(form.discountPct).toFixed(1)
-    : null;
-
   const hasPending = requests.some((r) => r.status === 'PENDING');
+
+  // Confirm dialog message
+  const confirmMessage = approvalInfo
+    ? `Request ${pctNum.toFixed(1)}% discount — ${approvalInfo.label}.`
+    : `Request ${pctNum.toFixed(1)}% discount.`;
 
   return (
     <div className="space-y-4">
       <ConfirmDialog
         open={confirm.open}
         title="Submit Discount Request?"
-        message={`Request ${discountPct}% discount — this will be sent to your BL for approval.`}
+        message={confirmMessage}
         confirmLabel="Submit"
         onConfirm={doSubmit}
         onCancel={() => setConfirm({ open: false })}
       />
 
-      {/* BL Review Modal */}
+      {/* BL / BH Review Modal */}
       {reviewModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
             <h3 className="font-semibold text-gray-900 mb-4">
               <span className="flex items-center gap-2">
-              {reviewModal.action === 'APPROVED' ? <Check size={16} strokeWidth={2.5} /> : <X size={16} strokeWidth={2.5} />}
-              {reviewModal.action === 'APPROVED' ? 'Approve Discount Request' : 'Reject Discount Request'}
-            </span>
+                {reviewModal.action === 'APPROVED' ? <Check size={16} strokeWidth={2.5} /> : <X size={16} strokeWidth={2.5} />}
+                {reviewModal.action === 'APPROVED' ? 'Approve Discount Request' : 'Reject Discount Request'}
+              </span>
             </h3>
             <form onSubmit={handleReview} className="space-y-4">
               {reviewModal.action === 'REJECTED' && (
@@ -223,13 +300,42 @@ export default function DiscountTab({ leadId }: Props) {
 
       {hasPending && !showForm && !isBL && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
-          A discount request is currently pending BL review.
+          A discount request is currently pending review.
         </div>
       )}
 
+      {/* ── Discount approval rules summary ────────────────────────────────── */}
+      {!isBL && !showForm && (
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-stone-600 uppercase tracking-wider">
+            <Info size={13} /> Approval rules
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-stone-600">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              <span><span className="font-semibold">0–10%</span> — Auto-approved (no review)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+              <span><span className="font-semibold">11–15%</span> — BL approval required</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+              <span><span className="font-semibold">16–20%</span> — Branch Head required</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+              <span><span className="font-semibold">&gt;20% or woodwork &lt;₹5L</span> — Special case, Branch Head</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Request form ───────────────────────────────────────────────────── */}
       {!isBL && showForm && (
         <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">New Discount Request</h3>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -254,6 +360,7 @@ export default function DiscountTab({ leadId }: Props) {
               />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -278,14 +385,30 @@ export default function DiscountTab({ leadId }: Props) {
               />
             </div>
           </div>
-          {discountPct && (
+
+          {/* Live discount preview */}
+          {discountedTotal != null && pctNum > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex items-center gap-2">
-              <span className="font-semibold text-amber-700">{discountPct}% discount</span>
+              <span className="font-semibold text-amber-700">{pctNum.toFixed(1)}% discount</span>
               <span className="text-amber-600 text-sm">
-                (₹{(Number(form.totalValue) * Number(form.discountPct) / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} off → ₹{(Number(form.totalValue) * (1 - Number(form.discountPct) / 100)).toLocaleString('en-IN', { maximumFractionDigits: 0 })})
+                (₹{(Number(form.totalValue) * pctNum / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} off → ₹{discountedTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })})
               </span>
             </div>
           )}
+
+          {/* Live approval routing preview */}
+          {approvalInfo && (
+            <div className={`border rounded-lg px-4 py-3 flex items-start gap-2.5 ${APPROVAL_COLOR[approvalInfo.color]}`}>
+              {approvalInfo.isSpecialCase
+                ? <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                : <Info size={15} className="shrink-0 mt-0.5" />}
+              <div>
+                <p className="text-xs font-semibold">{approvalInfo.label}</p>
+                <p className="text-xs mt-0.5 opacity-80">{approvalInfo.detail}</p>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Reason <span className="text-red-500">*</span>
@@ -297,15 +420,21 @@ export default function DiscountTab({ leadId }: Props) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
+
           <button
             type="submit" disabled={submitting}
             className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >
-            {submitting ? 'Submitting…' : 'Submit for BL Approval'}
+            {submitting ? 'Submitting…' : approvalInfo?.approverRole === 'SELF'
+              ? 'Submit (auto-approved)'
+              : approvalInfo?.approverRole === 'BL'
+              ? 'Submit for BL Approval'
+              : 'Submit for Branch Head Approval'}
           </button>
         </form>
       )}
 
+      {/* ── Request list ───────────────────────────────────────────────────── */}
       {loading ? (
         <div className="text-center py-10 text-gray-400 text-sm animate-pulse">Loading requests…</div>
       ) : requests.length === 0 ? (
@@ -315,7 +444,7 @@ export default function DiscountTab({ leadId }: Props) {
           </div>
           <p className="font-medium text-gray-900 mb-1">No discount requests</p>
           <p className="text-sm text-gray-400">
-            {isBL ? 'No discount requests raised for this lead yet.' : 'Use the button above to raise a discount request for BL approval'}
+            {isBL ? 'No discount requests raised for this lead yet.' : 'Use the button above to raise a discount request.'}
           </p>
         </div>
       ) : (
@@ -324,10 +453,21 @@ export default function DiscountTab({ leadId }: Props) {
             <div key={req.id} className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[req.status]}`}>
                       {req.status}
                     </span>
+                    {req.isSpecialCase && (
+                      <span className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200">
+                        <AlertTriangle size={10} />
+                        Special Case
+                      </span>
+                    )}
+                    {req.approverRole === 'SELF' && req.status === 'APPROVED' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        Auto-approved
+                      </span>
+                    )}
                     <span className="text-base font-bold text-brand-600">{Number(req.discountPct).toFixed(1)}%</span>
                     <span className="text-xs text-gray-400">discount</span>
                   </div>
@@ -336,15 +476,43 @@ export default function DiscountTab({ leadId }: Props) {
                     <span className="text-gray-900 font-medium">{formatINR(req.amount)}</span>
                   </div>
                 </div>
-                <div className="text-right text-xs text-gray-400">
+                <div className="text-right text-xs text-gray-400 shrink-0">
                   <p>By {req.requestedBy.name}</p>
                   <p>{new Date(req.createdAt).toLocaleDateString('en-IN')}</p>
+                  {req.approverRole && req.approverRole !== 'SELF' && (
+                    <p className="text-stone-400 mt-0.5">
+                      → {req.approverRole === 'BL' ? 'BL' : 'Branch Head'}
+                    </p>
+                  )}
                 </div>
               </div>
+
               {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteLink) && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
-                  {req.woodworkValueExGst != null && <span>Woodwork ex-GST: <span className="text-gray-700 font-medium">{formatINR(Number(req.woodworkValueExGst))}</span></span>}
-                  {req.totalValueExGst != null && <span>Total ex-GST: <span className="text-gray-700 font-medium">{formatINR(Number(req.totalValueExGst))}</span></span>}
+                  {req.woodworkValueExGst != null && (
+                    <span>
+                      Woodwork ex-GST:{' '}
+                      <span className="text-gray-700 font-medium">{formatINR(Number(req.woodworkValueExGst))}</span>
+                    </span>
+                  )}
+                  {req.totalValueExGst != null && (
+                    <span>
+                      Total ex-GST:{' '}
+                      <span className="text-gray-700 font-medium">{formatINR(Number(req.totalValueExGst))}</span>
+                    </span>
+                  )}
+                  {req.woodworkValueExGst != null && req.discountPct != null && (
+                    <span>
+                      Post-discount woodwork:{' '}
+                      <span className={`font-medium ${
+                        Number(req.woodworkValueExGst) * (1 - Number(req.discountPct) / 100) < 500000
+                          ? 'text-red-600'
+                          : 'text-gray-700'
+                      }`}>
+                        {formatINR(Number(req.woodworkValueExGst) * (1 - Number(req.discountPct) / 100))}
+                      </span>
+                    </span>
+                  )}
                   {req.quoteLink && (
                     <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
                       View quote
@@ -352,9 +520,10 @@ export default function DiscountTab({ leadId }: Props) {
                   )}
                 </div>
               )}
+
               <p className="text-sm text-gray-600 mb-2">{req.reason}</p>
 
-              {/* BL action buttons on PENDING requests */}
+              {/* BL / BH action buttons on PENDING requests */}
               {isBL && req.status === 'PENDING' && (
                 <div className="flex gap-2 mt-3">
                   <button
@@ -376,7 +545,9 @@ export default function DiscountTab({ leadId }: Props) {
                 <div className={`rounded-lg px-3 py-2 text-xs mt-2 ${req.status === 'APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                   <span className="font-medium">{req.reviewedBy.name}</span>
                   {req.status === 'REJECTED' && req.reviewerComment && <span className="ml-1">— {req.reviewerComment}</span>}
-                  {req.status === 'APPROVED' && <span className="ml-1">approved this request</span>}
+                  {req.status === 'APPROVED' && <span className="ml-1">
+                    {req.reviewerComment === 'Auto-approved: discount ≤ 10%' ? 'auto-approved this request' : 'approved this request'}
+                  </span>}
                 </div>
               )}
             </div>
