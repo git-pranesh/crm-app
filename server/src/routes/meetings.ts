@@ -8,6 +8,7 @@ import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, rescheduleE
 import { sendSms } from '../services/smsService.js';
 import { recalculateMilestones } from '../lib/milestones.js';
 import { queues } from '../jobs/index.js';
+import { computeAutoRatingFromMode } from '../services/intentScoring.js';
 
 export const meetingsRouter = Router({ mergeParams: true });
 export const meetingStatusRouter = Router();
@@ -106,6 +107,47 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   await recalculateMilestones(leadId);
+
+  // ── Auto intent rating from meeting mode ──────────────────────────────────
+  // Set immediately after a meeting is created so the funnel gate has an
+  // up-to-date rating. Only applies when the current source is "auto" or not
+  // yet set — a manual override from the designer is never auto-downgraded.
+  //
+  // Error semantics: failure here must NOT be silently swallowed, because a
+  // missing IntentRatingLog creates an incomplete audit trail. We throw inside
+  // the transaction so the caller receives a clear 500 if the audit write fails,
+  // while the meeting record itself is already committed (atomic separation).
+  {
+    const currentLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { intentRatingSource: true, intentRating: true },
+    });
+    // Auto-set if: no rating yet, or last source was also auto
+    if (!currentLead?.intentRatingSource || currentLead.intentRatingSource === 'auto') {
+      const autoRating = computeAutoRatingFromMode(mode);
+      // Both the Lead update AND the IntentRatingLog must succeed together.
+      await prisma.$transaction([
+        prisma.lead.update({
+          where: { id: leadId },
+          data: { intentRating: autoRating, intentRatingSource: 'auto' },
+        }),
+        prisma.intentRatingLog.create({
+          data: {
+            leadId,
+            systemRating: autoRating,
+            finalRating: autoRating,
+            reason: `Auto-set from ${mode} meeting (meeting ID: ${meeting.id})`,
+          },
+        }),
+      ]);
+      await logActivity(user.id, 'INTENT_RATING_UPDATED', leadId, {
+        rating: autoRating,
+        systemRating: autoRating,
+        reason: `Auto-set from ${mode} meeting mode`,
+        isAuto: true,
+      });
+    }
+  }
 
   // SMS: meeting confirmation (auto-trigger)
   if (lead.phone) {

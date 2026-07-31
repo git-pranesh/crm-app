@@ -7,7 +7,11 @@ export type NotificationType =
   | 'SLA_BREACH'
   | 'MEETING_NO_SHOW'
   | 'TASK_DUE'
-  | 'BL_ASSIGNED';
+  | 'BL_ASSIGNED'
+  | 'DESIGNER_ASSIGNED'
+  | 'ONBOARDING_DIP_REQUIRED'
+  | 'DQL_QUESTIONNAIRE'
+  | 'DIP_CHECKLIST_COMPLETE';
 
 export async function createNotification(
   userId: string,

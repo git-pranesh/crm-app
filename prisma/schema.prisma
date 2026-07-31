@@ -204,6 +204,24 @@ model Lead {
   currentOfferId     String?
   /// STANDARD = normal CRE→BL→Designer flow; DIRECT = BL manually assigned
   assignmentPath     AssignmentPath @default(STANDARD)
+  /// Builder name or "N/A"
+  builder            String?
+  /// Client-specified offers / promotions (up to three)
+  offer1             String?
+  offer2             String?
+  offer3             String?
+  /// Expected move-in / possession date (calendar date)
+  expectedMoveIn     DateTime?
+  /// Alternate email ID
+  email2             String?
+  /// PAN number for invoicing
+  pan                String?
+  /// GST number for invoicing
+  gst                String?
+  /// Persistent lead-level notes (separate from activity log)
+  notes              String?
+  /// "auto" = set by meeting-mode mapping; "manual" = designer override
+  intentRatingSource String?
   /// Flexible extra fields keyed by CustomFieldDefinition.key
   customFields       Json           @default("{}")
   createdAt          DateTime       @default(now())

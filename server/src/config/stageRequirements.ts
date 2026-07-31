@@ -11,16 +11,38 @@ import { prisma } from '../lib/prisma.js';
  * unrestricted.
  */
 export type StageRequirement =
-  | { type: 'field'; field: 'intentRating' | 'estimatedValue' | 'floorPlanUrl' | 'nextMeetingDate'; label: string }
+  | {
+      type: 'field';
+      field:
+        | 'intentRating'
+        | 'estimatedValue'
+        | 'floorPlanUrl'
+        | 'nextMeetingDate'
+        | 'projectType'
+        | 'source'
+        | 'location'
+        | 'builder'
+        | 'scope'
+        | 'expectedMoveIn';
+      label: string;
+    }
   | { type: 'meeting'; meetingType: 'DQL' | 'PP'; label: string }
   | { type: 'quote'; label: string }
   | { type: 'dip'; label: string };
 
 export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
+  /**
+   * EL → MQL: all key facts (except Offer and Floor Plan) must be filled.
+   * Intent rating of 1 is separately blocked in checkStageRequirements.
+   */
   'EFFECTIVE_LEAD->MQL': [
-    { type: 'field', field: 'intentRating', label: 'Intent rating' },
-    { type: 'field', field: 'estimatedValue', label: 'Estimated budget' },
-    { type: 'field', field: 'nextMeetingDate', label: 'Next meeting date' },
+    { type: 'field', field: 'estimatedValue', label: 'Client budget' },
+    { type: 'field', field: 'projectType', label: 'Project type' },
+    { type: 'field', field: 'source', label: 'Lead source' },
+    { type: 'field', field: 'location', label: 'Location' },
+    { type: 'field', field: 'builder', label: 'Builder (or N/A)' },
+    { type: 'field', field: 'scope', label: 'Scope of work' },
+    { type: 'field', field: 'expectedMoveIn', label: 'Expected move-in date' },
   ],
   'MQL->DQL': [
     { type: 'meeting', meetingType: 'DQL', label: 'Scheduled DQL meeting' },
@@ -34,7 +56,6 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   'PROPOSAL_PRESENTED->ONBOARDING': [
     { type: 'quote', label: 'Generated quote' },
   ],
-  // Existing gate, generalized: handover requires a completed DIP checklist.
   'ONBOARDING->HANDED_OVER': [
     { type: 'dip', label: 'Completed DIP checklist' },
   ],
@@ -102,10 +123,13 @@ export async function checkStageRequirements(
   fromStage: string,
   toStage: string,
 ): Promise<StageCheckResult> {
-  const reqs = requirementsForTransition(fromStage, toStage);
-  if (reqs.length === 0) return { ok: true, missing: [] };
+  const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
+  const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
+  const isForwardFunnelMove = fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx;
 
+  const reqs = requirementsForTransition(fromStage, toStage);
   const missing: string[] = [];
+
   for (const r of reqs) {
     let satisfied = false;
     switch (r.type) {
@@ -140,5 +164,14 @@ export async function checkStageRequirements(
     }
     if (!satisfied) missing.push(r.label);
   }
+
+  // Global rule: a lead with 1-star intent cannot advance forward in the funnel.
+  // This applies to ALL forward moves regardless of which transition.
+  if (isForwardFunnelMove && lead.intentRating === 1) {
+    missing.push(
+      'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before advancing',
+    );
+  }
+
   return { ok: missing.length === 0, missing };
 }

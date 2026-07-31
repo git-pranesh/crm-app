@@ -1,19 +1,47 @@
-import type { Lead } from '@prisma/client';
+/**
+ * Intent rating rules — meeting-mode based auto-scoring.
+ *
+ * When a meeting is scheduled or completed the system automatically sets the
+ * lead's intent rating based on the meeting mode. The designer can always
+ * override this manually (which sets intentRatingSource = "manual").
+ *
+ * 1★ leads (no action planned) are blocked from advancing in the funnel.
+ */
 
 /**
- * PLACEHOLDER scoring — founder has not defined real criteria yet.
- * Wire the mechanism now; swap the formula later without touching
- * the audit/override plumbing.
- *
- * Input: a Lead record enriched with calls[] and meetings[].
+ * Map a meeting mode to the auto-assigned star rating.
+ * EC_VISIT = 5, SITE_VISIT = 4, VIRTUAL = 3, PUBLIC_PLACE = 2
+ */
+export const MODE_TO_RATING: Record<string, number> = {
+  EC_VISIT: 5,
+  SITE_VISIT: 4,
+  VIRTUAL: 3,
+  PUBLIC_PLACE: 2,
+};
+
+/**
+ * Return the auto intent rating for a given meeting mode.
+ * Falls back to 2 for any unrecognised mode.
+ */
+export function computeAutoRatingFromMode(mode: string): number {
+  return MODE_TO_RATING[mode] ?? 2;
+}
+
+/**
+ * Backward-compatible wrapper: used by the intent-rating override validation.
+ * Now returns the auto-rating derived from the most recent meeting mode,
+ * or 1 if no meetings exist (no action planned).
  */
 export function computeSystemRating(
-  lead: Lead & { calls?: { id: string }[]; meetings?: { status: string; id: string }[] },
+  lead: {
+    calls?: { id: string }[];
+    meetings?: { mode?: string | null; status: string }[];
+  },
 ): number {
-  let score = 1;
-  if (lead.estimatedValue && Number(lead.estimatedValue) > 0) score++;
-  if (lead.possessionTimeline) score++;
-  if (lead.calls && lead.calls.length > 0) score++;
-  if (lead.meetings && lead.meetings.some((m) => m.status === 'SCHEDULED')) score++;
-  return Math.min(score, 5);
+  if (!lead.meetings || lead.meetings.length === 0) return 1;
+  // meetings is expected newest-first (orderBy createdAt desc from DB).
+  // Find the first entry with a mode — that is the most recent rated meeting.
+  const latest = lead.meetings.find((m) => m.mode);
+  if (!latest?.mode) return 1;
+  return computeAutoRatingFromMode(latest.mode);
 }

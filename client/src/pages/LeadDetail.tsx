@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
-  ChevronDown, Star, RefreshCw, Mail,
+  ChevronDown, Upload, ExternalLink, Pencil,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
@@ -18,10 +18,14 @@ import DIPChecklistPanel from '../components/DIPChecklistPanel';
 type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount';
 
 interface Lead {
-  id: string; leadId: string; name: string; phone: string; phone2?: string; email?: string;
+  id: string; leadId: string; name: string; phone: string; phone2?: string;
+  email?: string; email2?: string; pan?: string; gst?: string;
   stage: string; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string;
   projectType?: string; scope?: string; location?: string; possessionTimeline?: string;
-  estimatedValue?: string | number | null; intentRating?: number | null;
+  builder?: string; expectedMoveIn?: string | null;
+  offer1?: string; offer2?: string; offer3?: string;
+  notes?: string;
+  estimatedValue?: string | number | null; intentRating?: number | null; intentRatingSource?: string | null;
   nextMeetingDate?: string | null; floorPlanUrl?: string | null;
   onHoldRevivalDate?: string | null; isDuplicate?: boolean;
   isSLABreached: boolean; createdAt: string; updatedAt: string;
@@ -145,6 +149,33 @@ function StarRating({ rating, onSelect }: { rating?: number | null; onSelect?: (
   );
 }
 
+/** Thin field row used inside the two key-facts blocks */
+function FactRow({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
+  return (
+    <div className={`flex gap-2 py-1.5 border-b border-gray-50 last:border-0 ${className ?? ''}`}>
+      <span className="text-xs text-gray-400 w-32 shrink-0">{label}</span>
+      <span className="text-xs text-gray-700 flex-1">{value ?? <span className="text-gray-300">—</span>}</span>
+    </div>
+  );
+}
+
+const EMPTY_EDIT = {
+  // Client details
+  name: '', phone: '', phone2: '', email: '', email2: '', pan: '', gst: '',
+  // Project details
+  projectType: '', scope: '', location: '', builder: '', source: '',
+  estimatedValue: '', expectedMoveIn: '',
+  offer1: '', offer2: '', offer3: '',
+  notes: '',
+  // Legacy
+  possessionTimeline: '', nextMeetingDate: '',
+};
+
+const SOURCE_OPTIONS = [
+  'Meta Ads', 'Google Ads', 'Referral', 'Walk-in', 'Manual',
+  'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Other',
+];
+
 export default function LeadDetail() {
   const { leadId } = useParams<{ leadId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -166,31 +197,22 @@ export default function LeadDetail() {
   const [intentReason, setIntentReason] = useState('');
   const [savingIntent, setSavingIntent] = useState(false);
 
-  const [noteText, setNoteText] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
-
-  const [floorPlan, setFloorPlan] = useState('');
-  const [savingFloor, setSavingFloor] = useState(false);
+  const [editDetailsModal, setEditDetailsModal] = useState(false);
+  const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
+  const [savingDetails, setSavingDetails] = useState(false);
 
   const [reassignField, setReassignField] = useState<'designer' | 'bl' | null>(null);
   const [reassignValue, setReassignValue] = useState('');
   const [savingReassign, setSavingReassign] = useState(false);
 
-  const [editDetailsModal, setEditDetailsModal] = useState(false);
-  const [editDetails, setEditDetails] = useState({
-    projectType: '', scope: '', location: '', possessionTimeline: '',
-    estimatedValue: '', nextMeetingDate: '',
-  });
-  const [savingDetails, setSavingDetails] = useState(false);
+  const [uploadingFloorPlan, setUploadingFloorPlan] = useState(false);
+  const floorPlanInputRef = useRef<HTMLInputElement>(null);
 
   const loadLead = useCallback(() => {
     if (!leadId) return;
     setLoadingLead(true);
     api.get<{ lead: Lead }>(`/leads/${leadId}`)
-      .then((d) => {
-        setLead(d.lead);
-        setFloorPlan(d.lead.floorPlanUrl ?? '');
-      })
+      .then((d) => setLead(d.lead))
       .catch(() => toast.error('Could not load lead'))
       .finally(() => setLoadingLead(false));
   }, [leadId]);
@@ -237,11 +259,25 @@ export default function LeadDetail() {
   const openEditDetails = () => {
     if (!lead) return;
     setEditDetails({
+      name: lead.name ?? '',
+      phone: lead.phone ?? '',
+      phone2: lead.phone2 ?? '',
+      email: lead.email ?? '',
+      email2: lead.email2 ?? '',
+      pan: lead.pan ?? '',
+      gst: lead.gst ?? '',
       projectType: lead.projectType ?? '',
       scope: lead.scope ?? '',
       location: lead.location ?? '',
-      possessionTimeline: lead.possessionTimeline ?? '',
+      builder: lead.builder ?? '',
+      source: lead.source ?? '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
+      expectedMoveIn: lead.expectedMoveIn ? lead.expectedMoveIn.slice(0, 10) : '',
+      offer1: lead.offer1 ?? '',
+      offer2: lead.offer2 ?? '',
+      offer3: lead.offer3 ?? '',
+      notes: lead.notes ?? '',
+      possessionTimeline: lead.possessionTimeline ?? '',
       nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
     });
     setEditDetailsModal(true);
@@ -252,16 +288,30 @@ export default function LeadDetail() {
     setSavingDetails(true);
     try {
       await api.patch(`/leads/${leadId}`, {
+        name: editDetails.name.trim() || null,
+        phone: editDetails.phone.trim() || null,
+        phone2: editDetails.phone2.trim() || null,
+        email: editDetails.email.trim() || null,
+        email2: editDetails.email2.trim() || null,
+        pan: editDetails.pan.trim() || null,
+        gst: editDetails.gst.trim() || null,
         projectType: editDetails.projectType.trim() || null,
         scope: editDetails.scope.trim() || null,
         location: editDetails.location.trim() || null,
-        possessionTimeline: editDetails.possessionTimeline.trim() || null,
+        builder: editDetails.builder.trim() || null,
+        source: editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
+        expectedMoveIn: editDetails.expectedMoveIn ? new Date(editDetails.expectedMoveIn).toISOString() : null,
+        offer1: editDetails.offer1.trim() || null,
+        offer2: editDetails.offer2.trim() || null,
+        offer3: editDetails.offer3.trim() || null,
+        notes: editDetails.notes.trim() || null,
+        possessionTimeline: editDetails.possessionTimeline.trim() || null,
         nextMeetingDate: editDetails.nextMeetingDate
           ? new Date(editDetails.nextMeetingDate).toISOString()
           : null,
       });
-      toast.success('Project details updated');
+      toast.success('Lead details updated');
       setEditDetailsModal(false);
       loadLead(); loadActivities();
     } catch (e: any) {
@@ -311,31 +361,33 @@ export default function LeadDetail() {
     }
   };
 
-  const handleNoteSubmit = async () => {
-    if (!noteText.trim()) return;
-    setSavingNote(true);
+  const handleFloorPlanUpload = async (file: File) => {
+    setUploadingFloorPlan(true);
     try {
-      await api.post(`/leads/${leadId}/notes`, { note: noteText });
-      toast.success('Note saved');
-      setNoteText('');
-      loadActivities();
-    } catch (e: any) {
-      toast.error(e.message ?? 'Could not save note');
-    } finally {
-      setSavingNote(false);
-    }
-  };
-
-  const handleFloorPlanSave = async () => {
-    setSavingFloor(true);
-    try {
-      await api.patch(`/leads/${leadId}`, { floorPlanUrl: floorPlan || null });
-      toast.success('Floor plan URL saved');
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('crm_token') ?? '';
+      const baseUrl = (import.meta as any).env?.VITE_API_URL ?? '';
+      const res = await fetch(`${baseUrl}/api/leads/${leadId}/floor-plan`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      // Safely parse JSON — the server may return HTML on unhandled multer errors
+      let data: { error?: string; url?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        // Non-JSON body (e.g. HTML error page from Express default handler)
+        if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+      toast.success('Floor plan uploaded');
       loadLead();
     } catch (e: any) {
-      toast.error(e.message ?? 'Could not save');
+      toast.error(e.message ?? 'Could not upload floor plan');
     } finally {
-      setSavingFloor(false);
+      setUploadingFloorPlan(false);
     }
   };
 
@@ -373,7 +425,7 @@ export default function LeadDetail() {
 
   return (
     <div className="min-h-screen">
-      {/* Stage-change modal */}
+      {/* ── Stage-change modal ────────────────────────────────────────────────── */}
       {stageModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
@@ -412,33 +464,116 @@ export default function LeadDetail() {
         </div>
       )}
 
-      {/* Edit project details modal */}
+      {/* ── Edit Lead Details modal ───────────────────────────────────────────── */}
       {editDetailsModal && (
-        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-md p-6">
-            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Edit Project Details</h3>
-            <p className="text-xs text-stone-400 mb-4">Estimated value and next meeting date are required to move a lead to MQL.</p>
-            <form onSubmit={handleSaveDetails} className="space-y-3">
-              {([
-                { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
-                { key: 'scope', label: 'Scope of Work', placeholder: '2-bedroom / 3-bedroom / Full home' },
-                { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
-                { key: 'possessionTimeline', label: 'Possession', placeholder: 'Immediate / 3 months' },
-                { key: 'estimatedValue', label: 'Estimated Value (₹)', placeholder: '1500000', type: 'number' },
-                { key: 'nextMeetingDate', label: 'Next Meeting Date & Time', type: 'datetime-local' },
-              ] as { key: keyof typeof editDetails; label: string; placeholder?: string; type?: string }[]).map((f) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
-                  <input
-                    type={f.type ?? 'text'}
-                    value={editDetails[f.key]}
-                    onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-                  />
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-lg p-6 my-4">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Edit Lead Details</h3>
+            <p className="text-xs text-stone-400 mb-5">
+              The following <strong>Project Details</strong> are required before moving EL → MQL:
+              Client Budget, Project Type, Lead Source, Location, Builder, Scope of Work, Expected Move-in.
+              Client Details fields are recommended but not gated.
+              Leads with 1★ intent cannot advance regardless.
+            </p>
+            <form onSubmit={handleSaveDetails} className="space-y-5">
+              {/* ── Client Details ─────────────────────────────────────────── */}
+              <div>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">Client Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { key: 'name', label: 'Full Name', placeholder: 'Amit Sharma', colSpan: 2 },
+                    { key: 'phone', label: 'Phone', placeholder: '+91 98765 43210' },
+                    { key: 'phone2', label: 'Alternate Phone', placeholder: '' },
+                    { key: 'email', label: 'Email', placeholder: 'amit@example.com', type: 'email' },
+                    { key: 'email2', label: 'Alternate Email', placeholder: '', type: 'email' },
+                    { key: 'pan', label: 'PAN', placeholder: 'ABCDE1234F' },
+                    { key: 'gst', label: 'GST', placeholder: '29ABCDE1234F1ZX' },
+                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number }[]).map((f) => (
+                    <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                      <input
+                        type={f.type ?? 'text'}
+                        value={editDetails[f.key]}
+                        onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                        placeholder={f.placeholder}
+                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                      />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* ── Project Details ─────────────────────────────────────────── */}
+              <div>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">Project Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
+                    { key: 'scope', label: 'Scope of Work', placeholder: '3-bed full home' },
+                    { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
+                    { key: 'builder', label: 'Builder (or N/A)', placeholder: 'Sobha / Godrej / N/A' },
+                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean }[]).map((f) => (
+                    <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                      <input
+                        type={f.type ?? 'text'}
+                        value={editDetails[f.key]}
+                        onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                        placeholder={f.placeholder}
+                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                      />
+                    </div>
+                  ))}
+                  {/* Source — select with common values */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">Lead Source <span className="text-brand-500">*</span></label>
+                    <select
+                      value={editDetails.source}
+                      onChange={(e) => setEditDetails({ ...editDetails, source: e.target.value })}
+                      className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                    >
+                      <option value="">Select source…</option>
+                      {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  {([
+                    { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
+                    { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
+                    { key: 'possessionTimeline', label: 'Possession (text)', placeholder: 'Immediate / 3 months' },
+                    { key: 'offer1', label: 'Offer 1', placeholder: '10% discount on modular' },
+                    { key: 'offer2', label: 'Offer 2', placeholder: '' },
+                    { key: 'offer3', label: 'Offer 3', placeholder: '' },
+                    { key: 'notes', label: 'Notes', placeholder: 'Any additional context…', colSpan: 2, multiline: true },
+                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean }[]).map((f) => (
+                    <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                      {f.multiline ? (
+                        <textarea
+                          rows={3}
+                          value={editDetails[f.key]}
+                          onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                          placeholder={f.placeholder}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all resize-none"
+                          style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        />
+                      ) : (
+                        <input
+                          type={f.type ?? 'text'}
+                          value={editDetails[f.key]}
+                          onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                          placeholder={f.placeholder}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                          style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setEditDetailsModal(false)}
                   className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
@@ -453,19 +588,25 @@ export default function LeadDetail() {
         </div>
       )}
 
-      {/* Intent override modal */}
+      {/* ── Intent override modal ─────────────────────────────────────────────── */}
       {intentModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
             <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Override Intent Rating</h3>
-            <p className="text-xs text-stone-400 mb-4">System-computed rating may differ. Reason required when overriding.</p>
+            <p className="text-xs text-stone-400 mb-4">System auto-rates based on meeting type. Reason required when overriding manually.</p>
             <div className="flex justify-center mb-4">
               <StarRating rating={pendingRating} onSelect={setPendingRating} />
             </div>
+            {pendingRating === 1 && (
+              <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs">
+                <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                <span>1★ means "no action planned". This lead will be blocked from advancing stages until the rating is updated.</span>
+              </div>
+            )}
             <div className="mb-4">
               <label className="block text-sm font-semibold text-stone-700 mb-1.5">Reason</label>
               <textarea rows={2} value={intentReason} onChange={(e) => setIntentReason(e.target.value)}
-                placeholder="e.g. Confirmed purchase intent during site visit"
+                placeholder="e.g. Client confirmed purchase intent during site visit"
                 className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                 style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
               <p className="text-xs text-stone-400 mt-1">Required if overriding system rating.</p>
@@ -483,7 +624,20 @@ export default function LeadDetail() {
         </div>
       )}
 
-      {/* Sticky header */}
+      {/* ── Hidden floor plan file input ─────────────────────────────────────── */}
+      <input
+        type="file"
+        ref={floorPlanInputRef}
+        accept=".pdf,.jpg,.jpeg,.png,.dwg,.dxf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFloorPlanUpload(file);
+          e.target.value = '';
+        }}
+      />
+
+      {/* ── Sticky header ─────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-10 bg-white px-6 py-3" style={{ borderBottom: '1px solid #EDE8E3' }}>
         {loadingLead ? (
           <div className="h-12 flex items-center">
@@ -496,10 +650,14 @@ export default function LeadDetail() {
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-extrabold text-stone-900 tracking-tight truncate">{lead.name}</h1>
                 {lead.isSLABreached && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold"><AlertTriangle size={10} strokeWidth={2.5} /> SLA</span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
+                    <AlertTriangle size={10} strokeWidth={2.5} /> SLA
+                  </span>
                 )}
                 {lead.currentOffer && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold"><Gift size={10} strokeWidth={2} /> {lead.currentOffer.name}</span>
+                  <span className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full font-semibold">
+                    <Gift size={10} strokeWidth={2} /> {lead.currentOffer.name}
+                  </span>
                 )}
               </div>
               <p className="text-xs text-stone-400 mt-0.5 font-medium">
@@ -509,7 +667,7 @@ export default function LeadDetail() {
                 {lead.location ? ` · ${lead.location}` : ''}
               </p>
               {/* Stage + intent row */}
-              <div className="flex items-center gap-3 mt-1.5">
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                 <button
                   onClick={openStageModal}
                   className={`text-xs px-2.5 py-0.5 rounded-full font-semibold cursor-pointer hover:opacity-80 transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}
@@ -517,20 +675,34 @@ export default function LeadDetail() {
                 >
                   <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} <ChevronDown size={10} strokeWidth={2.5} /></span>
                 </button>
+                {/* Intent stars + auto badge */}
                 <button
                   onClick={() => openIntentModal(lead.intentRating ?? 0)}
                   title="Click to override intent rating"
-                  className="flex items-center gap-1 hover:opacity-70 transition-opacity"
+                  className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
                 >
                   {Array.from({ length: 5 }, (_, i) => (
                     <span key={i} className={`text-base ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-stone-200'}`}>★</span>
                   ))}
+                  {lead.intentRatingSource === 'auto' && (
+                    <span className="text-[9px] font-bold bg-sky-100 text-sky-600 px-1.5 py-0.5 rounded-full tracking-wide">AUTO</span>
+                  )}
+                  {lead.intentRatingSource === 'manual' && (
+                    <span className="text-[9px] font-bold bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full tracking-wide">MANUAL</span>
+                  )}
                 </button>
+                {/* 1-star warning */}
+                {lead.intentRating === 1 && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium">
+                    <AlertTriangle size={10} strokeWidth={2.5} />
+                    1★ — cannot advance stage
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Right: action buttons */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
               <button
                 onClick={() => toast('Call logging — coming soon')}
                 className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
@@ -564,7 +736,7 @@ export default function LeadDetail() {
         </div>
       )}
 
-      {/* Main content: tabs (left 2/3) + sidebar (right 1/3) */}
+      {/* ── Main content: tabs (left 2/3) + sidebar (right 1/3) ─────────────── */}
       <div className="px-6 py-4 flex gap-6 items-start">
         {/* Main col */}
         <div className="flex-1 min-w-0 space-y-0">
@@ -590,97 +762,99 @@ export default function LeadDetail() {
           {/* Tab content */}
           <div className="bg-white rounded-b-2xl p-5" style={{ border: '1px solid #EDE8E3' }}>
             {activeTab === 'overview' && lead && (
-              <div className="space-y-5">
-                {/* Key facts */}
+              <div className="space-y-6">
+                {/* ── Client Details ────────────────────────────────────────── */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Key Facts</h3>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                    {[
-                      { label: 'Project type', value: lead.projectType },
-                      { label: 'Configuration', value: lead.scope },
-                      { label: 'Location', value: lead.location },
-                      { label: 'Est. value', value: fmtVal(lead.estimatedValue) },
-                      { label: 'Possession', value: lead.possessionTimeline },
-                      { label: 'Source', value: lead.source?.replace(/_/g, ' ') },
-                      { label: 'Created', value: new Date(lead.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) },
-                      { label: 'Offer', value: lead.currentOffer?.name },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex gap-2 py-1.5 border-b border-gray-50">
-                        <span className="text-xs text-gray-400 w-28 shrink-0">{label}</span>
-                        <span className="text-xs text-gray-700">{value ?? <span className="text-gray-300">—</span>}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Floor plan URL */}
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Floor Plan</h3>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={floorPlan}
-                      onChange={(e) => setFloorPlan(e.target.value)}
-                      placeholder="https://drive.google.com/… or any URL"
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    />
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Client Details</h3>
                     <button
-                      onClick={handleFloorPlanSave}
-                      disabled={savingFloor}
-                      className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                      onClick={openEditDetails}
+                      className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
                     >
-                      {savingFloor ? 'Saving…' : 'Save'}
+                      <Pencil size={11} strokeWidth={2} /> Edit
                     </button>
                   </div>
-                  {lead.floorPlanUrl && (
-                    <a href={lead.floorPlanUrl} target="_blank" rel="noreferrer"
-                      className="text-xs text-brand-500 hover:underline mt-1 block truncate">
-                      {lead.floorPlanUrl}
-                    </a>
-                  )}
-                </div>
-
-                {/* Add note */}
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Add a Note</h3>
-                  <textarea
-                    rows={2}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Add a note about this lead…"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none"
-                  />
-                  <div className="flex justify-end mt-1.5">
-                    <button
-                      onClick={handleNoteSubmit}
-                      disabled={savingNote || !noteText.trim()}
-                      className="bg-brand-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
-                    >
-                      {savingNote ? 'Saving…' : 'Save Note'}
-                    </button>
+                  <div className="grid grid-cols-2 gap-x-8">
+                    <FactRow label="Full Name" value={lead.name} />
+                    <FactRow label="Phone" value={lead.phone} />
+                    <FactRow label="Alternate Phone" value={lead.phone2} />
+                    <FactRow label="Email" value={lead.email
+                      ? <a href={`mailto:${lead.email}`} className="text-brand-500 hover:underline">{lead.email}</a>
+                      : undefined} />
+                    <FactRow label="Alternate Email" value={lead.email2
+                      ? <a href={`mailto:${lead.email2}`} className="text-brand-500 hover:underline">{lead.email2}</a>
+                      : undefined} />
+                    <FactRow label="PAN" value={lead.pan} />
+                    <FactRow label="GST" value={lead.gst} />
                   </div>
                 </div>
 
-                {/* Recent activity */}
+                {/* ── Project Details ───────────────────────────────────────── */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Activity</h3>
-                  {activities.length === 0 ? (
-                    <p className="text-xs text-gray-400 py-4 text-center">No activity yet</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {activities.slice(0, 10).map((a) => (
-                        <div key={a.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                          <span className="text-base mt-0.5">{ACTION_ICONS[a.action] ?? '•'}</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-gray-700">
-                              <span className="font-medium">{a.user?.name}</span>
-                              {' — '}
-                              {describeActivity(a.action, a.meta)}
-                            </p>
-                          </div>
-                          <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
-                        </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-800">Project Details</h3>
+                    <button
+                      onClick={openEditDetails}
+                      className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
+                    >
+                      <Pencil size={11} strokeWidth={2} /> Edit
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-8">
+                    <FactRow label="Project Type" value={lead.projectType} />
+                    <FactRow label="Scope of Work" value={lead.scope} />
+                    <FactRow label="Location" value={lead.location} />
+                    <FactRow label="Builder" value={lead.builder} />
+                    <FactRow label="Client Budget" value={fmtVal(lead.estimatedValue)} />
+                    <FactRow label="Expected Move-in" value={lead.expectedMoveIn
+                      ? new Date(lead.expectedMoveIn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : undefined} />
+                    <FactRow label="Possession" value={lead.possessionTimeline} />
+                    <FactRow label="Source" value={lead.source?.replace(/_/g, ' ')} />
+                  </div>
+
+                  {/* Offers */}
+                  {(lead.offer1 || lead.offer2 || lead.offer3) && (
+                    <div className="mt-2 space-y-0.5">
+                      {[lead.offer1, lead.offer2, lead.offer3].filter(Boolean).map((o, i) => (
+                        <FactRow key={i} label={`Offer ${i + 1}`} value={o} />
                       ))}
+                    </div>
+                  )}
+
+                  {/* Floor plan */}
+                  <div className="mt-3 flex items-center gap-3 py-1.5 border-b border-gray-50">
+                    <span className="text-xs text-gray-400 w-32 shrink-0">Floor Plan</span>
+                    <div className="flex items-center gap-2">
+                      {lead.floorPlanUrl ? (
+                        <a
+                          href={lead.floorPlanUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
+                        >
+                          <ExternalLink size={11} strokeWidth={2} /> View file
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-300">No file uploaded</span>
+                      )}
+                      <button
+                        onClick={() => floorPlanInputRef.current?.click()}
+                        disabled={uploadingFloorPlan}
+                        className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50"
+                        style={{ border: '1px solid #EDE8E3' }}
+                      >
+                        <Upload size={10} strokeWidth={2} />
+                        {uploadingFloorPlan ? 'Uploading…' : lead.floorPlanUrl ? 'Replace' : 'Upload'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  {lead.notes && (
+                    <div className="mt-2 py-2 border-b border-gray-50">
+                      <span className="text-xs text-gray-400 block mb-1">Notes</span>
+                      <p className="text-xs text-gray-700 whitespace-pre-wrap">{lead.notes}</p>
                     </div>
                   )}
                 </div>
@@ -712,14 +886,14 @@ export default function LeadDetail() {
 
             {activeTab === 'calls' && <CallLogTab leadId={leadId!} />}
             {activeTab === 'followups' && <FollowUpTab leadId={leadId!} />}
-            {activeTab === 'meetings' && <MeetingsTab leadId={leadId!} />}
+            {activeTab === 'meetings' && <MeetingsTab leadId={leadId!} onMeetingCreated={loadLead} />}
             {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
             {activeTab === 'quotes' && lead && <QuoteTab leadId={leadId!} leadRef={lead.leadId} />}
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
           </div>
         </div>
 
-        {/* Sidebar col */}
+        {/* ── Sidebar col ─────────────────────────────────────────────────────── */}
         <div className="w-72 shrink-0 space-y-3">
           {/* Assignment */}
           <SidebarCard title="Assignment">
@@ -773,33 +947,38 @@ export default function LeadDetail() {
             ) : <div className="h-12 bg-gray-50 rounded animate-pulse" />}
           </SidebarCard>
 
-          {/* Project details */}
-          <SidebarCard title="Project Details">
+          {/* Intent Rating */}
+          <SidebarCard title="Intent Rating">
             {lead ? (
               <>
-                <div className="flex justify-end -mt-1 mb-1">
-                  <button onClick={openEditDetails} className="text-xs text-brand-500 hover:underline font-medium">Edit</button>
-                </div>
-                <InfoRow label="Type" value={lead.projectType} />
-                <InfoRow label="Scope of work" value={lead.scope} />
-                <InfoRow label="Location" value={lead.location} />
-                <InfoRow label="Possession" value={lead.possessionTimeline} />
-                <InfoRow label="Est. value" value={fmtVal(lead.estimatedValue)} />
-                <InfoRow label="Next meeting" value={lead.nextMeetingDate
-                  ? new Date(lead.nextMeetingDate).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
-                  : undefined} />
-                <InfoRow label="Floor plan" value={lead.floorPlanUrl
-                  ? <a href={lead.floorPlanUrl} target="_blank" rel="noreferrer" className="text-brand-500 hover:underline truncate block max-w-[120px]">View</a>
-                  : undefined} />
-                <InfoRow label="Lead rating" value={
-                  <span className="flex gap-0.5">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
                     {Array.from({ length: 5 }, (_, i) => (
-                      <span key={i} className={`text-xs ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                      <span key={i} className={`text-sm ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
                     ))}
-                  </span>
-                } />
+                  </div>
+                  <button onClick={() => openIntentModal(lead.intentRating ?? 0)}
+                    className="text-xs text-brand-500 hover:underline font-medium">Override</button>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {lead.intentRatingSource === 'auto' && (
+                    <span className="text-[9px] font-bold bg-sky-100 text-sky-600 px-1.5 py-0.5 rounded-full">AUTO — from meeting type</span>
+                  )}
+                  {lead.intentRatingSource === 'manual' && (
+                    <span className="text-[9px] font-bold bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full">MANUAL override</span>
+                  )}
+                  {!lead.intentRatingSource && (
+                    <span className="text-[9px] text-gray-400">No rating yet</span>
+                  )}
+                </div>
+                {lead.intentRating === 1 && (
+                  <div className="mt-2 flex items-start gap-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg px-2.5 py-1.5 text-xs">
+                    <AlertTriangle size={11} className="mt-0.5 shrink-0" strokeWidth={2.5} />
+                    <span>Stage advance blocked. Update intent to proceed.</span>
+                  </div>
+                )}
               </>
-            ) : <div className="h-24 bg-gray-50 rounded animate-pulse" />}
+            ) : <div className="h-10 bg-gray-50 rounded animate-pulse" />}
           </SidebarCard>
 
           {/* Source & campaign */}

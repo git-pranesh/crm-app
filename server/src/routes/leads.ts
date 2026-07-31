@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
+import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
+import { supabaseAdmin } from '../lib/supabase.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
@@ -10,6 +12,17 @@ import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
+
+// ── Validation helpers ────────────────────────────────────────────────────────
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+function isValidPhone(phone: string): boolean {
+  const digits = phone.replace(/[\s\-().+]/g, '');
+  return /^\d{7,15}$/.test(digits);
+}
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 export const leadsRouter = Router();
 
@@ -458,7 +471,28 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       onHoldRevivalDate, customFields,
       inactivationReason,
       reason,
+      // Task #20 — new key-facts fields
+      builder, offer1, offer2, offer3, expectedMoveIn,
+      email2, pan, gst, notes,
     } = req.body as Record<string, any>;
+
+    // ── Format validation ─────────────────────────────────────────────────────
+    if (email !== undefined && email?.trim() && !isValidEmail(email)) {
+      res.status(400).json({ error: 'email: invalid format' });
+      return;
+    }
+    if (email2 !== undefined && email2?.trim() && !isValidEmail(email2)) {
+      res.status(400).json({ error: 'email2: invalid format' });
+      return;
+    }
+    if (phone !== undefined && phone?.trim() && !isValidPhone(phone)) {
+      res.status(400).json({ error: 'phone: must be 7–15 digits' });
+      return;
+    }
+    if (phone2 !== undefined && phone2?.trim() && !isValidPhone(phone2)) {
+      res.status(400).json({ error: 'phone2: must be 7–15 digits' });
+      return;
+    }
 
     const existing = await prisma.lead.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
@@ -480,16 +514,26 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         });
         return;
       }
+      // NOTE: intentRating is intentionally excluded from the prospective object.
+      // The 1-star gate must evaluate the persisted DB value — not a value supplied
+      // in this request — so callers cannot bypass the block by sending a non-1
+      // rating alongside a stage change. Intent updates must go through the
+      // dedicated PATCH /api/leads/:id/intent-rating endpoint which enforces the
+      // full audit trail (reason required, intentRatingSource set, log written).
       const prospective = {
         ...existing,
         ...(estimatedValue !== undefined && {
           estimatedValue: estimatedValue === '' || estimatedValue === null ? null : parseFloat(estimatedValue),
         }),
-        ...(intentRating !== undefined && {
-          intentRating: intentRating === '' || intentRating === null ? null : parseInt(intentRating),
-        }),
         ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
         ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
+        // Key-facts fields (Task #20) — needed so gate can check them in the same request
+        ...(builder !== undefined && { builder: builder?.trim() || null }),
+        ...(scope !== undefined && { scope: scope?.trim() || null }),
+        ...(projectType !== undefined && { projectType: projectType?.trim() || null }),
+        ...(source !== undefined && { source: source || null }),
+        ...(location !== undefined && { location: location?.trim() || null }),
+        ...(expectedMoveIn !== undefined && { expectedMoveIn: expectedMoveIn ? new Date(expectedMoveIn) : null }),
       };
       const gate = await checkStageRequirements(prospective, prevStage, stage);
       if (!gate.ok) {
@@ -513,7 +557,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(estimatedValue !== undefined && {
           estimatedValue: estimatedValue === '' || estimatedValue === null ? null : parseFloat(estimatedValue),
         }),
-        ...(intentRating && { intentRating: parseInt(intentRating) }),
+        // intentRating is intentionally excluded here — all intent updates must
+        // go through PATCH /api/leads/:id/intent-rating to enforce the audit
+        // trail (reason required, intentRatingSource, IntentRatingLog record).
         ...(possessionTimeline !== undefined && { possessionTimeline: possessionTimeline?.trim() || null }),
         ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
         ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
@@ -523,6 +569,16 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(customFields && {
           customFields: { ...(existing.customFields as Record<string, unknown> ?? {}), ...customFields },
         }),
+        // Task #20 — new key-facts fields
+        ...(builder !== undefined && { builder: builder?.trim() || null }),
+        ...(offer1 !== undefined && { offer1: offer1?.trim() || null }),
+        ...(offer2 !== undefined && { offer2: offer2?.trim() || null }),
+        ...(offer3 !== undefined && { offer3: offer3?.trim() || null }),
+        ...(expectedMoveIn !== undefined && { expectedMoveIn: expectedMoveIn ? new Date(expectedMoveIn) : null }),
+        ...(email2 !== undefined && { email2: email2?.trim() || null }),
+        ...(pan !== undefined && { pan: pan?.trim() || null }),
+        ...(gst !== undefined && { gst: gst?.trim() || null }),
+        ...(notes !== undefined && { notes: notes?.trim() || null }),
       },
       include: LEAD_INCLUDE,
     });
@@ -597,7 +653,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             where: { id },
             include: {
               calls: { select: { id: true } },
-              meetings: { select: { id: true, status: true } },
+              // mode + deterministic newest-first order so computeSystemRating uses the right meeting
+              meetings: { select: { id: true, mode: true, status: true }, orderBy: { createdAt: 'desc' } },
             },
           });
           if (leadWithRels) {
@@ -857,7 +914,8 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
       where: { id },
       include: {
         calls: { select: { id: true } },
-        meetings: { select: { id: true, status: true } },
+        // newest-first so computeSystemRating reliably uses the most recent meeting mode
+        meetings: { select: { id: true, mode: true, status: true }, orderBy: { createdAt: 'desc' } },
       },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
@@ -870,7 +928,7 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
       return;
     }
 
-    await prisma.lead.update({ where: { id }, data: { intentRating: rating } });
+    await prisma.lead.update({ where: { id }, data: { intentRating: rating, intentRatingSource: 'manual' } });
 
     const log = await prisma.intentRatingLog.create({
       data: {
@@ -903,6 +961,93 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
     });
     res.json({ history: logs });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/leads/:id/floor-plan — upload floor plan file to Supabase Storage ──
+// Multer errors (LIMIT_FILE_SIZE, malformed multipart) are handled by the inner
+// callback so they are always returned as JSON rather than Express's default HTML.
+leadsRouter.post('/:id/floor-plan', verifyToken, (req, res, next) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (upload.single('file') as any)(req, res, (err: any) => {
+    if (!err) return next();
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'File too large. Maximum size is 20 MB.'
+      : (err.message ?? 'Invalid or malformed file upload.');
+    res.status(status).json({ error: message });
+  });
+}, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    const file = req.file;
+
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    // ── Server-side MIME type allowlist ───────────────────────────────────────
+    // Strategy: MIME type is the primary gate.
+    //   - Standard types (PDF, images): MIME must be in the known-good set.
+    //   - DWG/DXF: browsers report application/octet-stream or a few CAD-specific
+    //     types for these; we accept them ONLY when the extension is also dwg/dxf
+    //     so a generic binary with any other extension cannot slip through.
+    //   - Anything else (text/html, application/javascript, etc.) is rejected
+    //     regardless of extension, preventing disguised uploads.
+    const STANDARD_MIME = new Set([
+      'application/pdf',
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+    ]);
+    const DWG_DXF_EXT = new Set(['dwg', 'dxf']);
+    const DWG_DXF_MIME = new Set([
+      'application/octet-stream',
+      'image/vnd.dwg', 'image/x-dwg',
+      'application/acad', 'application/x-dwg', 'application/x-autocad',
+    ]);
+    const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
+    const isStandard = STANDARD_MIME.has(file.mimetype);
+    const isCadFile = DWG_DXF_EXT.has(ext) && DWG_DXF_MIME.has(file.mimetype);
+    if (!isStandard && !isCadFile) {
+      res.status(400).json({ error: `File type not allowed. Accepted: PDF, JPG, PNG, WEBP, DWG, DXF` });
+      return;
+    }
+    // Use only known MIME types for storage; avoid uploading supplied arbitrary MIME
+    const safeMime = isStandard ? file.mimetype : 'application/octet-stream';
+
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    if (!supabaseAdmin) {
+      res.status(500).json({ error: 'Supabase storage not configured (SUPABASE_SERVICE_ROLE_KEY missing)' });
+      return;
+    }
+
+    const safeExt = (DWG_DXF_EXT.has(ext) || ['pdf','jpg','jpeg','png','webp'].includes(ext)) ? ext : 'pdf';
+    const storagePath = `floor-plans/${lead.leadId}/${Date.now()}.${safeExt}`;
+
+    // Ensure bucket exists (idempotent)
+    await supabaseAdmin.storage.createBucket('crm-files', { public: true }).catch(() => {});
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from('crm-files')
+      .upload(storagePath, file.buffer, { contentType: safeMime, upsert: true });
+
+    if (uploadError) {
+      res.status(500).json({ error: uploadError.message });
+      return;
+    }
+
+    const { data: { publicUrl } } = supabaseAdmin.storage.from('crm-files').getPublicUrl(storagePath);
+
+    await prisma.lead.update({ where: { id }, data: { floorPlanUrl: publicUrl } });
+    await logActivity(user.id, 'FLOOR_PLAN_UPLOADED', id, { url: publicUrl, fileName: file.originalname });
+
+    res.json({ url: publicUrl });
+  } catch (err: any) {
+    console.error('[leads:floor-plan]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

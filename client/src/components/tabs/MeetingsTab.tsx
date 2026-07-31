@@ -16,9 +16,9 @@ const STATUS_COLORS: Record<string, string> = {
   NO_SHOW: 'bg-red-100 text-red-700',
 };
 
-interface Props { leadId: string }
+interface Props { leadId: string; onMeetingCreated?: () => void }
 
-export default function MeetingsTab({ leadId }: Props) {
+export default function MeetingsTab({ leadId, onMeetingCreated }: Props) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +69,7 @@ export default function MeetingsTab({ leadId }: Props) {
       setForm({ type: '', mode: '', scheduledAt: '' });
       setShowForm(false);
       await loadMeetings();
+      onMeetingCreated?.();
     } catch (e: any) {
       setError(e.message);
     } finally {
