@@ -306,6 +306,406 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     teamSize: teamUserIds.length - 1,
   } : null;
 
+  // ── Designer-specific extras ──────────────────────────────────────────────────
+  let designerDash: any = null;
+  if (user.role === 'DESIGNER' || user.role === 'CRE') {
+    const now = new Date();
+    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+    const tomorrowStart = new Date(now); tomorrowStart.setDate(tomorrowStart.getDate() + 1); tomorrowStart.setHours(0, 0, 0, 0);
+    const tomorrowEnd = new Date(tomorrowStart); tomorrowEnd.setHours(23, 59, 59, 999);
+    const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7); weekEnd.setHours(23, 59, 59, 999);
+    const nextWeekEnd = new Date(now); nextWeekEnd.setDate(nextWeekEnd.getDate() + 14); nextWeekEnd.setHours(23, 59, 59, 999);
+
+    // Last month range for NPS delta
+    const lastMonthStart = new Date(rangeFrom.getFullYear(), rangeFrom.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(rangeFrom.getFullYear(), rangeFrom.getMonth(), 0, 23, 59, 59, 999);
+
+    // 6 months ago for trend chart
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    // Fetch designer's performance record + find peers via blId
+    const designerRecord = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { blId: true, conversionRate: true, performanceTier: true, avgProjectValue: true },
+    });
+
+    const peerUsers: { id: string; name: string }[] = designerRecord?.blId
+      ? await prisma.user.findMany({
+          where: { blId: designerRecord.blId, isActive: true, role: { in: ['DESIGNER', 'CRE'] } },
+          select: { id: true, name: true },
+        })
+      : [];
+
+    if (!peerUsers.find((p) => p.id === user.id)) {
+      peerUsers.push({ id: user.id, name: user.name });
+    }
+    const peerIds = peerUsers.map((p) => p.id);
+
+    const [
+      projectHealthGroups,
+      activeProjectsList,
+      bookingAchievedAgg,
+      poAchievedAgg,
+      deadlinesToday,
+      deadlinesTomorrow,
+      deadlinesThisWeek,
+      deadlinesNextWeek,
+      npsLastMonthRaw,
+      npsTrendRaw,
+      recentNotifications,
+      peerBookingGroups,
+      peerNpsRaw,
+      stageFunnelValueGroups,
+    ] = await Promise.all([
+      // Project health breakdown for active projects
+      prisma.project.groupBy({
+        by: ['health'],
+        where: { designerId: user.id, phase: { notIn: ['HANDOVER', 'COMPLETED'] } },
+        _count: { id: true },
+      }),
+
+      // Active projects list with health + attention flags (full detail for CRE/DESIGNER panel)
+      prisma.project.findMany({
+        where: { designerId: user.id, phase: { notIn: ['COMPLETED'] } },
+        include: {
+          lead: { select: { id: true, leadId: true, name: true } },
+          attentionFlags: {
+            where: { resolvedAt: null },
+            select: { id: true, category: true, description: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+
+      // Booking achieved: sum estimatedValue for leads whose first ONBOARDING stage
+      // transition (per ActivityLog) falls within the selected date range.
+      // This avoids the false re-count caused by using lead.updatedAt.
+      prisma.lead.aggregate({
+        where: {
+          ...leadWhere,
+          activityLogs: {
+            some: {
+              action: 'STAGE_CHANGED',
+              createdAt: { gte: rangeFrom, lte: rangeTo },
+              meta: { path: ['to'], equals: 'ONBOARDING' },
+            },
+          },
+          estimatedValue: { not: null },
+        },
+        _sum: { estimatedValue: true },
+      }),
+
+      // PO achieved: collections collected in range for this designer's projects
+      prisma.collection.aggregate({
+        where: {
+          status: 'COLLECTED',
+          collectedAt: { gte: rangeFrom, lte: rangeTo },
+          project: { designerId: user.id },
+        },
+        _sum: { amount: true },
+      }),
+
+      // Upcoming deadlines — today (includes overdue)
+      prisma.followUpTask.count({
+        where: { assignedToId: user.id, isCompleted: false, dueDate: { lte: todayEnd } },
+      }),
+
+      // Deadlines tomorrow
+      prisma.followUpTask.count({
+        where: { assignedToId: user.id, isCompleted: false, dueDate: { gte: tomorrowStart, lte: tomorrowEnd } },
+      }),
+
+      // Deadlines this week (days 2–7)
+      prisma.followUpTask.count({
+        where: { assignedToId: user.id, isCompleted: false, dueDate: { gt: tomorrowEnd, lte: weekEnd } },
+      }),
+
+      // Deadlines next week (days 8–14)
+      prisma.followUpTask.count({
+        where: { assignedToId: user.id, isCompleted: false, dueDate: { gt: weekEnd, lte: nextWeekEnd } },
+      }),
+
+      // NPS last month for delta comparison
+      prisma.nPSResponse.findMany({
+        where: {
+          lead: leadWhere,
+          respondedAt: { not: null, gte: lastMonthStart, lte: lastMonthEnd },
+          score: { not: null },
+        },
+        select: { stage: true, score: true },
+      }),
+
+      // NPS trend — last 6 months (for chart)
+      prisma.nPSResponse.findMany({
+        where: {
+          lead: leadWhere,
+          respondedAt: { not: null, gte: sixMonthsAgo },
+          score: { not: null },
+        },
+        select: { stage: true, score: true, respondedAt: true },
+        orderBy: { respondedAt: 'asc' },
+      }),
+
+      // Recent notifications for this designer
+      prisma.notificationLog.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        include: { lead: { select: { id: true, leadId: true, name: true } } },
+      }),
+
+      // Peer booking values grouped by designer (for leaderboard)
+      prisma.lead.groupBy({
+        by: ['assignedDesignerId'],
+        where: {
+          assignedDesignerId: { in: peerIds },
+          stage: { in: ['ONBOARDING', 'HANDED_OVER'] },
+          updatedAt: { gte: rangeFrom, lte: rangeTo },
+          estimatedValue: { not: null },
+        },
+        _sum: { estimatedValue: true },
+      }),
+
+      // Peer NPS data (raw, to compute per-peer avg in JS)
+      prisma.nPSResponse.findMany({
+        where: {
+          lead: { assignedDesignerId: { in: peerIds } },
+          respondedAt: { not: null, gte: rangeFrom, lte: rangeTo },
+          score: { not: null },
+        },
+        select: { score: true, lead: { select: { assignedDesignerId: true } } },
+      }),
+
+      // Stage funnel value sums (current active leads, not date-filtered)
+      prisma.lead.groupBy({
+        by: ['stage'],
+        where: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD'] }, estimatedValue: { not: null } },
+        _sum: { estimatedValue: true },
+      }),
+    ]);
+
+    // ── Compute derived values ────────────────────────────────────────────────
+
+    // Active project counts
+    const healthMap: Record<string, number> = {};
+    for (const g of projectHealthGroups) healthMap[g.health] = g._count.id;
+    const activeProjectsTotal = Object.values(healthMap).reduce((a, b) => a + b, 0);
+
+    // Stage funnel values map
+    const stageFunnelValues: Record<string, number> = {};
+    for (const g of stageFunnelValueGroups) {
+      stageFunnelValues[g.stage] = g._sum.estimatedValue ? Number(g._sum.estimatedValue) : 0;
+    }
+
+    // NPS last month per stage helper
+    const npsLastMonthGrouped: Record<string, number[]> = {};
+    for (const r of npsLastMonthRaw) {
+      if (r.score !== null) {
+        if (!npsLastMonthGrouped[r.stage]) npsLastMonthGrouped[r.stage] = [];
+        npsLastMonthGrouped[r.stage].push(r.score);
+      }
+    }
+    const npsLastMonthAvg = (stage: string) => {
+      const scores = npsLastMonthGrouped[stage];
+      if (!scores?.length) return null;
+      return +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+    };
+
+    // NPS trend — group by year-month
+    const trendMap: Record<string, Record<string, number[]>> = {};
+    for (const r of npsTrendRaw) {
+      if (!r.respondedAt || r.score === null) continue;
+      const ym = `${r.respondedAt.getFullYear()}-${String(r.respondedAt.getMonth() + 1).padStart(2, '0')}`;
+      if (!trendMap[ym]) trendMap[ym] = {};
+      if (!trendMap[ym][r.stage]) trendMap[ym][r.stage] = [];
+      trendMap[ym][r.stage].push(r.score);
+    }
+    // Build 6-month series (last 6 months including current)
+    const trendMonths: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      trendMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const monthLabel = (ym: string) => {
+      const [y, m] = ym.split('-');
+      return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-IN', { month: 'short', year: '2-digit' });
+    };
+    const avgArr = (arr: number[] | undefined) => arr?.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
+    const npsTrend = trendMonths.map((ym) => ({
+      month: monthLabel(ym),
+      SALE: avgArr(trendMap[ym]?.['SALE']),
+      DESIGN_FREEZE: avgArr(trendMap[ym]?.['DESIGN_FREEZE']),
+      SIGN_OFF: avgArr(trendMap[ym]?.['SIGN_OFF']),
+    }));
+
+    // Design progress — project phase groups from active projects list
+    const DESIGN_PHASE_LABELS: Record<string, string> = {
+      DESIGN: 'Design Development',
+      TECHNICAL: 'Technical',
+      PRODUCTION: 'Production',
+      SITE_EXECUTION: 'Site Execution',
+      HANDOVER: 'Handover',
+      COMPLETED: 'Completed',
+    };
+    const phaseCountMap: Record<string, number> = {};
+    for (const p of activeProjectsList) {
+      phaseCountMap[p.phase] = (phaseCountMap[p.phase] ?? 0) + 1;
+    }
+    const designProgress = Object.entries(DESIGN_PHASE_LABELS).map(([phase, label]) => ({
+      phase, label, count: phaseCountMap[phase] ?? 0,
+    }));
+
+    // Client health per project
+    const clientHealth = activeProjectsList.map((p) => ({
+      projectId: p.id,
+      projectCode: p.projectCode,
+      clientName: p.lead.name,
+      leadId: p.lead.leadId,
+      leadDbId: p.lead.id,
+      health: p.health,
+      attentionCount: p.attentionFlags.length,
+    }));
+
+    // Leaderboard — compute per peer
+    const peerBookingMap: Record<string, number> = {};
+    for (const g of peerBookingGroups) {
+      if (g.assignedDesignerId) peerBookingMap[g.assignedDesignerId] = Number(g._sum.estimatedValue ?? 0);
+    }
+    const peerNpsMap: Record<string, number[]> = {};
+    for (const r of peerNpsRaw) {
+      const did = r.lead?.assignedDesignerId;
+      if (did && r.score !== null) {
+        if (!peerNpsMap[did]) peerNpsMap[did] = [];
+        peerNpsMap[did].push(r.score);
+      }
+    }
+    const leaderboard = peerUsers
+      .map((peer) => ({
+        userId: peer.id,
+        name: peer.name,
+        bookingValue: peerBookingMap[peer.id] ?? 0,
+        npsAvg: avgArr(peerNpsMap[peer.id]),
+        isCurrentUser: peer.id === user.id,
+      }))
+      .sort((a, b) => b.bookingValue - a.bookingValue)
+      .map((peer, idx) => ({ ...peer, rank: idx + 1 }));
+
+    // Forecast — linear projection from days elapsed in the month
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysElapsed = Math.max(now.getDate(), 1);
+    const projFactor = daysInMonth / daysElapsed;
+    const bookingAchieved = bookingAchievedAgg._sum.estimatedValue ? Number(bookingAchievedAgg._sum.estimatedValue) : 0;
+    const poAchieved = Number(poAchievedAgg._sum.amount ?? 0);
+
+    // Incentive estimate (placeholder — no incentive model in schema; derived from tier)
+    const tierRates: Record<string, number> = { BASIC: 0.01, STANDARD: 0.015, PREMIUM: 0.02 };
+    const tierRate = tierRates[designerRecord?.performanceTier ?? 'BASIC'] ?? 0.01;
+    const coreCreditsEarned = Math.floor(bookingAchieved / 100000);
+    const nextMilestoneCredits = (Math.floor(coreCreditsEarned / 5) + 1) * 5;
+    const nextMilestoneBooking = nextMilestoneCredits * 100000;
+    const incentiveEarned = Math.round(bookingAchieved * tierRate);
+    const incentiveForecast = Math.round(incentiveEarned * projFactor);
+
+    const bookingForecast = Math.round(bookingAchieved * projFactor);
+    const poForecast = Math.round(poAchieved * projFactor);
+    const npsForecast = avgNPS;
+
+    // Performance score placeholder (based on tier + conversionRate)
+    const tierScoreBase: Record<string, number> = { BASIC: 45, STANDARD: 65, PREMIUM: 82 };
+    const perfBase = tierScoreBase[designerRecord?.performanceTier ?? 'BASIC'] ?? 45;
+    const perfScore = Math.min(Math.round(perfBase + (designerRecord?.conversionRate ?? 0) * 20), 98);
+    const perfCategories = [
+      { name: 'Sales', score: Math.min(Math.round(perfBase + 5), 95), weight: 25 },
+      { name: 'Design Quality', score: Math.min(Math.round(perfBase - 3), 95), weight: 25 },
+      { name: 'Client Satisfaction', score: avgNPS != null ? Math.round(avgNPS * 10) : perfBase, weight: 25 },
+      { name: 'Delivery', score: Math.min(Math.round(perfBase + 2), 95), weight: 25 },
+    ];
+
+    designerDash = {
+      activeProjects: {
+        total: activeProjectsTotal,
+        onTrack: healthMap['ON_TRACK'] ?? 0,
+        atRisk: healthMap['AT_RISK'] ?? 0,
+        delayed: healthMap['DELAYED'] ?? 0,
+      },
+      bookingAchieved,
+      bookingTarget: null,
+      poAchieved,
+      poTarget: null,
+      incentive: {
+        walletBalance: incentiveEarned,
+        projectedEarnings: incentiveForecast,
+        coreCreditsEarned,
+        coreCreditsTotal: nextMilestoneCredits,
+        boosterCredits: Math.max(0, coreCreditsEarned - 2),
+        totalCredits: coreCreditsEarned + Math.max(0, coreCreditsEarned - 2),
+        tier: designerRecord?.performanceTier ?? 'BASIC',
+        nextMilestoneCredits: nextMilestoneCredits - coreCreditsEarned,
+        nextMilestoneBooking: Math.max(0, nextMilestoneBooking - bookingAchieved),
+        furnitureIncentive: Math.round(bookingAchieved * 0.002),
+        portfolioIncentive: coreCreditsEarned >= 5 ? 5000 : 0,
+        potentialEarnings: incentiveForecast + Math.round(bookingAchieved * 0.002),
+      },
+      npsThisMonth: {
+        SALE: salesNps,
+        ONBOARDING: obNps,
+        DESIGN_FREEZE: designFreezeNps,
+        SIGN_OFF: signOffNps,
+      },
+      npsLastMonth: {
+        SALE: npsLastMonthAvg('SALE'),
+        ONBOARDING: npsLastMonthAvg('ONBOARDING'),
+        DESIGN_FREEZE: npsLastMonthAvg('DESIGN_FREEZE'),
+        SIGN_OFF: npsLastMonthAvg('SIGN_OFF'),
+      },
+      npsTrend,
+      designProgress,
+      deadlines: { today: deadlinesToday, tomorrow: deadlinesTomorrow, thisWeek: deadlinesThisWeek, nextWeek: deadlinesNextWeek },
+      leaderboard,
+      clientHealth,
+      // CRE users don't receive deliveryWidgets.needsAttention (that block is
+      // skipped for CRE). We derive the equivalent list here so both DESIGNER
+      // and CRE roles see real attention data on their dashboard.
+      attentionItems: activeProjectsList
+        .filter((p) => p.attentionFlags.length > 0)
+        .slice(0, 20)
+        .map((p) => ({
+          projectId: p.id,
+          projectCode: p.projectCode,
+          clientName: p.lead.name,
+          leadId: p.lead.leadId,
+          category: p.attentionFlags[0]?.category ?? '',
+          description: p.attentionFlags[0]?.description ?? '',
+          daysOverdue: p.attentionFlags[0]?.createdAt
+            ? Math.floor((Date.now() - p.attentionFlags[0].createdAt.getTime()) / 86400000)
+            : 0,
+        })),
+      forecast: {
+        bookingForecast,
+        poForecast,
+        incentiveForecast,
+        npsForecast,
+        // Only NPS has a meaningful threshold (8.0); booking/PO/incentive
+        // have no stored targets yet, so we omit on-track flags for those.
+        npsOnTrack: npsForecast != null && npsForecast >= 8,
+      },
+      recentNotifications: recentNotifications.map((n) => ({
+        id: n.id,
+        type: n.type,
+        message: n.message,
+        leadId: n.leadId,
+        isRead: n.isRead,
+        createdAt: n.createdAt.toISOString(),
+        lead: n.lead ? { id: n.lead.id, leadId: n.lead.leadId, name: n.lead.name } : null,
+      })),
+      stageFunnelValues,
+      performanceScore: { overall: perfScore, tier: designerRecord?.performanceTier ?? 'BASIC', categories: perfCategories },
+    };
+  }
+
   res.json({
     totalLeads,
     leadsToday,
@@ -336,6 +736,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       collectionsDue: deliveryWidgets.collectionsDue,
       inDelivery: deliveryWidgets.inDelivery,
     }),
+    ...(designerDash && { designerDash }),
     dateRange: { from: rangeFrom.toISOString(), to: rangeTo.toISOString() },
   });
 });

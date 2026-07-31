@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
+import DesignerDashboard from './DesignerDashboard';
 
 interface NpsBreakdown {
   salesNps: number | null;
@@ -524,12 +525,12 @@ function BLDashboard({ data }: { data: DashboardData }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export default function Dashboard() {
+// ── BH / BL dashboard shell (handles its own data-fetch) ─────────────────────
+function BHBLDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const user = getStoredUser();
-
   const isBH = user?.role === 'BRANCH_HEAD' || user?.role === 'ADMIN';
 
   useEffect(() => {
@@ -577,4 +578,11 @@ export default function Dashboard() {
       {data && (isBH ? <BHDashboard data={data} /> : <BLDashboard data={data} />)}
     </div>
   );
+}
+
+// ── Main export — routes by role ───────────────────────────────────────────────
+export default function Dashboard() {
+  const user = getStoredUser();
+  const isDesigner = user?.role === 'DESIGNER' || user?.role === 'CRE';
+  return isDesigner ? <DesignerDashboard /> : <BHBLDashboard />;
 }
