@@ -1,0 +1,53 @@
+1.⁠ ⁠Slide 21 – Call Log
+Please remove the text “No pre-meeting questionnaire submitted yet” shown at the bottom of the call log. This should not be displayed in the dashboard.
+
+
+2.⁠ ⁠DQL → PP Direct Move
+The DQL → PP direct movement is an additionally allowed path, not a replacement for the existing Proposal Ready stage.
+However, even when the project moves directly from DQL to PP
+
+The Proposal Ready stage requirements still have to be completed.
+
+The PP document must be filled/completed.
+The proposal document must be attached.
+
+The system should record that the project followed the DQL → PP direct path.
+So, please do not remove Proposal Ready from the workflow. The direct path should simply be an additional permitted route.
+
+3.⁠ ⁠Design Pipeline Stages
+
+Yes, the Design Pipeline stages are confirmed as the interior design project phases.
+
+The detailed and updated pipeline/stage definitions have been provided in the new document submitted today. Please use that latest document as the source of truth for the detailed stage structure rather than creating a separate interpretation.
+
+
+4.⁠ ⁠Performance Score
+The Performance Score should be system-calculated; it should not be a manually defined score by the client/user.
+
+The score should incorporate the relevant performance parameters, including:
+NPS / CX performance
+TAT / SLA adherence
+Process adherence
+Target achievement
+Other defined operational/performance parameters applicable to the role
+
+The CRM should automatically calculate the score from the underlying data and display the resulting score/performance rating.
+
+5.⁠ ⁠Today's Focus
+Today's Focus should be fully auto-generated.
+It should derive the action items from the tasks, follow-ups, deadlines, pending activities and project-level actions already recorded in the CRM.
+
+Since follow-up tasks and required actions can be added under each project, the system should automatically pull the relevant items into Today's Focus based on:
+Due today
+Overdue
+High-priority pending actions
+SLA/TAT risks
+Client follow-ups
+Upcoming deadlines
+Other project/task actions requiring attention
+
+There should therefore be no requirement for the designer/BL to manually create Today's Focus items. It should be a dynamic management view generated from the actual CRM data.
+
+
+In short:
+Today's Focus = Automatically generated from the user's/project's pending and upcoming CRM actions
