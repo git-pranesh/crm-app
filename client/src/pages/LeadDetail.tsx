@@ -1128,17 +1128,19 @@ export default function LeadDetail() {
                           <ExternalLink size={11} strokeWidth={2} /> View file
                         </a>
                       ) : (
-                        <span className="text-xs text-gray-300">No file uploaded</span>
+                        <>
+                          <span className="text-xs text-gray-300">No file uploaded</span>
+                          <button
+                            onClick={() => floorPlanInputRef.current?.click()}
+                            disabled={uploadingFloorPlan}
+                            className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50"
+                            style={{ border: '1px solid #EDE8E3' }}
+                          >
+                            <Upload size={10} strokeWidth={2} />
+                            {uploadingFloorPlan ? 'Uploading…' : 'Upload'}
+                          </button>
+                        </>
                       )}
-                      <button
-                        onClick={() => floorPlanInputRef.current?.click()}
-                        disabled={uploadingFloorPlan}
-                        className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50"
-                        style={{ border: '1px solid #EDE8E3' }}
-                      >
-                        <Upload size={10} strokeWidth={2} />
-                        {uploadingFloorPlan ? 'Uploading…' : lead.floorPlanUrl ? 'Replace' : 'Upload'}
-                      </button>
                     </div>
                   </div>
 

@@ -1398,8 +1398,14 @@ leadsRouter.post('/:id/floor-plan', verifyToken, (req, res, next) => {
     // Use only known MIME types for storage; avoid uploading supplied arbitrary MIME
     const safeMime = isStandard ? file.mimetype : 'application/octet-stream';
 
-    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true } });
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, floorPlanUrl: true } });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    // Files cannot be replaced once uploaded — only new files may be added.
+    if (lead.floorPlanUrl) {
+      res.status(405).json({ error: 'A floor plan is already attached and cannot be replaced. Use the Files tab to add a new file.' });
+      return;
+    }
 
     if (!supabaseAdmin) {
       res.status(500).json({ error: 'Supabase storage not configured (SUPABASE_SERVICE_ROLE_KEY missing)' });
