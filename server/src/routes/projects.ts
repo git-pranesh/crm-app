@@ -6,6 +6,19 @@ import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
 
 export const projectsRouter = Router();
 
+// ── BL is view-only on projects ───────────────────────────────────────────────
+// BL can see everything a project exposes (list, pipeline, detail, files) but
+// cannot mutate project data — that stays with the assigned Designer/CRE and
+// Branch Head. Lead mutations are unaffected (see leads.ts) — this guard is
+// scoped to project-mutating routes only.
+function blockBLWrite(req: any, res: any, next: any) {
+  if (req.user?.role === 'BL') {
+    res.status(403).json({ error: 'BL role has view-only access to projects' });
+    return;
+  }
+  next();
+}
+
 // ── Build designer-scope where clause ─────────────────────────────────────────
 async function buildProjectWhere(user: { id: string; role: string; blId?: string | null }) {
   if (user.role === 'DESIGNER' || user.role === 'CRE') {
@@ -159,7 +172,7 @@ projectsRouter.get('/:id', verifyToken, async (req, res) => {
 });
 
 // ── PATCH /api/projects/:id — update phase, health, progress, dates ───────────
-projectsRouter.patch('/:id', verifyToken, async (req, res) => {
+projectsRouter.patch('/:id', verifyToken, blockBLWrite, async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;
@@ -198,7 +211,7 @@ projectsRouter.patch('/:id', verifyToken, async (req, res) => {
 });
 
 // ── POST /api/projects/:id/attention-flag — flag an issue ────────────────────
-projectsRouter.post('/:id/attention-flag', verifyToken, async (req, res) => {
+projectsRouter.post('/:id/attention-flag', verifyToken, blockBLWrite, async (req, res) => {
   try {
     const user = req.user!;
     const { id } = req.params;
@@ -230,7 +243,7 @@ projectsRouter.post('/:id/attention-flag', verifyToken, async (req, res) => {
 });
 
 // ── PATCH /api/projects/:id/attention-flag/:flagId/resolve ───────────────────
-projectsRouter.patch('/:id/attention-flag/:flagId/resolve', verifyToken, async (req, res) => {
+projectsRouter.patch('/:id/attention-flag/:flagId/resolve', verifyToken, blockBLWrite, async (req, res) => {
   try {
     const user = req.user!;
     const { id, flagId } = req.params;

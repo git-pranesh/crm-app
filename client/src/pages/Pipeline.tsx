@@ -73,14 +73,17 @@ interface DesignPipelineTimeline {
 }
 
 interface SalesFilters {
+  source: string;
+  stage: string;
+  projectType: string;
+  location: string;
   originDateFrom: string;
   originDateTo: string;
-  originMonth: string;
   budgetMin: string;
   budgetMax: string;
   possessionDateFrom: string;
   possessionDateTo: string;
-  intentMin: string;
+  intent: string;
   projectedObFrom: string;
   projectedObTo: string;
 }
@@ -182,27 +185,6 @@ function fmtDate(d: string | null | undefined) {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
 }
 
-/** Generate last-N billing months as dropdown options.
- *  Billing cycle: 16th of the selected month → 15th of the next month.
- */
-function billingMonthOptions(count = 14): Array<{ value: string; label: string }> {
-  const now = new Date();
-  const options: Array<{ value: string; label: string }> = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const y = d.getFullYear();
-    const m = d.getMonth(); // 0-indexed
-    const val = `${y}-${String(m + 1).padStart(2, '0')}`;
-    const from = new Date(y, m, 16).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-    const toD   = new Date(y, m + 1, 15);
-    const to   = toD.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
-    options.push({ value: val, label: `${from} – ${to}` });
-  }
-  return options;
-}
-
-const BILLING_MONTHS = billingMonthOptions();
-
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 const INTENT_COLOR = (r: number | null | undefined) => {
   if (!r) return 'bg-gray-300';
@@ -221,9 +203,8 @@ function StarRating({ rating }: { rating: number | null | undefined }) {
   );
 }
 
-/** Clickable star input for minimum-intent filter. */
+/** Clickable star input for exact-match intent filter (e.g. "2 stars" shows only 2-star leads). */
 function StarFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [hover, setHover] = useState(0);
   const selected = parseInt(value) || 0;
   return (
     <div className="flex gap-1 items-center">
@@ -232,15 +213,13 @@ function StarFilter({ value, onChange }: { value: string; onChange: (v: string) 
           key={i}
           type="button"
           onClick={() => onChange(selected === i ? '' : String(i))}
-          onMouseEnter={() => setHover(i)}
-          onMouseLeave={() => setHover(0)}
           className="text-lg leading-none transition-colors"
         >
-          <span className={(hover || selected) >= i ? 'text-amber-400' : 'text-gray-200'}>★</span>
+          <span className={selected === i ? 'text-amber-400' : 'text-gray-200'}>★</span>
         </button>
       ))}
       {selected > 0 && (
-        <span className="text-xs text-stone-500 ml-0.5">≥ {selected}</span>
+        <span className="text-xs text-stone-500 ml-0.5">{selected} star{selected > 1 ? 's' : ''}</span>
       )}
     </div>
   );
@@ -584,12 +563,26 @@ function DesignPipelineView() {
 type FilterTab = 'all' | 'active' | 'onhold' | 'inactive';
 
 const EMPTY_SALES_FILTERS: SalesFilters = {
-  originDateFrom: '', originDateTo: '', originMonth: '',
+  source: '', stage: '', projectType: '', location: '',
+  originDateFrom: '', originDateTo: '',
   budgetMin: '', budgetMax: '',
   possessionDateFrom: '', possessionDateTo: '',
-  intentMin: '',
+  intent: '',
   projectedObFrom: '', projectedObTo: '',
 };
+
+const SOURCE_FILTER_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
+
+const STAGE_FILTER_OPTIONS_ALL = [
+  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
+  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+];
+const STAGE_FILTER_OPTIONS_DESIGNER = [
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
+  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+];
 
 function SalesPipelineView({ userRole }: { userRole: string }) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -620,15 +613,19 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     try {
       const params = new URLSearchParams({ limit: '200' });
       if (isDesigner) params.set('pipelineMode', '1');
+      // Filters shared with the leads list
+      if (salesFilters.source)      params.set('source',      salesFilters.source);
+      if (salesFilters.stage)       params.set('stage',       salesFilters.stage);
+      if (salesFilters.projectType) params.set('projectType', salesFilters.projectType);
+      if (salesFilters.location)    params.set('location',    salesFilters.location);
       // Advanced filters
       if (salesFilters.originDateFrom) params.set('originDateFrom', salesFilters.originDateFrom);
       if (salesFilters.originDateTo)   params.set('originDateTo',   salesFilters.originDateTo);
-      if (salesFilters.originMonth)    params.set('originMonth',    salesFilters.originMonth);
       if (salesFilters.budgetMin)      params.set('budgetMin',      salesFilters.budgetMin);
       if (salesFilters.budgetMax)      params.set('budgetMax',      salesFilters.budgetMax);
       if (salesFilters.possessionDateFrom) params.set('possessionDateFrom', salesFilters.possessionDateFrom);
       if (salesFilters.possessionDateTo)   params.set('possessionDateTo',   salesFilters.possessionDateTo);
-      if (salesFilters.intentMin)      params.set('intentMin',      salesFilters.intentMin);
+      if (salesFilters.intent)      params.set('intent',      salesFilters.intent);
       if (salesFilters.projectedObFrom) params.set('projectedObFrom', salesFilters.projectedObFrom);
       if (salesFilters.projectedObTo)   params.set('projectedObTo',   salesFilters.projectedObTo);
 
@@ -841,6 +838,62 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         <div className="bg-white px-5 py-4 shrink-0" style={{ borderBottom: '1px solid #EDE8E3' }}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
+            {/* Source */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Source</label>
+              <select
+                value={salesFilters.source}
+                onChange={(e) => setSF('source', e.target.value)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+              >
+                <option value="">All sources</option>
+                {SOURCE_FILTER_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+              </select>
+            </div>
+
+            {/* Stage */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Stage</label>
+              <select
+                value={salesFilters.stage}
+                onChange={(e) => setSF('stage', e.target.value)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+              >
+                <option value="">All stages</option>
+                {(isDesigner ? STAGE_FILTER_OPTIONS_DESIGNER : STAGE_FILTER_OPTIONS_ALL).map((s) => (
+                  <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Project type */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Project type</label>
+              <input
+                type="text"
+                value={salesFilters.projectType}
+                onChange={(e) => setSF('projectType', e.target.value)}
+                placeholder="2BHK / Villa / Office"
+                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+              />
+            </div>
+
+            {/* Location */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Location</label>
+              <input
+                type="text"
+                value={salesFilters.location}
+                onChange={(e) => setSF('location', e.target.value)}
+                placeholder="Whitefield, Bangalore"
+                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+              />
+            </div>
+
             {/* Lead origin date range */}
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Lead origin date (from)</label>
@@ -861,22 +914,6 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
                 className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
                 style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
               />
-            </div>
-
-            {/* Origin month — billing cycle (16th–15th) */}
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Origin billing month (16th–15th)</label>
-              <select
-                value={salesFilters.originMonth}
-                onChange={(e) => setSF('originMonth', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-              >
-                <option value="">All months</option>
-                {BILLING_MONTHS.map((bm) => (
-                  <option key={bm.value} value={bm.value}>{bm.label}</option>
-                ))}
-              </select>
             </div>
 
             {/* Budget range */}
@@ -925,10 +962,10 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
               />
             </div>
 
-            {/* Intent rating minimum */}
+            {/* Intent rating (exact match) */}
             <div>
-              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Minimum intent rating</label>
-              <StarFilter value={salesFilters.intentMin} onChange={(v) => setSF('intentMin', v)} />
+              <label className="block text-xs font-semibold text-stone-500 mb-1.5">Intent rating</label>
+              <StarFilter value={salesFilters.intent} onChange={(v) => setSF('intent', v)} />
             </div>
 
             {/* Projected OB date range */}
