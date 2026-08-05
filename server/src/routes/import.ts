@@ -5,7 +5,13 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 
+import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+
 export const importRouter = Router();
+
+// projectType/location are collected on a best-effort basis from the sheet and
+// stay optional here (unlike the authenticated create form) — bulk-imported
+// leads are typically enriched by a CRE after the fact.
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -117,6 +123,19 @@ importRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), upload.sin
 
       if (!r.name || !r.phone) {
         errors.push(`Row ${rowNum}: name and phone are required`);
+        continue;
+      }
+
+      if (!isValidPhone(r.phone)) {
+        errors.push(`Row ${rowNum}: phone "${r.phone}" is not a valid phone number`);
+        skippedCount++;
+        preview.push({ row: rowNum, status: 'INVALID', phone: r.phone, name: r.name });
+        continue;
+      }
+      if (r.email && !isValidEmail(r.email)) {
+        errors.push(`Row ${rowNum}: email "${r.email}" is not a valid email address`);
+        skippedCount++;
+        preview.push({ row: rowNum, status: 'INVALID', phone: r.phone, name: r.name });
         continue;
       }
 

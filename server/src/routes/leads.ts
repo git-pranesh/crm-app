@@ -14,15 +14,7 @@ import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
-
-// ── Validation helpers ────────────────────────────────────────────────────────
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
-function isValidPhone(phone: string): boolean {
-  const digits = phone.replace(/[\s\-().+]/g, '');
-  return /^\d{7,15}$/.test(digits);
-}
+import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -275,8 +267,20 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       assignedDesignerId, assignedBLId,
     } = req.body as Record<string, string>;
 
-    if (!name?.trim() || !phone?.trim()) {
-      res.status(400).json({ error: 'name and phone are required' });
+    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim()) {
+      res.status(400).json({ error: 'name, phone, projectType, scope and location are required' });
+      return;
+    }
+    if (!isValidPhone(phone)) {
+      res.status(400).json({ error: 'phone: must be 7–15 digits' });
+      return;
+    }
+    if (email?.trim() && !isValidEmail(email)) {
+      res.status(400).json({ error: 'email: invalid format' });
+      return;
+    }
+    if (phone2?.trim() && !isValidPhone(phone2)) {
+      res.status(400).json({ error: 'phone2: must be 7–15 digits' });
       return;
     }
 
@@ -335,6 +339,10 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
 });
 
 // ── POST /api/leads/manual — create lead manually (CRE / BL / BRANCH_HEAD) ────
+// projectType/scope/location are intentionally NOT required here — this route
+// is for fast walk-in/referral capture where those details aren't known yet
+// and get filled in later, unlike the primary `/leads` create form which
+// collects them upfront. Phone/email format is still enforced below.
 leadsRouter.post(
   '/manual',
   verifyToken,
@@ -357,6 +365,18 @@ leadsRouter.post(
       }
       if (!phone?.trim()) {
         res.status(400).json({ error: 'phone is required' });
+        return;
+      }
+      if (!isValidPhone(phone)) {
+        res.status(400).json({ error: 'phone: must be 7–15 digits' });
+        return;
+      }
+      if (phone2?.trim() && !isValidPhone(phone2)) {
+        res.status(400).json({ error: 'phone2: must be 7–15 digits' });
+        return;
+      }
+      if (email?.trim() && !isValidEmail(email)) {
+        res.status(400).json({ error: 'email: invalid format' });
         return;
       }
 
@@ -641,6 +661,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'phone2: must be 7–15 digits' });
       return;
     }
+    // Note: name/phone/projectType/scope/location are required on the primary
+    // lead-edit UI (client-side, before submit) but are intentionally NOT
+    // hard-blocked here on PATCH — leads created via CSV import or ad
+    // webhooks may legitimately lack these fields, and PATCH is also used by
+    // internal flows (stage moves, reassignment) that don't touch them. A
+    // server-side block here would make those legacy/ingested leads
+    // permanently uneditable via any endpoint other than the exact field
+    // that's missing. Format validation above still applies to any value
+    // that IS supplied.
 
     const existing = await prisma.lead.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }

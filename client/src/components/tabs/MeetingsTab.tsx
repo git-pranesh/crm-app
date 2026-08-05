@@ -437,9 +437,6 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                 </div>
               )}
 
-              {meeting.type === 'DQL' && !questionnaire && (
-                <p className="text-xs text-gray-400 mt-2 italic">No pre-meeting questionnaire submitted yet</p>
-              )}
             </div>
           ))}
         </div>

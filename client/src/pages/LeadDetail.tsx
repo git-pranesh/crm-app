@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
+import { validateEmail, validatePhone } from '../lib/validation';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -265,8 +266,29 @@ export default function LeadDetail() {
 
   const [editDetailsModal, setEditDetailsModal] = useState(false);
   const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
+  const [originalEditDetails, setOriginalEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
+  const [editDetailsErrors, setEditDetailsErrors] = useState<Record<string, string>>({});
   const [possessionMode, setPossessionMode] = useState<'preset' | 'custom'>('preset');
   const [savingDetails, setSavingDetails] = useState(false);
+
+  const REQUIRED_EDIT_FIELDS = ['name', 'phone', 'projectType', 'scope', 'location'] as const;
+
+  const validateEditField = (key: string, value: string) => {
+    let error: string | null = null;
+    if ((REQUIRED_EDIT_FIELDS as readonly string[]).includes(key) && !value.trim()) {
+      error = 'This field is required';
+    } else if (key === 'email' || key === 'email2') {
+      error = validateEmail(value);
+    } else if (key === 'phone' || key === 'phone2') {
+      error = validatePhone(value);
+    }
+    setEditDetailsErrors((prev) => {
+      const next = { ...prev };
+      if (error) next[key] = error; else delete next[key];
+      return next;
+    });
+    return error;
+  };
 
   const [reassignField, setReassignField] = useState<'designer' | 'bl' | null>(null);
   const [reassignValue, setReassignValue] = useState('');
@@ -378,7 +400,7 @@ export default function LeadDetail() {
 
   const openEditDetails = () => {
     if (!lead) return;
-    setEditDetails({
+    const snapshot = {
       name: lead.name ?? '',
       phone: lead.phone ?? '',
       phone2: lead.phone2 ?? '',
@@ -399,19 +421,44 @@ export default function LeadDetail() {
       notes: lead.notes ?? '',
       possessionTimeline: lead.possessionTimeline ?? '',
       nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
-    });
+    };
+    setEditDetails(snapshot);
+    setOriginalEditDetails(snapshot);
     const savedPossession = lead.possessionTimeline ?? '';
     setPossessionMode(
       savedPossession && !POSSESSION_PRESETS.includes(savedPossession) ? 'custom' : 'preset',
     );
+    setEditDetailsErrors({});
     setEditDetailsModal(true);
   };
 
   const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Only fields the user actually changed are validated and sent — legacy leads
+    // with pre-existing blank/invalid data can still be saved untouched.
+    const changedKeys = (Object.keys(editDetails) as (keyof typeof EMPTY_EDIT)[]).filter(
+      (key) => editDetails[key] !== originalEditDetails[key],
+    );
+    const validatableKeys = ['name', 'phone', 'phone2', 'email', 'email2', 'projectType', 'scope', 'location'] as const;
+    const errors: Record<string, string> = {};
+    for (const key of changedKeys) {
+      if ((validatableKeys as readonly string[]).includes(key)) {
+        const err = validateEditField(key, editDetails[key]);
+        if (err) errors[key] = err;
+      }
+    }
+    if (Object.keys(errors).length > 0) {
+      setEditDetailsErrors(errors);
+      toast.error(Object.values(errors)[0]);
+      return;
+    }
+    if (changedKeys.length === 0) {
+      setEditDetailsModal(false);
+      return;
+    }
     setSavingDetails(true);
     try {
-      await api.patch(`/leads/${leadId}`, {
+      const fullPayload: Record<string, any> = {
         name: editDetails.name.trim() || null,
         phone: editDetails.phone.trim() || null,
         phone2: editDetails.phone2.trim() || null,
@@ -434,7 +481,12 @@ export default function LeadDetail() {
         nextMeetingDate: editDetails.nextMeetingDate
           ? new Date(editDetails.nextMeetingDate).toISOString()
           : null,
-      });
+      };
+      // Only send fields the user actually changed, so unrelated saves never trip
+      // required-field checks on legacy data left blank before this field was required.
+      const payload: Record<string, any> = {};
+      for (const key of changedKeys) payload[key] = fullPayload[key];
+      await api.patch(`/leads/${leadId}`, payload);
       toast.success('Lead details updated');
       setEditDetailsModal(false);
       loadLead(); loadActivities();
@@ -669,24 +721,33 @@ export default function LeadDetail() {
                 <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">Client Details</p>
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { key: 'name', label: 'Full Name', placeholder: 'Amit Sharma', colSpan: 2 },
-                    { key: 'phone', label: 'Phone', placeholder: '+91 98765 43210' },
+                    { key: 'name', label: 'Full Name', placeholder: 'Amit Sharma', colSpan: 2, required: true },
+                    { key: 'phone', label: 'Phone', placeholder: '+91 98765 43210', required: true },
                     { key: 'phone2', label: 'Alternate Phone', placeholder: '' },
                     { key: 'email', label: 'Email', placeholder: 'amit@example.com', type: 'email' },
                     { key: 'email2', label: 'Alternate Email', placeholder: '', type: 'email' },
                     { key: 'pan', label: 'PAN', placeholder: 'ABCDE1234F' },
                     { key: 'gst', label: 'GST', placeholder: '29ABCDE1234F1ZX' },
-                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number }[]).map((f) => (
+                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; required?: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
-                      <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">
+                        {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
+                      </label>
                       <input
                         type={f.type ?? 'text'}
                         value={editDetails[f.key]}
                         onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                        onBlur={(e) => validateEditField(f.key, e.target.value)}
                         placeholder={f.placeholder}
-                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{
+                          border: editDetailsErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                          background: '#FDFAF7',
+                        }}
                       />
+                      {editDetailsErrors[f.key] && (
+                        <p className="text-[11px] text-red-500 mt-1">{editDetailsErrors[f.key]}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -697,21 +758,30 @@ export default function LeadDetail() {
                 <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-3">Project Details</p>
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
-                    { key: 'scope', label: 'Scope of Work', placeholder: '3-bed full home' },
-                    { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore' },
+                    { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office', required: true },
+                    { key: 'scope', label: 'Scope of Work', placeholder: '3-bed full home', required: true },
+                    { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore', required: true },
                     { key: 'builder', label: 'Builder (or N/A)', placeholder: 'Sobha / Godrej / N/A' },
-                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean }[]).map((f) => (
+                  ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean; required?: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
-                      <label className="block text-xs font-semibold text-stone-600 mb-1">{f.label}</label>
+                      <label className="block text-xs font-semibold text-stone-600 mb-1">
+                        {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
+                      </label>
                       <input
                         type={f.type ?? 'text'}
                         value={editDetails[f.key]}
                         onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                        onBlur={(e) => validateEditField(f.key, e.target.value)}
                         placeholder={f.placeholder}
-                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{
+                          border: editDetailsErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                          background: '#FDFAF7',
+                        }}
                       />
+                      {editDetailsErrors[f.key] && (
+                        <p className="text-[11px] text-red-500 mt-1">{editDetailsErrors[f.key]}</p>
+                      )}
                     </div>
                   ))}
                   {/* Source — select with common values */}

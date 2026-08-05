@@ -3,7 +3,13 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { logActivity } from '../lib/activityLog.js';
 
+import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+
 export const leadWebhooksRouter = Router();
+
+// projectType/scope/location are intentionally NOT required for webhook-sourced
+// leads — ad-form leads (Meta/Google) never collect them upfront; a CRE fills
+// them in once they make contact. Phone/email format is still enforced below.
 
 const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
 const META_APP_SECRET = process.env.META_APP_SECRET ?? '';
@@ -28,7 +34,16 @@ async function createLeadFromWebhook(data: {
   name: string; phone: string; email?: string;
   source: string; utmCampaign?: string; utmSource?: string;
   adName?: string;
-}): Promise<string> {
+}): Promise<string | null> {
+  if (!isValidPhone(data.phone)) {
+    console.warn(`[webhook] Rejected lead with invalid phone "${data.phone}" from source ${data.source}`);
+    return null;
+  }
+  if (data.email && !isValidEmail(data.email)) {
+    console.warn(`[webhook] Rejected lead with invalid email "${data.email}" from source ${data.source}`);
+    return null;
+  }
+
   const existing = await prisma.lead.findFirst({ where: { phone: data.phone } });
   if (existing) return existing.id;
 
@@ -144,6 +159,8 @@ leadWebhooksRouter.post('/google', async (req, res) => {
       const phone = b.phone || b.phone_number || b.mobile || '';
 
       if (!phone) { console.warn('[google:webhook] No phone provided'); return; }
+      if (!isValidPhone(phone)) { console.warn(`[google:webhook] Rejected lead with invalid phone "${phone}"`); return; }
+      if (b.email && !isValidEmail(b.email)) { console.warn(`[google:webhook] Rejected lead with invalid email "${b.email}"`); return; }
 
       // Find CRE to assign to (round-robin: pick first active CRE)
       const cre = await prisma.user.findFirst({

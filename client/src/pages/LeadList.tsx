@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Users, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
+import { validateEmail, validatePhone } from '../lib/validation';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
@@ -155,6 +156,22 @@ export default function LeadList() {
   const userRole = getCurrentUserRole();
   const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
+  const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
+
+  const validateNewLeadField = (key: string, value: string) => {
+    let error: string | null = null;
+    if (key === 'email') error = validateEmail(value);
+    else if (key === 'phone') error = validatePhone(value);
+    else if (['name', 'projectType', 'scope', 'location'].includes(key) && !value.trim()) {
+      error = 'This field is required';
+    }
+    setNewLeadErrors((prev) => {
+      const next = { ...prev };
+      if (error) next[key] = error; else delete next[key];
+      return next;
+    });
+    return error;
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,8 +196,15 @@ export default function LeadList() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source) {
-      toast.error('Name, phone, location and source are required'); return;
+    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source || !newLead.projectType || !newLead.scope) {
+      toast.error('Name, phone, project type, scope of work, location and source are required'); return;
+    }
+    const phoneError = validatePhone(newLead.phone);
+    const emailError = validateEmail(newLead.email);
+    if (phoneError || emailError) {
+      setNewLeadErrors((prev) => ({ ...prev, ...(phoneError ? { phone: phoneError } : {}), ...(emailError ? { email: emailError } : {}) }));
+      toast.error(phoneError ?? emailError ?? 'Please fix the highlighted fields');
+      return;
     }
     const digits = newLead.phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
     if (digits.length !== 10) {
@@ -191,6 +215,7 @@ export default function LeadList() {
       const data = await api.post<{ lead: Lead }>('/leads', { ...newLead, phone: digits });
       toast.success(`Lead ${data.lead.leadId} created`);
       setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
+      setNewLeadErrors({});
       setShowCreate(false);
       await load();
     } catch (e: any) {
@@ -256,7 +281,7 @@ export default function LeadList() {
               {exporting ? 'Exporting…' : '↓ Export CSV'}
             </button>
             <button
-              onClick={() => setShowCreate(!showCreate)}
+              onClick={() => { setShowCreate(!showCreate); setNewLeadErrors({}); }}
               className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 transition-colors"
             >
               {showCreate ? 'Cancel' : '+ New Lead'}
@@ -275,9 +300,9 @@ export default function LeadList() {
                 { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma' },
                 { key: 'phone', label: 'Phone', required: true, placeholder: '98765 43210 (10 digits)' },
                 { key: 'email', label: 'Email', placeholder: 'priya@example.com' },
-                { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office' },
+                { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa / Office' },
                 { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
-                { key: 'scope', label: 'Scope of Work', placeholder: '2-bedroom / 3-bedroom / Full home' },
+                { key: 'scope', label: 'Scope of Work', required: true, placeholder: '2-bedroom / 3-bedroom / Full home' },
                 { key: 'possessionTimeline', label: 'Possession', placeholder: 'Immediate / 3 months / 6 months' },
                 { key: 'estimatedValue', label: 'Estimated Value (₹)', placeholder: '1500000', type: 'number' },
               ].map((f: any) => (
@@ -288,11 +313,18 @@ export default function LeadList() {
                   <input
                     value={(newLead as any)[f.key]}
                     onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
+                    onBlur={(e) => validateNewLeadField(f.key, e.target.value)}
                     required={f.required}
                     placeholder={f.placeholder}
-                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
+                    style={{
+                      border: newLeadErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                      background: '#FDFAF7',
+                    }}
                   />
+                  {newLeadErrors[f.key] && (
+                    <p className="text-[11px] text-red-500 mt-1">{newLeadErrors[f.key]}</p>
+                  )}
                 </div>
               ))}
               <div>

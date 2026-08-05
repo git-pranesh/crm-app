@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { getStoredUser, logout } from '../lib/auth';
+import { validateEmail, validatePhone } from '../lib/validation';
 
 interface SearchLead {
   id: string;
@@ -99,7 +100,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const [showNewLead, setShowNewLead] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '' });
+  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '' });
+  const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
+  const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location'];
+
+  const validateNewLeadField = (key: string, value: string) => {
+    let error: string | null = null;
+    if (key === 'email') error = validateEmail(value);
+    else if (key === 'phone') error = validatePhone(value);
+    else if (NEW_LEAD_REQUIRED.includes(key) && !value.trim()) error = 'This field is required';
+    setNewLeadErrors((prev) => {
+      const next = { ...prev };
+      if (error) next[key] = error; else delete next[key];
+      return next;
+    });
+    return error;
+  };
 
   const fetchNotifs = useCallback(async () => {
     try {
@@ -140,12 +156,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone) { toast.error('Name and phone are required'); return; }
+    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location) {
+      toast.error('Name, phone, project type, scope of work and location are required'); return;
+    }
+    const phoneError = validatePhone(newLead.phone);
+    const emailError = validateEmail(newLead.email);
+    if (phoneError || emailError) {
+      setNewLeadErrors((prev) => ({ ...prev, ...(phoneError ? { phone: phoneError } : {}), ...(emailError ? { email: emailError } : {}) }));
+      toast.error(phoneError ?? emailError ?? 'Please fix the highlighted fields');
+      return;
+    }
     setCreating(true);
     try {
       const data = await api.post<{ lead: { leadId: string } }>('/leads', newLead);
       toast.success(`Lead ${data.lead.leadId} created`);
-      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '' });
+      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '' });
+      setNewLeadErrors({});
       setShowNewLead(false);
     } catch (e: any) {
       toast.error(e.message);
@@ -347,19 +373,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* New Lead Modal */}
       {showNewLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm" onClick={() => setShowNewLead(false)} />
+          <div className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm" onClick={() => { setShowNewLead(false); setNewLeadErrors({}); }} />
           <div className="relative bg-white rounded-3xl shadow-warm-lg w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-stone-900">New Lead</h2>
-              <button onClick={() => setShowNewLead(false)} className="text-stone-400 hover:text-stone-600 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-stone-100 transition-colors"><X size={16} strokeWidth={2} /></button>
+              <button onClick={() => { setShowNewLead(false); setNewLeadErrors({}); }} className="text-stone-400 hover:text-stone-600 w-8 h-8 flex items-center justify-center rounded-xl hover:bg-stone-100 transition-colors"><X size={16} strokeWidth={2} /></button>
             </div>
             <form onSubmit={handleCreate} className="grid grid-cols-2 gap-4">
               {[
                 { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma', span: 2 },
                 { key: 'phone', label: 'Phone', required: true, placeholder: '+91 98765 43210' },
                 { key: 'email', label: 'Email', required: false, placeholder: 'priya@example.com' },
-                { key: 'projectType', label: 'Project Type', required: false, placeholder: '2BHK / Villa' },
-                { key: 'location', label: 'Location', required: false, placeholder: 'Whitefield, Bangalore' },
+                { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa' },
+                { key: 'scope', label: 'Scope of Work', required: true, placeholder: '2-bedroom / Full home' },
+                { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
               ].map((f) => (
                 <div key={f.key} className={(f as any).span === 2 ? 'col-span-2' : ''}>
                   <label className="block text-xs font-semibold text-stone-600 mb-1.5">
@@ -368,13 +395,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <input
                     value={(newLead as any)[f.key]}
                     onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
+                    onBlur={(e) => { validateNewLeadField(f.key, e.target.value); e.currentTarget.style.background = '#FDFAF7'; }}
                     required={f.required}
                     placeholder={f.placeholder}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                    style={{ border: newLeadErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
                     onFocus={(e) => e.currentTarget.style.background = '#fff'}
-                    onBlur={(e) => e.currentTarget.style.background = '#FDFAF7'}
                   />
+                  {newLeadErrors[f.key] && (
+                    <p className="text-[11px] text-red-500 mt-1">{newLeadErrors[f.key]}</p>
+                  )}
                 </div>
               ))}
               <div>
@@ -390,7 +420,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </select>
               </div>
               <div className="col-span-2 flex justify-end gap-2 pt-1">
-                <button type="button" onClick={() => setShowNewLead(false)}
+                <button type="button" onClick={() => { setShowNewLead(false); setNewLeadErrors({}); }}
                   className="px-4 py-2.5 text-sm font-medium text-stone-600 rounded-xl hover:bg-stone-50 transition-colors"
                   style={{ border: '1px solid #EDE8E3' }}>
                   Cancel
