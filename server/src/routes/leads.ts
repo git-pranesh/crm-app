@@ -15,6 +15,7 @@ import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../con
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+import { computeSlaInfoForLeads, computeSlaInfoForLead } from '../lib/stageSla.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -242,10 +243,14 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     // Other roles (BL, CRE, Branch Head) always receive isUnread:false so the badge
     // never appears for users who cannot clear it.
     const viewerIsDesigner = user.role === 'DESIGNER';
+    // SLA breach indicators (task #56) — days stuck in current stage + status
+    const slaInfoMap = await computeSlaInfoForLeads(leads);
     const leadsWithMeta = leads.map((l: any) => ({
       ...l,
       avgNps: npsAvgMap[l.id] ?? null,
       isUnread: viewerIsDesigner && l.assignedDesignerId === user.id && !l.firstOpenedAt,
+      daysInCurrentStage: slaInfoMap[l.id]?.daysInCurrentStage ?? 0,
+      slaStatus: slaInfoMap[l.id]?.slaStatus ?? 'ok',
     }));
 
     res.json({ leads: leadsWithMeta, total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) });
@@ -618,7 +623,10 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
       : null;
     const npsPerStage = npsRows.reduce((acc, r) => ({ ...acc, [r.stage]: r }), {} as Record<string, typeof npsRows[0]>);
 
-    res.json({ lead, avgNps, npsPerStage });
+    // SLA breach indicator (task #56) — days stuck in current stage + status
+    const slaInfo = await computeSlaInfoForLead(lead);
+
+    res.json({ lead: { ...lead, ...slaInfo }, avgNps, npsPerStage });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

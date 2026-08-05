@@ -33,6 +33,7 @@ interface Lead {
   nextMeetingDate?: string | null; floorPlanUrl?: string | null;
   onHoldRevivalDate?: string | null; isDuplicate?: boolean;
   isSLABreached: boolean; createdAt: string; updatedAt: string;
+  daysInCurrentStage?: number; slaStatus?: 'ok' | 'warning' | 'breach';
   assignedDesigner?: { id: string; name: string } | null;
   assignedBL?: { id: string; name: string } | null;
   assignedDesignerId?: string | null; assignedBLId?: string | null;
@@ -1110,8 +1111,12 @@ export default function LeadDetail() {
                               {/* Node */}
                               <button
                                 onClick={openStageModal}
-                                title={`Click to change stage`}
-                                className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-center transition-all border-2 ${
+                                title={
+                                  isCurrent && lead.slaStatus && lead.slaStatus !== 'ok'
+                                    ? `${lead.slaStatus === 'breach' ? 'SLA breached' : 'SLA approaching'} — ${lead.daysInCurrentStage}d in stage`
+                                    : `Click to change stage`
+                                }
+                                className={`relative w-14 h-14 rounded-full flex flex-col items-center justify-center text-center transition-all border-2 ${
                                   isCurrent
                                     ? 'bg-brand-500 border-brand-600 text-white shadow-md'
                                     : wasVisited
@@ -1119,6 +1124,14 @@ export default function LeadDetail() {
                                     : 'bg-gray-50 border-gray-100 text-gray-300'
                                 }`}
                               >
+                                {isCurrent && lead.slaStatus && lead.slaStatus !== 'ok' && (
+                                  <span
+                                    className={`absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                                      lead.slaStatus === 'breach' ? 'bg-red-500' : 'bg-orange-400'
+                                    }`}
+                                    aria-label={lead.slaStatus === 'breach' ? 'SLA breached' : 'SLA approaching'}
+                                  />
+                                )}
                                 <span className="text-[10px] font-bold leading-none">{FUNNEL_ABBREV[stage]}</span>
                                 {wasVisited && visit?.tatDays !== undefined && (
                                   <span className="text-[8px] leading-tight mt-0.5 opacity-80">{visit.tatDays}d</span>

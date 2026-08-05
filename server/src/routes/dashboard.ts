@@ -629,9 +629,9 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     const perfScore = Math.min(Math.round(perfBase + (designerRecord?.conversionRate ?? 0) * 20), 98);
     const perfCategories = [
       { name: 'Sales', score: Math.min(Math.round(perfBase + 5), 95), weight: 25 },
-      { name: 'Design Quality', score: Math.min(Math.round(perfBase - 3), 95), weight: 25 },
+      { name: 'Design Performance', score: Math.min(Math.round(perfBase - 3), 95), weight: 25 },
       { name: 'Client Satisfaction', score: avgNPS != null ? Math.round(avgNPS * 10) : perfBase, weight: 25 },
-      { name: 'Delivery', score: Math.min(Math.round(perfBase + 2), 95), weight: 25 },
+      { name: 'Timeline Adherence', score: Math.min(Math.round(perfBase + 2), 95), weight: 25 },
     ];
 
     designerDash = {

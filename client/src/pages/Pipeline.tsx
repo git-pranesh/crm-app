@@ -16,6 +16,8 @@ interface Lead {
   estimatedValue?: string | number | null;
   intentRating?: number | null;
   isSLABreached: boolean;
+  daysInCurrentStage?: number;
+  slaStatus?: 'ok' | 'warning' | 'breach';
   followUpTasks?: { id: string }[];
   createdAt: string;
   location?: string;
@@ -40,6 +42,7 @@ interface DesignProject {
   totalActiveDays: number;
   collectionsCount: number;
   attentionFlags: Array<{ id: string; category: string; description: string }>;
+  designTimeline?: DesignPipelineTimeline;
   lead: {
     id: string;
     leadId: string;
@@ -48,6 +51,25 @@ interface DesignProject {
     expectedMoveIn: string | null;
     estimatedValue: number | null;
   };
+}
+
+interface DesignPhaseTimeline {
+  key: string;
+  label: string;
+  startDate: string | null;
+  status: 'upcoming' | 'in_progress' | 'done';
+  elapsedDays: number | null;
+  allocatedDays: number | null;
+  slaStatus: 'ok' | 'warning' | 'breach';
+}
+
+interface DesignPipelineTimeline {
+  kickoffDate: string | null;
+  overallElapsedDays: number | null;
+  overallRemainingDays: number | null;
+  overallSlaDays: number;
+  overallStatus: 'ok' | 'warning' | 'breach';
+  phases: DesignPhaseTimeline[];
 }
 
 interface SalesFilters {
@@ -274,6 +296,22 @@ function LeadCard({
         {lead.isSLABreached && (
           <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">SLA breach</span>
         )}
+        {lead.slaStatus === 'breach' && (
+          <span
+            className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full"
+            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+          >
+            Stage overdue
+          </span>
+        )}
+        {lead.slaStatus === 'warning' && (
+          <span
+            className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full"
+            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+          >
+            Stage due soon
+          </span>
+        )}
         {lead.followUpTasks && lead.followUpTasks.length > 0 && (
           <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Follow-up overdue</span>
         )}
@@ -478,6 +516,56 @@ function DesignPipelineView() {
                           {f.category}{f.description ? `: ${f.description.slice(0, 40)}${f.description.length > 40 ? '…' : ''}` : ''}
                         </span>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Design Pipeline 8-stage timeline (task #56) */}
+                  {proj.designTimeline && (
+                    <div className="mt-3 pt-3" style={{ borderTop: '1px solid #F5F0EB' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide">Design timeline</span>
+                        {proj.designTimeline.overallElapsedDays != null ? (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                              proj.designTimeline.overallStatus === 'breach'
+                                ? 'bg-red-100 text-red-700'
+                                : proj.designTimeline.overallStatus === 'warning'
+                                ? 'bg-orange-100 text-orange-700'
+                                : 'bg-green-100 text-green-700'
+                            }`}
+                          >
+                            {proj.designTimeline.overallElapsedDays}d / {proj.designTimeline.overallSlaDays}d
+                            {proj.designTimeline.overallRemainingDays != null && proj.designTimeline.overallRemainingDays < 0
+                              ? ` (${Math.abs(proj.designTimeline.overallRemainingDays)}d over)`
+                              : ''}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-stone-400">Not started</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {proj.designTimeline.phases.map((ph) => (
+                          <span
+                            key={ph.key}
+                            title={
+                              ph.status === 'upcoming'
+                                ? `${ph.label}: upcoming`
+                                : `${ph.label}: ${ph.elapsedDays}d elapsed${ph.allocatedDays != null ? ` / ${ph.allocatedDays}d allocated` : ''}`
+                            }
+                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                              ph.status === 'upcoming'
+                                ? 'bg-stone-50 text-stone-300 border-stone-100'
+                                : ph.slaStatus === 'breach'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : ph.slaStatus === 'warning'
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : 'bg-brand-50 text-brand-700 border-brand-200'
+                            }`}
+                          >
+                            {ph.label}{ph.status !== 'upcoming' ? ` · ${ph.elapsedDays}d` : ''}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -975,6 +1063,22 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
                 {lead.isSLABreached && (
                   <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">
                     SLA
+                  </span>
+                )}
+                {lead.slaStatus === 'breach' && (
+                  <span
+                    className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0"
+                    title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+                  >
+                    Stage overdue
+                  </span>
+                )}
+                {lead.slaStatus === 'warning' && (
+                  <span
+                    className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0"
+                    title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+                  >
+                    Stage due soon
                   </span>
                 )}
               </Link>

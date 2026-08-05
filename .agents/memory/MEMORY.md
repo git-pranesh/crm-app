@@ -19,3 +19,5 @@
 - [Sales funnel restructure](funnel-restructure.md) — active funnel is MQL→...→DESIGN_IN_PROGRESS; EL/HANDED_OVER legacy-only; only DQL→PP skip allowed; incentive trigger moved to DESIGN_IN_PROGRESS
 - [Prisma schema/DB column drift](prisma-schema-drift.md) — schema.prisma vs live DB have pre-existing drift (duplicate camelCase/snake_case columns, missing unique constraint); avoid plain `db push`, patch narrowly with raw SQL
 - [Checklist gate completeness](checklist-gate-completeness.md) — any field a checklist UI shows as "required" must also be validated server-side in the send/complete endpoint, not just persisted
+- [SLA display layer](sla-config-layer.md) — stage/design-pipeline SLA badges are a separate live-computed layer from the older SLAConfig/slaCheck breach+notification system; don't merge them
+- [Dev login for API testing](dev-login-testing.md) — seed password often stale; reset a user's password via Supabase admin.auth.admin.updateUserById using SUPABASE_SERVICE_ROLE_KEY to get a real token for curl/API verification

@@ -39,6 +39,7 @@ import { obObmChecklistRouter } from './routes/obObmChecklist.js';
 import { calendarRouter } from './routes/calendar.js';
 import { projectsRouter } from './routes/projects.js';
 import { filesRouter } from './routes/files.js';
+import { configRouter } from './routes/config.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
@@ -109,6 +110,7 @@ app.use('/api/accept-invite', acceptInviteRouter);
 // Standalone calls (recording URL)
 app.use('/api/calls', callsStandaloneRouter);
 app.use('/api/quotes', quotesRouter);
+app.use('/api/config', configRouter);
 
 // Leads CRUD
 app.use('/api/leads', leadsRouter);

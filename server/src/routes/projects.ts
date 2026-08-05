@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
+import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
 
 export const projectsRouter = Router();
 
@@ -80,6 +81,17 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
             phone: true,
             expectedMoveIn: true,
             estimatedValue: true,
+            obObmChecklist: {
+              select: {
+                siteDocumentationAt: true,
+                initialSiteDiscussionAt: true,
+                layoutFinalisationAt: true,
+                designDiscussionAt: true,
+                preSignOffAt: true,
+                maskingAt: true,
+                signOffAt: true,
+              },
+            },
           },
         },
         attentionFlags: {
@@ -106,6 +118,9 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
       totalActiveDays: Math.floor((now - p.createdAt.getTime()) / 86_400_000),
       collectionsCount: p._count.collections,
       attentionFlags: p.attentionFlags,
+      // Design Pipeline 8-stage timeline (task #56) — derived from the OB→OBM
+      // checklist's manual timeline dates, with a 45-day overall SLA.
+      designTimeline: computeDesignPipelineTimeline(p.lead.obObmChecklist, p.createdAt),
       lead: {
         id: p.lead.id,
         leadId: p.lead.leadId,
