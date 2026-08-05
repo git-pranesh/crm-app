@@ -34,6 +34,8 @@ import { callsStandaloneRouter } from './routes/calls.js';
 import { googleFormWebhookRouter, questionnaireRouter } from './routes/questionnaire.js';
 import { acceptInviteRouter } from './routes/acceptInvite.js';
 import { dipChecklistRouter } from './routes/dipChecklist.js';
+import { pdObChecklistRouter } from './routes/pdObChecklist.js';
+import { obObmChecklistRouter } from './routes/obObmChecklist.js';
 import { calendarRouter } from './routes/calendar.js';
 import { projectsRouter } from './routes/projects.js';
 import { filesRouter } from './routes/files.js';
@@ -120,6 +122,8 @@ app.use('/api/leads/:leadId/offer', leadOfferRouter);
 app.use('/api/leads/:leadId/discount-request', leadDiscountRouter);
 app.use('/api/leads/:leadId/questionnaire', questionnaireRouter);
 app.use('/api/leads/:leadId/dip-checklist', dipChecklistRouter);
+app.use('/api/leads/:leadId/pd-ob-checklist', pdObChecklistRouter);
+app.use('/api/leads/:leadId/ob-obm-checklist', obObmChecklistRouter);
 app.use('/api/leads/:leadId/files', filesRouter);
 
 // Bulk import

@@ -15,6 +15,8 @@ import DiscountTab from '../components/tabs/DiscountTab';
 import QuoteTab from '../components/tabs/QuoteTab';
 import FilesTab from '../components/tabs/FilesTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
+import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
+import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 
 type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount' | 'files';
 
@@ -962,6 +964,20 @@ export default function LeadDetail() {
           <p className="text-sm text-stone-500">Lead not found</p>
         )}
       </div>
+
+      {/* PD→OB checklist for PROPOSAL_DISCUSSION (and later, as a record) */}
+      {lead && ['PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'].includes(lead.stage) && (
+        <div className="px-6 pt-4">
+          <PDOBChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} />
+        </div>
+      )}
+
+      {/* OB→OBM checklist for ONBOARDING (and later, as a record) */}
+      {lead && ['ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'].includes(lead.stage) && (
+        <div className="px-6 pt-4">
+          <OBOBMChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} />
+        </div>
+      )}
 
       {/* DIP Checklist for ONBOARDING_MEETING / DESIGN_IN_PROGRESS / HANDED_OVER (legacy) */}
       {lead && (lead.stage === 'ONBOARDING_MEETING' || lead.stage === 'DESIGN_IN_PROGRESS' || lead.stage === 'HANDED_OVER') && (

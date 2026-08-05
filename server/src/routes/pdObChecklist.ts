@@ -1,0 +1,190 @@
+/**
+ * PD→OB transition checklist (Task #54)
+ *
+ * GET   /api/leads/:leadId/pd-ob-checklist                     — get checklist state
+ * PATCH /api/leads/:leadId/pd-ob-checklist                     — update checklist fields
+ * POST  /api/leads/:leadId/pd-ob-checklist/send-welcome-mail   — validate, send welcome
+ *                                                                 mail, mark complete, and
+ *                                                                 advance the lead to
+ *                                                                 ONBOARDING.
+ *
+ * The checklist is auto-created when a lead enters PROPOSAL_DISCUSSION (see
+ * routes/leads.ts). Its `completedAt` gates PROPOSAL_DISCUSSION → ONBOARDING
+ * (config/stageRequirements.ts, type 'pdObChecklist').
+ */
+import { Router } from 'express';
+import { prisma } from '../lib/prisma.js';
+import { verifyToken } from '../middleware/auth.js';
+import { logActivity } from '../lib/activityLog.js';
+import { createNotification } from '../lib/notifications.js';
+import { sendEmail } from '../lib/email.js';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
+
+export const pdObChecklistRouter = Router({ mergeParams: true });
+
+export function pdObWelcomeMailTemplate(clientName: string): { subject: string; html: string } {
+  return {
+    subject: `Welcome Onboard — Interiors by DeX`,
+    html: `<p>Dear ${clientName},</p>
+<p>Congratulations and welcome aboard! We're thrilled to begin your interior design journey with <strong>Interiors by DeX</strong>.</p>
+<p>Our onboarding team will be in touch shortly with the next steps, including your onboarding meeting.</p>
+<p>Thank you for choosing us — we can't wait to bring your space to life!<br/><em>Team Interiors by DeX</em></p>`,
+  };
+}
+
+async function loadLeadForChecklist(leadId: string, user: { id: string; role: string }) {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: {
+      id: true, leadId: true, name: true, email: true, stage: true,
+      assignedDesignerId: true, assignedBLId: true,
+    },
+  });
+  if (!lead) return { lead: null, authorized: false };
+  const authorized = await isAuthorizedForLead(lead, user);
+  return { lead, authorized };
+}
+
+// ── GET /api/leads/:leadId/pd-ob-checklist ────────────────────────────────────
+pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+
+    const checklist = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+
+    // Uploaded-file status is sourced from LeadFile (single source of truth —
+    // mirrors how stageRequirements.ts checks file gates).
+    const [paymentScreenshot, obQuote] = await Promise.all([
+      prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
+      prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
+    ]);
+
+    res.json({
+      checklist: checklist ?? null,
+      hasPaymentScreenshot: !!paymentScreenshot,
+      hasObQuote: !!obQuote,
+      welcomeMailTemplate: pdObWelcomeMailTemplate(lead.name),
+    });
+  } catch (err: any) {
+    console.error('[pd-ob-checklist:get]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/leads/:leadId/pd-ob-checklist ──────────────────────────────────
+pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+
+    const current = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+    if (!current) {
+      res.status(404).json({ error: 'PD→OB checklist not found. Lead may not be in Proposal Discussion stage yet.' });
+      return;
+    }
+    if (current.completedAt) {
+      res.status(400).json({ error: 'Checklist already completed — the welcome mail has been sent and the lead has moved to Onboarding.' });
+      return;
+    }
+
+    const {
+      paymentValue, projectValue, obMeetingScheduledAt, obMeetingLocation, notes,
+    } = req.body as Record<string, any>;
+
+    const data: Record<string, any> = {};
+    if (paymentValue !== undefined) data.paymentValue = paymentValue === '' || paymentValue === null ? null : parseFloat(paymentValue);
+    if (projectValue !== undefined) data.projectValue = projectValue === '' || projectValue === null ? null : parseFloat(projectValue);
+    if (obMeetingScheduledAt !== undefined) data.obMeetingScheduledAt = obMeetingScheduledAt ? new Date(obMeetingScheduledAt) : null;
+    if (obMeetingLocation !== undefined) data.obMeetingLocation = obMeetingLocation?.trim() || null;
+    if (notes !== undefined) data.notes = notes?.trim() || null;
+
+    const checklist = await prisma.pDOBChecklist.update({ where: { leadId }, data });
+    await logActivity(req.user!.id, 'PD_OB_CHECKLIST_UPDATED', leadId, data);
+
+    res.json({ checklist });
+  } catch (err: any) {
+    console.error('[pd-ob-checklist:patch]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/leads/:leadId/pd-ob-checklist/send-welcome-mail ────────────────
+pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => {
+  try {
+    const { leadId } = req.params as { leadId: string };
+    const user = req.user!;
+    const { lead, authorized } = await loadLeadForChecklist(leadId, user);
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+
+    if (lead.stage !== 'PROPOSAL_DISCUSSION') {
+      res.status(400).json({ error: `Lead must be in Proposal Discussion stage (currently ${lead.stage}).` });
+      return;
+    }
+
+    const checklist = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+    if (!checklist) { res.status(404).json({ error: 'PD→OB checklist not found.' }); return; }
+    if (checklist.completedAt) { res.status(400).json({ error: 'Welcome mail already sent.' }); return; }
+
+    const [paymentScreenshot, obQuote] = await Promise.all([
+      prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
+      prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
+    ]);
+
+    const missing: string[] = [];
+    if (!paymentScreenshot) missing.push('Payment screenshot (Files tab)');
+    if (!obQuote) missing.push('OB Quote (Files tab)');
+    if (checklist.paymentValue == null) missing.push('Payment value');
+    if (checklist.projectValue == null) missing.push('Project value');
+    if (!checklist.obMeetingScheduledAt) missing.push('OB meeting date/time');
+    if (!checklist.obMeetingLocation) missing.push('OB meeting location');
+    if (!checklist.notes || !checklist.notes.trim()) missing.push('Notes');
+    if (!lead.email) missing.push("Client's email address");
+    if (missing.length) {
+      res.status(400).json({ error: 'Cannot send welcome mail — missing requirements', missing });
+      return;
+    }
+
+    const { subject, html } = req.body as { subject?: string; html?: string };
+    const template = pdObWelcomeMailTemplate(lead.name);
+    const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
+
+    await sendEmail(emailPayload);
+    await prisma.emailLog.create({
+      data: { leadId, type: 'PD_OB_WELCOME', sentTo: lead.email!, subject: emailPayload.subject },
+    });
+
+    const now = new Date();
+    const [updatedChecklist] = await prisma.$transaction([
+      prisma.pDOBChecklist.update({
+        where: { leadId },
+        data: { welcomeMailSent: true, welcomeMailSentAt: now, completedAt: now },
+      }),
+      prisma.lead.update({ where: { id: leadId }, data: { stage: 'ONBOARDING' } }),
+      prisma.oBOBMChecklist.upsert({ where: { leadId }, create: { leadId }, update: {} }),
+    ]);
+
+    await logActivity(user.id, 'STAGE_CHANGED', leadId, { from: 'PROPOSAL_DISCUSSION', to: 'ONBOARDING', isBackward: false });
+    await logActivity(user.id, 'PD_OB_WELCOME_MAIL_SENT', leadId, { subject: emailPayload.subject });
+
+    const notifyId = lead.assignedBLId ?? lead.assignedDesignerId;
+    if (notifyId) {
+      await createNotification(
+        notifyId,
+        'ONBOARDING_DIP_REQUIRED',
+        `Lead ${lead.leadId} moved to Onboarding — welcome mail sent. Complete the OB→OBM checklist next.`,
+        leadId,
+      ).catch(() => {});
+    }
+
+    res.json({ checklist: updatedChecklist, stage: 'ONBOARDING' });
+  } catch (err: any) {
+    console.error('[pd-ob-checklist:send-welcome-mail]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});

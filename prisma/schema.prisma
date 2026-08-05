@@ -108,6 +108,10 @@ enum LeadFileType {
   PITCH_PRESENTATION
   QUOTATION
   GENERATED_QUOTE
+  /// Task #54 — PD→OB checklist upload
+  PAYMENT_SCREENSHOT
+  /// Task #54 — PD→OB checklist upload
+  OB_QUOTE
   OTHER
 }
 
@@ -283,6 +287,8 @@ model Lead {
   smsLogs              SmsLog[]
   dqlQuestionnaire     DQLQuestionnaire?
   dipChecklist         DIPChecklist?
+  pdObChecklist        PDOBChecklist?
+  obObmChecklist       OBOBMChecklist?
   intentRatingLogs     IntentRatingLog[]
   npsResponses         NPSResponse[]
   project              Project?
@@ -663,6 +669,73 @@ model DIPChecklist {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@map("dip_checklists")
+}
+
+/// Task #54 — PD→OB transition checklist. Created when a lead enters
+/// PROPOSAL_DISCUSSION; its `completedAt` (set when the welcome mail is sent)
+/// gates the PROPOSAL_DISCUSSION → ONBOARDING transition. Payment screenshot
+/// and OB Quote uploads are tracked as LeadFile rows (fileType
+/// PAYMENT_SCREENSHOT / OB_QUOTE, stage PROPOSAL_DISCUSSION), not columns
+/// here — consistent with how other stage-gate file requirements work.
+model PDOBChecklist {
+  id                   String    @id @default(cuid())
+  leadId               String    @unique
+  paymentValue         Float?
+  projectValue         Float?
+  obMeetingScheduledAt DateTime?
+  obMeetingLocation    String?
+  notes                String?
+  welcomeMailSent      Boolean   @default(false)
+  welcomeMailSentAt    DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("pd_ob_checklists")
+}
+
+/// Task #54 — OB→OBM transition checklist. Created when a lead enters
+/// ONBOARDING; its `completedAt` gates the ONBOARDING → ONBOARDING_MEETING
+/// transition. The 7 timeline dates are required (all must be filled in)
+/// before the OBM mail can be sent — they also feed the future Design
+/// Pipeline timeline (task #48), but are not automatically computed here.
+model OBOBMChecklist {
+  id                       String    @id @default(cuid())
+  leadId                   String    @unique
+  // ── 7 manual timeline dates (required before send-obm-mail) ───────────────
+  siteDocumentationAt      DateTime?
+  initialSiteDiscussionAt  DateTime?
+  layoutFinalisationAt     DateTime?
+  designDiscussionAt       DateTime?
+  preSignOffAt             DateTime?
+  maskingAt                DateTime?
+  signOffAt                DateTime?
+  // ── 7 welcome-document items: shown/confirmed pair each ───────────────────
+  dexMaterialDone          Boolean   @default(false)
+  dexMaterialConfirmed     Boolean   @default(false)
+  creditSystemDone         Boolean   @default(false)
+  creditSystemConfirmed    Boolean   @default(false)
+  deepCleaningDone         Boolean   @default(false)
+  deepCleaningConfirmed    Boolean   @default(false)
+  paymentProcessDone       Boolean   @default(false)
+  paymentProcessConfirmed  Boolean   @default(false)
+  warrantyClaimDone        Boolean   @default(false)
+  warrantyClaimConfirmed   Boolean   @default(false)
+  continuityDone           Boolean   @default(false)
+  continuityConfirmed      Boolean   @default(false)
+  cancellationDone         Boolean   @default(false)
+  cancellationConfirmed    Boolean   @default(false)
+  npsTriggered             Boolean   @default(false)
+  npsTriggeredAt           DateTime?
+  obmMailSent              Boolean   @default(false)
+  obmMailSentAt            DateTime?
+  completedAt              DateTime?
+  createdAt                DateTime  @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("ob_obm_checklists")
 }
 
 model AssignmentConfig {

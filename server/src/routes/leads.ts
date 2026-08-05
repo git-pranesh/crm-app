@@ -13,6 +13,7 @@ import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 function isValidEmail(email: string): boolean {
@@ -841,6 +842,32 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         await prisma.lead.update({ where: { id }, data: { isSLABreached: false } });
       }
 
+      // Auto-create PDOBChecklist when moving to PROPOSAL_DISCUSSION (task
+      // #54) — its completion (welcome mail sent) now gates
+      // PROPOSAL_DISCUSSION → ONBOARDING. Normally this transition happens
+      // via the checklist's own send-welcome-mail action (see
+      // routes/pdObChecklist.ts), which upserts this itself; this is a
+      // safety net for leads that reach the stage some other way.
+      if (stage === 'PROPOSAL_DISCUSSION') {
+        await prisma.pDOBChecklist.upsert({
+          where: { leadId: id },
+          create: { leadId: id },
+          update: {},
+        });
+      }
+
+      // Auto-create OBOBMChecklist when moving to ONBOARDING (task #54) —
+      // its completion (OBM mail sent) now gates ONBOARDING →
+      // ONBOARDING_MEETING. Safety net; normally created by the PD→OB
+      // checklist's send-welcome-mail action.
+      if (stage === 'ONBOARDING') {
+        await prisma.oBOBMChecklist.upsert({
+          where: { leadId: id },
+          create: { leadId: id },
+          update: {},
+        });
+      }
+
       // Auto-create DIPChecklist when moving to ONBOARDING_MEETING (this is
       // what now gates ONBOARDING_MEETING → DESIGN_IN_PROGRESS).
       if (stage === 'ONBOARDING_MEETING') {
@@ -857,8 +884,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             id,
           );
         }
-        // NPS: trigger onboarding survey
-        createAndSendNps(id, 'ONBOARDING').catch(() => {});
+        // NPS: onboarding survey is now owned by the OB→OBM checklist (task
+        // #54) — it's a required, manually-triggered checklist item (see
+        // routes/obObmChecklist.ts and POST /:id/nps-trigger) rather than an
+        // automatic side effect of the stage change, so it isn't duplicated
+        // here. This block still auto-creates the DIPChecklist above as a
+        // safety net for any path that reaches ONBOARDING_MEETING outside
+        // the checklist's own send-obm-mail transition.
       }
 
       // NPS: trigger sign-off survey when lead reaches DESIGN_IN_PROGRESS
@@ -1348,6 +1380,43 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
     });
     res.json({ history: logs });
   } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/leads/:id/nps-trigger — manual NPS survey trigger (task #54) ────
+// Used by the OB→OBM checklist's "Trigger NPS" button. `stage` defaults to
+// 'ONBOARDING' (the milestone this checklist represents); createAndSendNps is
+// idempotent per (leadId, stage) so re-clicking is harmless. Also flips the
+// OB→OBM checklist's npsTriggered flag when the checklist exists.
+leadsRouter.post('/:id/nps-trigger', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = req.user!;
+    const { stage: npsStage } = req.body as { stage?: string };
+    const resolvedStage = npsStage?.trim() || 'ONBOARDING';
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, user))) {
+      res.status(403).json({ error: 'Not authorised for this lead' });
+      return;
+    }
+
+    await createAndSendNps(id, resolvedStage);
+    await logActivity(user.id, 'NPS_TRIGGERED', id, { stage: resolvedStage });
+
+    const checklist = await prisma.oBOBMChecklist.updateMany({
+      where: { leadId: id },
+      data: { npsTriggered: true, npsTriggeredAt: new Date() },
+    });
+
+    res.json({ ok: true, checklistUpdated: checklist.count > 0 });
+  } catch (err: any) {
+    console.error('[leads:nps-trigger]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

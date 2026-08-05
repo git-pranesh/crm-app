@@ -29,6 +29,8 @@ export type StageRequirement =
   | { type: 'meeting'; meetingType: 'DQL' | 'PP'; label: string }
   | { type: 'quote'; label: string }
   | { type: 'dip'; label: string }
+  | { type: 'pdObChecklist'; label: string }
+  | { type: 'obObmChecklist'; label: string }
   /**
    * File gate: a LeadFile with the given fileType must exist in one of the
    * listed stages. For FLOOR_PLAN the legacy `floorPlanUrl` field on the lead
@@ -79,13 +81,25 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
     { type: 'quote', label: 'Generated quote' },
   ],
   /**
-   * Proposal Discussion → Onboarding has no configured gate yet — the real
-   * PD→OB transition checklist (with mail triggers) is separate follow-up
-   * work; this transition is intentionally ungated for now.
+   * Proposal Discussion → Onboarding is gated on the PD→OB checklist
+   * (payment screenshot, payment/project value, OB Quote, OB meeting
+   * scheduled, welcome mail sent). The checklist's "send welcome mail"
+   * action performs this transition directly, so in practice this gate is
+   * only reachable once that action has already run — see
+   * routes/pdObChecklist.ts.
    */
-  'PROPOSAL_DISCUSSION->ONBOARDING': [],
+  'PROPOSAL_DISCUSSION->ONBOARDING': [
+    { type: 'pdObChecklist', label: 'Completed PD→OB checklist (welcome mail sent)' },
+  ],
+  /**
+   * Onboarding → Onboarding Meeting is gated on the generated quote document
+   * plus the OB→OBM checklist (7 welcome-document items + NPS trigger). Its
+   * "send OBM mail" action performs this transition directly — see
+   * routes/obObmChecklist.ts.
+   */
   'ONBOARDING->ONBOARDING_MEETING': [
     { type: 'file', fileType: 'GENERATED_QUOTE', stages: ['ONBOARDING'], label: 'Generated quote document (Files → OB)' },
+    { type: 'obObmChecklist', label: 'Completed OB→OBM checklist (OBM mail sent)' },
   ],
   'ONBOARDING_MEETING->DESIGN_IN_PROGRESS': [
     { type: 'dip', label: 'Completed DIP checklist' },
@@ -263,6 +277,22 @@ export async function checkStageRequirements(
           select: { completedAt: true },
         });
         satisfied = !!dip?.completedAt;
+        break;
+      }
+      case 'pdObChecklist': {
+        const c = await prisma.pDOBChecklist.findUnique({
+          where: { leadId: lead.id },
+          select: { completedAt: true },
+        });
+        satisfied = !!c?.completedAt;
+        break;
+      }
+      case 'obObmChecklist': {
+        const c = await prisma.oBOBMChecklist.findUnique({
+          where: { leadId: lead.id },
+          select: { completedAt: true },
+        });
+        satisfied = !!c?.completedAt;
         break;
       }
       case 'file': {

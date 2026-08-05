@@ -18,3 +18,4 @@
 - [Discount request integrity](discount-request-fields.md) — discountPct is derived server-side from amounts (approval thresholds depend on it); client pct only cross-checked
 - [Sales funnel restructure](funnel-restructure.md) — active funnel is MQL→...→DESIGN_IN_PROGRESS; EL/HANDED_OVER legacy-only; only DQL→PP skip allowed; incentive trigger moved to DESIGN_IN_PROGRESS
 - [Prisma schema/DB column drift](prisma-schema-drift.md) — schema.prisma vs live DB have pre-existing drift (duplicate camelCase/snake_case columns, missing unique constraint); avoid plain `db push`, patch narrowly with raw SQL
+- [Checklist gate completeness](checklist-gate-completeness.md) — any field a checklist UI shows as "required" must also be validated server-side in the send/complete endpoint, not just persisted

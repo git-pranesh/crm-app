@@ -40,6 +40,8 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   PITCH_PRESENTATION: 'Pitch Presentation',
   QUOTATION: 'Quotation',
   GENERATED_QUOTE: 'Generated Quote',
+  PAYMENT_SCREENSHOT: 'Payment Screenshot',
+  OB_QUOTE: 'OB Quote',
   OTHER: 'Other',
 };
 
@@ -54,6 +56,10 @@ const REQUIRED_FILES: Record<string, string> = {
   MQL: 'FLOOR_PLAN',
   DQL: 'LIFESTYLE_CAPTURE',
   PROPOSAL_READY: 'PITCH_PRESENTATION',
+  // PROPOSAL_DISCUSSION requires both a payment screenshot and an OB Quote
+  // (see PD→OB checklist) — badge shows the payment screenshot; both are
+  // enforced by the checklist's send-welcome-mail validation.
+  PROPOSAL_DISCUSSION: 'PAYMENT_SCREENSHOT',
   ONBOARDING: 'GENERATED_QUOTE',
 };
 
@@ -63,6 +69,8 @@ const FILE_TYPE_OPTIONS = [
   { value: 'PITCH_PRESENTATION', label: 'Pitch Presentation' },
   { value: 'QUOTATION', label: 'Quotation' },
   { value: 'GENERATED_QUOTE', label: 'Generated Quote' },
+  { value: 'PAYMENT_SCREENSHOT', label: 'Payment Screenshot' },
+  { value: 'OB_QUOTE', label: 'OB Quote' },
   { value: 'OTHER', label: 'Other' },
 ];
 
