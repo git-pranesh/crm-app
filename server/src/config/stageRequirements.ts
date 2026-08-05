@@ -149,6 +149,8 @@ function hasValue(v: unknown): boolean {
 export interface StageCheckResult {
   ok: boolean;
   missing: string[];
+  /** Per-requirement satisfaction, in the same order as configured, so UI can show which specific items are met vs. missing. */
+  details: { label: string; satisfied: boolean }[];
 }
 
 /**
@@ -168,6 +170,7 @@ export async function checkStageRequirements(
 
   const reqs = requirementsForTransition(fromStage, toStage);
   const missing: string[] = [];
+  const details: { label: string; satisfied: boolean }[] = [];
 
   for (const r of reqs) {
     let satisfied = false;
@@ -218,15 +221,16 @@ export async function checkStageRequirements(
       }
     }
     if (!satisfied) missing.push(r.label);
+    details.push({ label: r.label, satisfied });
   }
 
   // Global rule: a lead with 1-star intent cannot advance forward in the funnel.
   // This applies to ALL forward moves regardless of which transition.
   if (isForwardFunnelMove && lead.intentRating === 1) {
-    missing.push(
-      'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before advancing',
-    );
+    const label = 'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before advancing';
+    missing.push(label);
+    details.push({ label, satisfied: false });
   }
 
-  return { ok: missing.length === 0, missing };
+  return { ok: missing.length === 0, missing, details };
 }

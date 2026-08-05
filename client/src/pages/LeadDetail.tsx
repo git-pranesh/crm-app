@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
-  ChevronDown, Upload, ExternalLink, Pencil, Info, Check,
+  ChevronDown, Upload, ExternalLink, Pencil, Info, Check, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
@@ -195,16 +195,6 @@ const SOURCE_OPTIONS = [
 ];
 
 /** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */
-const STAGE_GATE_INFO: Record<string, string[]> = {
-  EFFECTIVE_LEAD: ['Client budget', 'Project type', 'Lead source', 'Location', 'Builder', 'Scope of work', 'Expected move-in date'],
-  MQL: ['Scheduled DQL meeting', 'Floor plan uploaded'],
-  DQL: ['Floor plan uploaded'],
-  PROPOSAL_READY: ['Scheduled PP (Proposal Presentation) meeting'],
-  PROPOSAL_PRESENTED: ['Generated quote'],
-  ONBOARDING: ['Completed DIP checklist'],
-  HANDED_OVER: [],
-};
-
 /** Funnel stages shown in the horizontal roadmap */
 const FUNNEL_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER',
@@ -277,6 +267,8 @@ export default function LeadDetail() {
   const [stageHistory, setStageHistory] = useState<StageVisit[]>([]);
   const [leadFollowUpTasks, setLeadFollowUpTasks] = useState<FollowUpTask[]>([]);
   const [gateInfoStage, setGateInfoStage] = useState<string | null>(null); // popover target
+  const [gateDetails, setGateDetails] = useState<Record<string, { label: string; satisfied: boolean }[]>>({});
+  const [gateDetailsLoading, setGateDetailsLoading] = useState(false);
 
   const [avgNps, setAvgNps] = useState<number | null>(null);
   const [npsPerStage, setNpsPerStage] = useState<Record<string, { stage: string; score: number | null; sentAt: string; respondedAt: string | null }>>({});
@@ -1010,7 +1002,8 @@ export default function LeadDetail() {
                         const wasVisited = visits.length > 0;
                         const visit = visits[visits.length - 1]; // most recent visit
                         const isGateInfoOpen = gateInfoStage === stage;
-                        const gates = STAGE_GATE_INFO[stage] ?? [];
+                        const nextStage = FUNNEL_STAGES[idx + 1];
+                        const hasGate = !!nextStage; // every stage but the last has an outgoing transition to check
 
                         return (
                           <div key={stage} className="flex items-center">
@@ -1043,11 +1036,29 @@ export default function LeadDetail() {
                                 </span>
                               )}
 
-                              {/* Gate info button + popover */}
-                              {gates.length > 0 && (
+                              {/* Gate info button + popover — labels & satisfied state come straight from the
+                                  server's /can-advance check (the same authoritative logic used to actually
+                                  block the move), never a separately-maintained client-side copy. */}
+                              {hasGate && (
                                 <div className="relative mt-0.5">
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); setGateInfoStage(isGateInfoOpen ? null : stage); }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isGateInfoOpen) {
+                                        setGateInfoStage(null);
+                                      } else {
+                                        setGateInfoStage(stage);
+                                        if (lead && nextStage) {
+                                          setGateDetailsLoading(true);
+                                          api.get<{ details: { label: string; satisfied: boolean }[] }>(
+                                            `/leads/${lead.id}/can-advance?fromStage=${stage}&toStage=${nextStage}`,
+                                          )
+                                            .then((res) => setGateDetails((prev) => ({ ...prev, [stage]: res.details ?? [] })))
+                                            .catch(() => setGateDetails((prev) => { const { [stage]: _drop, ...rest } = prev; return rest; }))
+                                            .finally(() => setGateDetailsLoading(false));
+                                        }
+                                      }
+                                    }}
                                     className="text-gray-300 hover:text-brand-400 transition-colors"
                                     title="Gate requirements"
                                   >
@@ -1055,18 +1066,26 @@ export default function LeadDetail() {
                                   </button>
                                   {isGateInfoOpen && (
                                     <div
-                                      className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 z-20 w-40 text-left"
+                                      className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 z-20 w-48 text-left"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
-                                        Gate to {FUNNEL_ABBREV[FUNNEL_STAGES[idx + 1] ?? stage]}
+                                        Gate to {FUNNEL_ABBREV[nextStage ?? stage]}
                                       </p>
-                                      {gates.map((g, gi) => (
-                                        <div key={gi} className="flex items-start gap-1 mb-0.5">
-                                          <span className="text-green-400 mt-px shrink-0"><Check size={8} strokeWidth={3} /></span>
-                                          <span className="text-[9px] text-gray-600 leading-tight">{g}</span>
-                                        </div>
-                                      ))}
+                                      {gateDetailsLoading && !gateDetails[stage] ? (
+                                        <p className="text-[9px] text-gray-400">Checking…</p>
+                                      ) : gateDetails[stage] && gateDetails[stage].length === 0 ? (
+                                        <p className="text-[9px] text-gray-400">No requirements to advance</p>
+                                      ) : (
+                                        (gateDetails[stage] ?? []).map((d, gi) => (
+                                          <div key={gi} className="flex items-start gap-1 mb-0.5">
+                                            <span className={`mt-px shrink-0 ${d.satisfied ? 'text-green-500' : 'text-red-500'}`}>
+                                              {d.satisfied ? <Check size={8} strokeWidth={3} /> : <X size={8} strokeWidth={3} />}
+                                            </span>
+                                            <span className={`text-[9px] leading-tight ${d.satisfied ? 'text-gray-600' : 'text-red-600 font-medium'}`}>{d.label}</span>
+                                          </div>
+                                        ))
+                                      )}
                                     </div>
                                   )}
                                 </div>

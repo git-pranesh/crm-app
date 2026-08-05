@@ -1322,13 +1322,21 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/leads/:id/can-advance?toStage=STAGE — gate pre-check ────────────
+// ── GET /api/leads/:id/can-advance?toStage=STAGE&fromStage=STAGE — gate pre-check ──
+// `fromStage` defaults to the lead's current stage (the real, actionable transition).
+// Callers (e.g. the stage-roadmap popover) may pass an explicit `fromStage` to preview
+// the requirements for a *different* funnel step than the lead is currently on — it
+// must be a recognised funnel stage, never arbitrary/free-text input.
 leadsRouter.get('/:id/can-advance', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { toStage } = req.query as { toStage?: string };
+    const { toStage, fromStage } = req.query as { toStage?: string; fromStage?: string };
     if (!toStage) {
       res.status(400).json({ error: 'toStage query parameter is required' });
+      return;
+    }
+    if (fromStage && !FUNNEL_ORDER.includes(fromStage as any)) {
+      res.status(400).json({ error: 'fromStage must be a valid funnel stage' });
       return;
     }
     const lead = await prisma.lead.findUnique({ where: { id } });
@@ -1339,7 +1347,7 @@ leadsRouter.get('/:id/can-advance', verifyToken, async (req, res) => {
       res.status(403).json({ error: 'Not authorised for this lead' });
       return;
     }
-    const result = await checkStageRequirements(lead as any, lead.stage, toStage);
+    const result = await checkStageRequirements(lead as any, fromStage ?? lead.stage, toStage);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
