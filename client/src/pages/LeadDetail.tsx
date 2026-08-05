@@ -64,7 +64,10 @@ const STAGE_COLORS: Record<string, string> = {
   DQL: 'bg-orange-100 text-orange-800',
   PROPOSAL_READY: 'bg-brand-50 text-brand-700',
   PROPOSAL_PRESENTED: 'bg-brand-100 text-brand-700',
+  PROPOSAL_DISCUSSION: 'bg-purple-100 text-purple-700',
   ONBOARDING: 'bg-green-100 text-green-700',
+  ONBOARDING_MEETING: 'bg-teal-100 text-teal-700',
+  DESIGN_IN_PROGRESS: 'bg-emerald-100 text-emerald-700',
   HANDED_OVER: 'bg-emerald-100 text-emerald-700',
   INACTIVE: 'bg-stone-100 text-stone-500',
   ON_HOLD: 'bg-stone-100 text-stone-600',
@@ -73,13 +76,16 @@ const STAGE_COLORS: Record<string, string> = {
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  ONBOARDING: 'Onboarding', HANDED_OVER: 'Handed Over',
+  PROPOSAL_DISCUSSION: 'Proposal Discussion',
+  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
+  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 
 const ALL_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
-  'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER', 'ON_HOLD', 'INACTIVE',
+  'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING',
+  'DESIGN_IN_PROGRESS', 'HANDED_OVER', 'ON_HOLD', 'INACTIVE',
 ];
 
 const ACTION_ICONS: Record<string, string> = {
@@ -195,15 +201,19 @@ const SOURCE_OPTIONS = [
 ];
 
 /** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */
-/** Funnel stages shown in the horizontal roadmap */
+/** Funnel stages shown in the horizontal roadmap. EFFECTIVE_LEAD/HANDED_OVER are
+ * legacy/off-funnel stages and are intentionally excluded here — new leads
+ * start at MQL and DESIGN_IN_PROGRESS is now the funnel's terminal stage. */
 const FUNNEL_STAGES = [
-  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER',
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ];
 
 const FUNNEL_ABBREV: Record<string, string> = {
   EFFECTIVE_LEAD: 'EL', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'PR', PROPOSAL_PRESENTED: 'PP',
-  ONBOARDING: 'OB', HANDED_OVER: 'HO',
+  PROPOSAL_DISCUSSION: 'PD', ONBOARDING: 'OB',
+  ONBOARDING_MEETING: 'OBM', DESIGN_IN_PROGRESS: 'DIP', HANDED_OVER: 'HO',
 };
 
 /** Priority bucket for activity log grouping (lower = shown first) */
@@ -328,7 +338,7 @@ export default function LeadDetail() {
         { from: 'PROPOSAL_READY', targetStage: 'PROPOSAL_PRESENTED', label: 'Proposal Presented' },
         { from: 'DQL', targetStage: 'PROPOSAL_PRESENTED', label: 'Proposal Presented' }, // direct DQL→PP
       ],
-      ONBOARDING: [{ from: 'PROPOSAL_PRESENTED', targetStage: 'ONBOARDING', label: 'Onboarding' }],
+      ONBOARDING: [{ from: 'PROPOSAL_DISCUSSION', targetStage: 'ONBOARDING', label: 'Onboarding' }],
     };
     const candidates = (PROMPTS[meetingType] ?? []).filter((p) => p.from === lead.stage);
     if (!candidates.length) return;
@@ -953,8 +963,8 @@ export default function LeadDetail() {
         )}
       </div>
 
-      {/* DIP Checklist for ONBOARDING / HANDED_OVER */}
-      {lead && (lead.stage === 'ONBOARDING' || lead.stage === 'HANDED_OVER') && (
+      {/* DIP Checklist for ONBOARDING_MEETING / DESIGN_IN_PROGRESS / HANDED_OVER (legacy) */}
+      {lead && (lead.stage === 'ONBOARDING_MEETING' || lead.stage === 'DESIGN_IN_PROGRESS' || lead.stage === 'HANDED_OVER') && (
         <div className="px-6 pt-4">
           <DIPChecklistPanel leadId={leadId!} stage={lead.stage} />
         </div>

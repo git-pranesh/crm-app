@@ -1,7 +1,9 @@
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  ONBOARDING: 'Onboarding', HANDED_OVER: 'Handed Over',
+  PROPOSAL_DISCUSSION: 'Proposal Discussion',
+  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
+  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 

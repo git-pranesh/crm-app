@@ -20,13 +20,18 @@ interface Props {
   currentStage: string;
 }
 
+// EFFECTIVE_LEAD/HANDED_OVER kept as legacy bookends so currentIdx math still
+// works correctly for pre-existing leads still on those stages.
 const STAGE_ORDER = [
-  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER',
+  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER',
 ];
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
-  ONBOARDING: 'Onboarding', HANDED_OVER: 'Handed Over',
+  PROPOSAL_DISCUSSION: 'Proposal Discussion',
+  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
+  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
 };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
@@ -40,9 +45,10 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 
 /**
  * Required file types per stage (mirrors stageRequirements.ts).
- * PROPOSAL_PRESENTED has no required file here: advancing to Onboarding is
- * gated on a generated Quote record instead, not a manually-uploaded file.
- * Quotation documents can still be attached voluntarily from this tab.
+ * PROPOSAL_PRESENTED has no required file here: advancing to Proposal
+ * Discussion is gated on a generated Quote record instead, not a
+ * manually-uploaded file. Quotation documents can still be attached
+ * voluntarily from this tab.
  */
 const REQUIRED_FILES: Record<string, string> = {
   MQL: 'FLOOR_PLAN',

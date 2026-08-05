@@ -51,7 +51,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
   };
 
   useEffect(() => {
-    if (stage === 'ONBOARDING' || stage === 'HANDED_OVER') load();
+    if (stage === 'ONBOARDING_MEETING' || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') load();
   }, [leadId, stage]);
 
   const toggle = async (key: ChecklistKey, currentValue: boolean) => {
@@ -62,7 +62,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
       });
       setChecklist(data.checklist);
       if (data.checklist.completedAt) {
-        toast.success('DIP checklist complete! Lead can now be moved to Handed Over.');
+        toast.success('DIP checklist complete! Lead can now be moved to Design in Progress.');
         onComplete?.();
       }
     } catch (e: any) {
@@ -87,7 +87,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
     }
   };
 
-  if (stage !== 'ONBOARDING' && stage !== 'HANDED_OVER') return null;
+  if (stage !== 'ONBOARDING_MEETING' && stage !== 'DESIGN_IN_PROGRESS' && stage !== 'HANDED_OVER') return null;
 
   if (loading) {
     return (
@@ -105,7 +105,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
   if (!checklist) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-700">
-        DIP checklist not yet created. It will appear once the lead enters ONBOARDING stage.
+        DIP checklist not yet created. It will appear once the lead enters Onboarding Meeting stage.
       </div>
     );
   }
@@ -121,7 +121,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
           <h3 className="font-semibold text-gray-900 text-sm">DIP Checklist</h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {isComplete
-              ? 'All items complete — lead can be moved to Handed Over'
+              ? 'All items complete — lead can be moved to Design in Progress'
               : `${completedCount} of ${ITEMS.length} complete`}
           </p>
         </div>
@@ -151,12 +151,12 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
               key={item.key}
               className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors
                 ${checked ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'}
-                ${stage === 'HANDED_OVER' ? 'pointer-events-none opacity-70' : ''}`}
+                ${(stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') ? 'pointer-events-none opacity-70' : ''}`}
             >
               <input
                 type="checkbox"
                 checked={checked}
-                disabled={saving || stage === 'HANDED_OVER'}
+                disabled={saving || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER'}
                 onChange={() => toggle(item.key, checked)}
                 className="w-4 h-4 accent-brand-500"
               />
@@ -169,7 +169,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
       </div>
 
       {/* Internal mail thread URL */}
-      {stage !== 'HANDED_OVER' && (
+      {stage !== 'DESIGN_IN_PROGRESS' && stage !== 'HANDED_OVER' && (
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Internal Mail Thread URL (optional)

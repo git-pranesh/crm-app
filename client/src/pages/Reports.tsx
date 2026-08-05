@@ -11,16 +11,22 @@ import { getStoredUser } from '../lib/auth';
 type AnyRow = Record<string, unknown>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+// EFFECTIVE_LEAD/HANDED_OVER kept only for rendering legacy report rows —
+// they are no longer part of the active funnel (see PIPELINE_STAGES on the
+// server, which reports use to build stage-shaped rows).
 const STAGE_LABEL: Record<string, string> = {
   NEW_LEAD: 'New', EFFECTIVE_LEAD: 'Effective', MQL: 'MQL',
   DQL: 'DQL', PROPOSAL_READY: 'Prop. Ready',
-  PROPOSAL_PRESENTED: 'Prop. Presented', ONBOARDING: 'Onboarding',
-  HANDED_OVER: 'Handed Over',
+  PROPOSAL_PRESENTED: 'Prop. Presented', PROPOSAL_DISCUSSION: 'Prop. Discussion',
+  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Mtg',
+  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
 };
 const STAGE_COLOR: Record<string, string> = {
   NEW_LEAD: '#94a3b8', EFFECTIVE_LEAD: '#6366f1', MQL: '#f59e0b',
   DQL: '#3b82f6', PROPOSAL_READY: '#8b5cf6',
-  PROPOSAL_PRESENTED: '#d95f32', ONBOARDING: '#22c55e', HANDED_OVER: '#06b6d4',
+  PROPOSAL_PRESENTED: '#d95f32', PROPOSAL_DISCUSSION: '#a855f7',
+  ONBOARDING: '#22c55e', ONBOARDING_MEETING: '#14b8a6',
+  DESIGN_IN_PROGRESS: '#059669', HANDED_OVER: '#06b6d4',
 };
 const BRAND = '#d95f32';
 
@@ -275,8 +281,10 @@ export default function Reports() {
   const totalLeads = leadSummaryRows.reduce((s, row) => s + ((row.count as number) || 0), 0);
 
   const pipelineRows: AnyRow[] = Array.isArray(r.pipeline?.data) ? r.pipeline.data : [];
+  // "Won"/converted: DESIGN_IN_PROGRESS is the funnel's terminal/incentive
+  // stage; HANDED_OVER kept for legacy leads (see funnel-restructure memory).
   const onboardedCount = pipelineRows
-    .filter((row) => row.stage === 'ONBOARDING' || row.stage === 'HANDED_OVER')
+    .filter((row) => row.stage === 'DESIGN_IN_PROGRESS' || row.stage === 'HANDED_OVER')
     .reduce((s, row) => s + ((row.count as number) || 0), 0);
   const conversionPct = totalLeads > 0 ? ((onboardedCount / totalLeads) * 100).toFixed(1) + '%' : '0%';
   const activeDesigners = Array.isArray(r.designer_performance?.data)

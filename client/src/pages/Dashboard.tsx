@@ -29,7 +29,7 @@ interface DashboardData {
   phaseLoad: { phase: string; count: number; valueSum: number }[];
   stageFunnel: { stage: string; count: number }[];
   sourceBreakdown: { source: string; count: number }[];
-  conversionRates: { elToMql: number; mqlToDql: number; dqlToPp: number; ppToOnboarding: number };
+  conversionRates: { mqlToDql: number; dqlToPr: number; prToPp: number; ppToPd: number; pdToOb: number; obToObm: number; obmToDip: number };
   slaBreaches: { activeCount: number; list: { id: string; rule: string; breachedAt: string; lead: { id: string; leadId: string; name: string; stage: string } }[] };
   teamActivity: { callsToday: number; stagesMovedToday: number; tasksCompletedToday: number };
   leadsToday?: number;
@@ -44,14 +44,21 @@ const fmt = (n: number) => {
   return '₹0';
 };
 
+// EFFECTIVE_LEAD/HANDED_OVER kept only for legacy leads — no longer part of
+// the active funnel (see .agents/memory/funnel-restructure.md).
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Eff. Lead', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'Prop. Ready', PROPOSAL_PRESENTED: 'Prop. Done', ONBOARDING: 'Onboarding',
+  PROPOSAL_READY: 'Prop. Ready', PROPOSAL_PRESENTED: 'Prop. Done',
+  PROPOSAL_DISCUSSION: 'Prop. Discussion', ONBOARDING: 'Onboarding',
+  ONBOARDING_MEETING: 'Onboarding Mtg', DESIGN_IN_PROGRESS: 'Design in Progress',
   HANDED_OVER: 'Handed Over',
 };
 const STAGE_COLORS: Record<string, string> = {
   EFFECTIVE_LEAD: '#6366f1', MQL: '#8b5cf6', DQL: '#d946ef',
-  PROPOSAL_READY: '#f59e0b', PROPOSAL_PRESENTED: '#f97316', ONBOARDING: '#22c55e',
+  PROPOSAL_READY: '#f59e0b', PROPOSAL_PRESENTED: '#f97316',
+  PROPOSAL_DISCUSSION: '#a855f7', ONBOARDING: '#22c55e',
+  ONBOARDING_MEETING: '#14b8a6', DESIGN_IN_PROGRESS: '#059669',
+  HANDED_OVER: '#06b6d4',
 };
 const PIE_COLORS = ['#d95f32', '#f97316', '#f59e0b', '#6366f1', '#8b5cf6', '#22c55e', '#06b6d4'];
 const PHASE_COLORS: Record<string, string> = {
@@ -63,9 +70,9 @@ const RISK_COLORS: Record<string, string> = {
   Blocked: 'bg-rose-100 text-rose-700',
 };
 const RULE_LABELS: Record<string, string> = {
-  FIRST_CONTACT: 'First contact >24h', LEAD_TO_MQL: 'Lead→MQL >5d',
+  FIRST_CONTACT: 'First contact >24h', LEAD_TO_MQL: 'Lead→MQL >5d (legacy EL)',
   MQL_TO_DQL: 'MQL→DQL >5d', PROPOSAL_TO_PP: 'Proposal→PP >2d',
-  FIRST_CONTACT_24H: 'First contact >24h', LEAD_TO_MQL_5D: 'Lead→MQL >5d',
+  FIRST_CONTACT_24H: 'First contact >24h', LEAD_TO_MQL_5D: 'Lead→MQL >5d (legacy EL)',
   MQL_TO_DQL_5D: 'MQL→DQL >5d', PROPOSAL_TO_PP_2D: 'Proposal→PP >2d',
 };
 
@@ -241,10 +248,13 @@ function BHDashboard({ data }: { data: DashboardData }) {
           <h3 className="font-bold text-stone-900 mb-4 tracking-tight">Stage Conversion</h3>
           <div className="space-y-3">
             {[
-              { label: 'EL → MQL', value: data.conversionRates.elToMql },
               { label: 'MQL → DQL', value: data.conversionRates.mqlToDql },
-              { label: 'DQL → PP', value: data.conversionRates.dqlToPp },
-              { label: 'PP → Onboarding', value: data.conversionRates.ppToOnboarding },
+              { label: 'DQL → PR', value: data.conversionRates.dqlToPr },
+              { label: 'PR → PP', value: data.conversionRates.prToPp },
+              { label: 'PP → PD', value: data.conversionRates.ppToPd },
+              { label: 'PD → OB', value: data.conversionRates.pdToOb },
+              { label: 'OB → OBM', value: data.conversionRates.obToObm },
+              { label: 'OBM → DIP', value: data.conversionRates.obmToDip },
             ].map((r) => (
               <div key={r.label} className="flex items-center gap-3">
                 <span className="text-xs text-stone-500 w-28 shrink-0">{r.label}</span>

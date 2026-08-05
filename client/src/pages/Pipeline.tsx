@@ -64,12 +64,18 @@ interface SalesFilters {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+// EFFECTIVE_LEAD and HANDED_OVER are legacy/off-funnel stages — excluded from
+// the kanban board (mirrors the existing precedent of HANDED_OVER already
+// being excluded); new leads start at MQL and DESIGN_IN_PROGRESS is the
+// funnel's new terminal stage.
 const KANBAN_STAGES_ALL = [
-  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING',
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ] as const;
 
 const KANBAN_STAGES_DESIGNER = [
-  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING',
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ] as const;
 
 const STAGE_LABELS: Record<string, string> = {
@@ -78,7 +84,10 @@ const STAGE_LABELS: Record<string, string> = {
   DQL: 'DQL',
   PROPOSAL_READY: 'Proposal Ready',
   PROPOSAL_PRESENTED: 'Proposal Presented',
+  PROPOSAL_DISCUSSION: 'Proposal Discussion',
   ONBOARDING: 'Onboarding',
+  ONBOARDING_MEETING: 'Onboarding Meeting',
+  DESIGN_IN_PROGRESS: 'Design in Progress',
   HANDED_OVER: 'Handed Over',
   INACTIVE: 'Inactive',
   ON_HOLD: 'On Hold',
@@ -90,7 +99,10 @@ const STAGE_ACCENT: Record<string, string> = {
   DQL: 'bg-orange-500',
   PROPOSAL_READY: 'bg-brand-400',
   PROPOSAL_PRESENTED: 'bg-brand-500',
+  PROPOSAL_DISCUSSION: 'bg-purple-500',
   ONBOARDING: 'bg-green-500',
+  ONBOARDING_MEETING: 'bg-teal-500',
+  DESIGN_IN_PROGRESS: 'bg-emerald-600',
 };
 
 const PHASE_LABELS: Record<string, string> = {

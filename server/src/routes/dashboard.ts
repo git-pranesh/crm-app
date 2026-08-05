@@ -5,8 +5,8 @@ import { verifyToken } from '../middleware/auth.js';
 export const dashboardRouter = Router();
 
 const PIPELINE_STAGES = [
-  'EFFECTIVE_LEAD', 'MQL', 'DQL',
-  'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING',
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ] as const;
 
 function startOfDay() {
@@ -82,7 +82,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.groupBy({ by: ['stage'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.lead.groupBy({ by: ['source'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.sLABreach.findMany({
-      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] } }, resolvedAt: null },
+      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] } }, resolvedAt: null },
       include: { lead: { select: { id: true, leadId: true, name: true, stage: true } } },
       orderBy: { breachedAt: 'desc' },
       take: 5,
@@ -97,9 +97,11 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       where: { completedAt: { gte: today }, assignedToId: { in: teamUserIds } },
     }),
     prisma.lead.count({
-      where: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] } },
+      where: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
     }),
-    prisma.lead.count({ where: { ...leadWhere, stage: 'ONBOARDING' } }),
+    // "Won" leads: DESIGN_IN_PROGRESS is the funnel's terminal/incentive stage,
+    // HANDED_OVER kept for legacy leads — mirrors performanceRecalc.ts.
+    prisma.lead.count({ where: { ...leadWhere, stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] } } }),
     prisma.meeting.count({
       where: { lead: leadWhere, type: 'PP', status: 'COMPLETED' },
     }),
@@ -107,7 +109,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.aggregate({
       where: {
         ...leadWhere,
-        stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
+        stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
         estimatedValue: { not: null },
       },
       _sum: { estimatedValue: true },
@@ -154,20 +156,24 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     .sort((a, b) => b.count - a.count);
 
   // ── Conversion rates ──────────────────────────────────────────────────────────
-  const pipelineTotal = PIPELINE_STAGES.reduce((acc, s) => acc + (stageMap[s] ?? 0), 0);
+  // Each rate is "% of leads currently at stage X or later that have already
+  // progressed to stage Y or later" — an occupancy-based progression proxy
+  // (same approach as before), recomputed for the new 8-stage funnel.
+  const rateBetween = (fromStage: string, toStage: string) => {
+    const fromIdx = PIPELINE_STAGES.indexOf(fromStage as any);
+    const toIdx = PIPELINE_STAGES.indexOf(toStage as any);
+    const denom = PIPELINE_STAGES.slice(fromIdx).reduce((a, s) => a + (stageMap[s] ?? 0), 0);
+    const numer = PIPELINE_STAGES.slice(toIdx).reduce((a, s) => a + (stageMap[s] ?? 0), 0);
+    return denom > 0 ? Math.round((numer / denom) * 100) : 0;
+  };
   const conversionRates = {
-    elToMql: pipelineTotal > 0
-      ? Math.round(((['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING']
-          .reduce((a, s) => a + (stageMap[s] ?? 0), 0)) / pipelineTotal) * 100)
-      : 0,
-    mqlToDql: (stageMap['MQL'] ?? 0) + (stageMap['DQL'] ?? 0) > 0
-      ? Math.round(((stageMap['DQL'] ?? 0) / ((stageMap['MQL'] ?? 0) + (stageMap['DQL'] ?? 0))) * 100)
-      : 0,
-    dqlToPp: 0,
-    ppToOnboarding: (stageMap['PROPOSAL_PRESENTED'] ?? 0) + (stageMap['ONBOARDING'] ?? 0) > 0
-      ? Math.round(((stageMap['ONBOARDING'] ?? 0) /
-          ((stageMap['PROPOSAL_PRESENTED'] ?? 0) + (stageMap['ONBOARDING'] ?? 0))) * 100)
-      : 0,
+    mqlToDql: rateBetween('MQL', 'DQL'),
+    dqlToPr: rateBetween('DQL', 'PROPOSAL_READY'),
+    prToPp: rateBetween('PROPOSAL_READY', 'PROPOSAL_PRESENTED'),
+    ppToPd: rateBetween('PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION'),
+    pdToOb: rateBetween('PROPOSAL_DISCUSSION', 'ONBOARDING'),
+    obToObm: rateBetween('ONBOARDING', 'ONBOARDING_MEETING'),
+    obmToDip: rateBetween('ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS'),
   };
 
   // ── avgNPS: average of per-stage averages ────────────────────────────────────
@@ -380,8 +386,10 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         take: 30,
       }),
 
-      // Booking achieved: sum estimatedValue for leads whose first ONBOARDING stage
-      // transition (per ActivityLog) falls within the selected date range.
+      // Booking achieved: sum estimatedValue for leads whose first
+      // DESIGN_IN_PROGRESS stage transition (per ActivityLog) falls within the
+      // selected date range — DIP is the funnel's terminal/incentive stage, so
+      // this matches the peer leaderboard and performanceRecalc definition.
       // This avoids the false re-count caused by using lead.updatedAt.
       prisma.lead.aggregate({
         where: {
@@ -390,7 +398,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
             some: {
               action: 'STAGE_CHANGED',
               createdAt: { gte: rangeFrom, lte: rangeTo },
-              meta: { path: ['to'], equals: 'ONBOARDING' },
+              meta: { path: ['to'], equals: 'DESIGN_IN_PROGRESS' },
             },
           },
           estimatedValue: { not: null },
@@ -457,12 +465,14 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         include: { lead: { select: { id: true, leadId: true, name: true } } },
       }),
 
-      // Peer booking values grouped by designer (for leaderboard)
+      // Peer booking values grouped by designer (for leaderboard) — mirrors the
+      // incentive-trigger stage used in performanceRecalc (DESIGN_IN_PROGRESS,
+      // with HANDED_OVER kept for legacy leads).
       prisma.lead.groupBy({
         by: ['assignedDesignerId'],
         where: {
           assignedDesignerId: { in: peerIds },
-          stage: { in: ['ONBOARDING', 'HANDED_OVER'] },
+          stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
           updatedAt: { gte: rangeFrom, lte: rangeTo },
           estimatedValue: { not: null },
         },

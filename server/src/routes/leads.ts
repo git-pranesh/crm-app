@@ -11,7 +11,7 @@ import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiv
 import { createAndSendNps } from '../lib/npsHelper.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
-import { checkStageRequirements, FUNNEL_ORDER } from '../config/stageRequirements.js';
+import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -96,8 +96,11 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     }
 
     // BUG-005: status → stage-set mapping (stage= takes precedence if both supplied)
+    // NOTE: EFFECTIVE_LEAD and HANDED_OVER are legacy/off-funnel stages (excluded
+    // from funnel-specific views like kanban/dashboards) but are kept in the
+    // coarse ACTIVE bucket so legacy leads don't disappear from list views.
     const statusToStages: Record<string, string[]> = {
-      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING'],
+      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'],
       ON_HOLD: ['ON_HOLD'],
       INACTIVE: ['INACTIVE'],
     };
@@ -316,7 +319,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         assignedDesignerId: assignedDesignerId || (['CRE', 'DESIGNER'].includes(user.role) ? user.id : undefined),
         assignedBLId: assignedBLId || (user.role === 'BL' ? user.id : (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined)),
         createdById: user.id,
-        stage: 'EFFECTIVE_LEAD',
+        stage: 'MQL',
       },
       include: LEAD_INCLUDE,
     });
@@ -428,7 +431,7 @@ leadsRouter.post(
           ...(phone2?.trim() && { phone2: phone2.trim() }),
           ...(email?.trim() && { email: email.trim() }),
           source,
-          stage: 'EFFECTIVE_LEAD',
+          stage: 'MQL',
           assignmentPath: 'DIRECT',
           createdById: user.id,
           ...(assignedDesignerId && { assignedDesignerId }),
@@ -477,7 +480,7 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
     }
 
     const statusToStages: Record<string, string[]> = {
-      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING'],
+      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'],
       ON_HOLD: ['ON_HOLD'],
       INACTIVE: ['INACTIVE'],
     };
@@ -685,6 +688,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         });
         return;
       }
+      // Structural skip guard: only the explicit DQL → Proposal Presented jump
+      // may skip a stage. Every other forward move must go one funnel step at
+      // a time, even if the accumulated gate requirements happen to be met.
+      if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage)) {
+        res.status(400).json({
+          error: `Cannot move directly from ${prevStage} to ${stage} — stages cannot be skipped except DQL → Proposal Presented.`,
+        });
+        return;
+      }
       // NOTE: intentRating is intentionally excluded from the prospective object.
       // The 1-star gate must evaluate the persisted DB value — not a value supplied
       // in this request — so callers cannot bypass the block by sending a non-1
@@ -713,6 +725,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       }
     }
 
+    // DQL → Proposal Presented is the only allowed stage skip — persist a
+    // flag so downstream views/reports can tell this lead never had a
+    // Proposal Ready step.
+    const isDqlToPpSkip = stage === 'PROPOSAL_PRESENTED' && prevStage === 'DQL';
+
     const lead = await prisma.lead.update({
       where: { id },
       data: {
@@ -722,6 +739,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(email !== undefined && { email: email || null }),
         ...(source && { source }),
         ...(stage && { stage: stage as any }),
+        ...(isDqlToPpSkip && { skippedProposalReady: true }),
         ...(projectType !== undefined && { projectType: projectType?.trim() || null }),
         ...(scope !== undefined && { scope: scope?.trim() || null }),
         ...(location !== undefined && { location: location?.trim() || null }),
@@ -815,7 +833,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       }
 
       // BUG-009 Part B: auto-resolve open SLA breaches when moving to a terminal stage
-      if (stage === 'HANDED_OVER' || stage === 'INACTIVE') {
+      if (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || stage === 'INACTIVE') {
         await prisma.sLABreach.updateMany({
           where: { leadId: id, resolvedAt: null },
           data: { resolvedAt: new Date() },
@@ -823,8 +841,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         await prisma.lead.update({ where: { id }, data: { isSLABreached: false } });
       }
 
-      // Auto-create DIPChecklist when moving to ONBOARDING
-      if (stage === 'ONBOARDING') {
+      // Auto-create DIPChecklist when moving to ONBOARDING_MEETING (this is
+      // what now gates ONBOARDING_MEETING → DESIGN_IN_PROGRESS).
+      if (stage === 'ONBOARDING_MEETING') {
         await prisma.dIPChecklist.upsert({
           where: { leadId: id },
           create: { leadId: id },
@@ -834,7 +853,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           await createNotification(
             existing.assignedBLId,
             'ONBOARDING_DIP_REQUIRED',
-            `Lead ${existing.leadId} onboarded — complete DIP checklist to close the sales task`,
+            `Lead ${existing.leadId} reached Onboarding Meeting — complete DIP checklist to move to Design in Progress`,
             id,
           );
         }
@@ -842,8 +861,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         createAndSendNps(id, 'ONBOARDING').catch(() => {});
       }
 
-      // NPS: trigger sign-off survey when lead reaches HANDED_OVER
-      if (stage === 'HANDED_OVER') {
+      // NPS: trigger sign-off survey when lead reaches DESIGN_IN_PROGRESS
+      // (the new terminal/conversion stage — replaces the old HANDED_OVER
+      // trigger; HANDED_OVER is kept as a legacy trigger so old data flows
+      // are unaffected).
+      if (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') {
         createAndSendNps(id, 'SIGN_OFF').catch(() => {});
       }
 
@@ -900,8 +922,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
-      // Auto-create Project when moving to HANDED_OVER (G3)
-      if (stage === 'HANDED_OVER') {
+      // Auto-create Project when moving to DESIGN_IN_PROGRESS — this is now
+      // the funnel's terminal/conversion stage (moved from the old
+      // HANDED_OVER trigger; HANDED_OVER kept as a legacy trigger for old
+      // data flows still using it directly).
+      if (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') {
         try {
           const alreadyExists = await prisma.project.findUnique({ where: { leadId: id } });
           if (!alreadyExists) {
@@ -1274,7 +1299,12 @@ leadsRouter.get('/:id/stage-history', verifyToken, async (req, res) => {
     // Reconstruct stage visit history from activity log
     type StageVisit = { stage: string; enteredAt: Date; exitedAt?: Date; tatDays?: number };
     const history: StageVisit[] = [];
-    let currentStage = 'EFFECTIVE_LEAD';
+    // Derive the lead's starting stage from its first logged transition's
+    // `from` value so this works for both legacy leads (start at
+    // EFFECTIVE_LEAD) and new leads (start at MQL) without hardcoding either.
+    // Falls back to the lead's current stage if it never changed stage.
+    const firstMeta = stageLogs[0]?.meta as { from?: string; to?: string } | null;
+    let currentStage = firstMeta?.from ?? lead.stage;
     let currentEnteredAt = lead.createdAt;
 
     for (const log of stageLogs) {

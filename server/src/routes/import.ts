@@ -31,7 +31,8 @@ const COLUMN_MAP: Record<string, string> = {
 
 const VALID_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
-  'PROPOSAL_PRESENTED', 'ONBOARDING', 'INACTIVE', 'ON_HOLD',
+  'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING',
+  'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'INACTIVE', 'ON_HOLD',
 ];
 
 async function parseRows(file: Express.Multer.File): Promise<Record<string, string>[]> {
@@ -131,7 +132,7 @@ importRouter.post('/', verifyToken, requireRole('BL', 'BRANCH_HEAD'), upload.sin
 
       const stage = r.stage && VALID_STAGES.includes(r.stage.toUpperCase())
         ? r.stage.toUpperCase()
-        : 'EFFECTIVE_LEAD';
+        : 'MQL';
       const designerId = r.designerName ? designerMap.get(r.designerName.toLowerCase()) : undefined;
       const blId = r.blName ? blMap.get(r.blName.toLowerCase()) : undefined;
 

@@ -4,7 +4,12 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 
 export const reportsRouter = Router();
 
-const PIPELINE_STAGES = ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER'];
+// Active funnel only (EFFECTIVE_LEAD/HANDED_OVER are legacy-only and excluded
+// from funnel-shaped reports — see .agents/memory/funnel-restructure.md).
+const PIPELINE_STAGES = ['MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS'];
+// "Won"/converted stages for conversion-rate and incentive-adjacent reports —
+// DESIGN_IN_PROGRESS is now the trigger stage; HANDED_OVER kept for legacy leads.
+const WON_STAGES = ['DESIGN_IN_PROGRESS', 'HANDED_OVER'];
 
 // ── CSV helper ────────────────────────────────────────────────────────────────
 function toCSV(rows: Record<string, unknown>[]): string {
@@ -126,7 +131,7 @@ async function designerPerformance(q: Record<string, string>) {
       prisma.lead.count({ where: dWhere }),
       prisma.meeting.count({ where: { lead: dWhere, type: 'DQL', status: 'COMPLETED' } }),
       prisma.meeting.count({ where: { lead: dWhere, type: 'PP', status: { in: ['COMPLETED', 'NO_SHOW'] } } }),
-      prisma.lead.count({ where: { ...dWhere, stage: 'ONBOARDING' } }),
+      prisma.lead.count({ where: { ...dWhere, stage: { in: WON_STAGES } } }),
       prisma.lead.count({ where: { ...dWhere, isSLABreached: true } }),
     ]);
     return {
@@ -152,7 +157,7 @@ async function blPerformance(q: Record<string, string>) {
     const bWhere = { ...where, assignedBLId: bl.id };
     const [leads, closed, discountReqs] = await Promise.all([
       prisma.lead.count({ where: bWhere }),
-      prisma.lead.count({ where: { ...bWhere, stage: 'ONBOARDING' } }),
+      prisma.lead.count({ where: { ...bWhere, stage: { in: WON_STAGES } } }),
       prisma.discountRequest.findMany({
         where: { lead: bWhere },
         select: { status: true, discountPct: true, originalAmount: true, amount: true },
@@ -187,7 +192,7 @@ async function sourcePerformance(q: Record<string, string>) {
     const src = r.source ?? 'Unknown';
     if (!sourceMap[src]) sourceMap[src] = { total: 0, onboarding: 0 };
     sourceMap[src].total += r._count.id;
-    if (r.stage === 'ONBOARDING') sourceMap[src].onboarding += r._count.id;
+    if (WON_STAGES.includes(r.stage)) sourceMap[src].onboarding += r._count.id;
   }
   return Object.entries(sourceMap)
     .map(([source, { total, onboarding }]) => ({
@@ -209,7 +214,7 @@ async function campaignPerformance(q: Record<string, string>) {
     const c = r.utmCampaign ?? 'Unknown';
     if (!map[c]) map[c] = { total: 0, onboarding: 0 };
     map[c].total += r._count.id;
-    if (r.stage === 'ONBOARDING') map[c].onboarding += r._count.id;
+    if (WON_STAGES.includes(r.stage)) map[c].onboarding += r._count.id;
   }
   return Object.entries(map)
     .map(([campaign, { total, onboarding }]) => ({
@@ -300,7 +305,7 @@ async function meetingPerformance(q: Record<string, string>) {
 }
 
 async function salesCycle(q: Record<string, string>) {
-  const where = { ...buildLeadWhere(q), stage: 'ONBOARDING' as const };
+  const where = { ...buildLeadWhere(q), stage: { in: WON_STAGES } };
   const agg = await prisma.lead.aggregate({
     where,
     _avg: { daysLeadToDQL: true, daysDQLToPP: true, daysPPToOnboarding: true },
@@ -329,7 +334,7 @@ async function leadAging(q: Record<string, string>) {
   };
   const where = buildLeadWhere(q);
   const leads = await prisma.lead.findMany({
-    where: { ...where, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'ONBOARDING', 'HANDED_OVER'] } },
+    where: { ...where, stage: { notIn: ['INACTIVE', 'ON_HOLD', ...WON_STAGES] } },
     select: {
       leadId: true, name: true, stage: true, updatedAt: true, isSLABreached: true,
       assignedDesigner: { select: { name: true } },
@@ -368,7 +373,7 @@ async function monthlyTrend(q: Record<string, string>) {
     const key = l.createdAt.toISOString().slice(0, 7); // YYYY-MM
     if (!monthMap[key]) monthMap[key] = { month: key, leads: 0, onboardings: 0 };
     monthMap[key].leads++;
-    if (l.stage === 'ONBOARDING') monthMap[key].onboardings++;
+    if (WON_STAGES.includes(l.stage)) monthMap[key].onboardings++;
   }
 
   const rows = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
@@ -388,7 +393,7 @@ async function offerPerformance(q: Record<string, string>) {
     const [total, current, onboarded] = await Promise.all([
       prisma.lead.count({ where: oWhere }),
       prisma.lead.count({ where: { ...where, currentOfferId: o.id } }),
-      prisma.lead.count({ where: { ...oWhere, stage: { in: ['ONBOARDING', 'HANDED_OVER'] } } }),
+      prisma.lead.count({ where: { ...oWhere, stage: { in: WON_STAGES } } }),
     ]);
     return {
       offer: o.name, total, current, onboarded,

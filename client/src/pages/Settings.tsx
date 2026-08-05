@@ -29,7 +29,7 @@ interface WATemplate {
 
 const SLA_ROWS: { rule: string; label: string }[] = [
   { rule: 'FIRST_CONTACT_24H',  label: 'First contact within N hours of creation' },
-  { rule: 'LEAD_TO_MQL_5D',    label: 'Reach MQL within N hours' },
+  { rule: 'LEAD_TO_MQL_5D',    label: 'Reach MQL within N hours (legacy Effective Lead cleanup)' },
   { rule: 'MQL_TO_DQL_5D',     label: 'DQL meeting scheduled within N hours of MQL' },
   { rule: 'PROPOSAL_TO_PP_2D', label: 'PP meeting scheduled within N hours of Proposal Ready' },
 ];

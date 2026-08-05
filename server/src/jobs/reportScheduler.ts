@@ -46,10 +46,12 @@ export const reportWorker = new Worker(
       ? `Week of ${new Date().toLocaleDateString('en-IN')}`
       : `Month of ${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}`;
 
-    // Get high-level stats for the email
+    // Get high-level stats for the email. "Onboardings" here means leads that
+    // have converted — DESIGN_IN_PROGRESS is the funnel's terminal/incentive
+    // stage, HANDED_OVER kept for legacy leads (see funnel-restructure memory).
     const [totalLeads, onboardings, slaBreaches] = await Promise.all([
       prisma.lead.count(),
-      prisma.lead.count({ where: { stage: 'ONBOARDING' } }),
+      prisma.lead.count({ where: { stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] } } }),
       prisma.sLABreach.count({ where: { resolvedAt: null } }),
     ]);
 

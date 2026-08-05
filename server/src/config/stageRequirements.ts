@@ -38,10 +38,12 @@ export type StageRequirement =
 
 export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   /**
-   * EL → MQL: all key facts (except Offer and Floor Plan) must be filled.
-   * Intent rating of 1 is separately blocked in checkStageRequirements.
+   * MQL → DQL: all key facts (except Offer and Floor Plan) must be filled —
+   * this absorbs the old EFFECTIVE_LEAD→MQL data-quality gate now that EL is
+   * off-funnel — plus the DQL meeting + floor plan requirements that already
+   * gated this step.
    */
-  'EFFECTIVE_LEAD->MQL': [
+  'MQL->DQL': [
     { type: 'field', field: 'estimatedValue', label: 'Client budget' },
     { type: 'field', field: 'projectType', label: 'Project type' },
     { type: 'field', field: 'source', label: 'Lead source' },
@@ -49,12 +51,10 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
     { type: 'field', field: 'builder', label: 'Builder (or N/A)' },
     { type: 'field', field: 'scope', label: 'Scope of work' },
     { type: 'field', field: 'expectedMoveIn', label: 'Expected move-in date' },
-  ],
-  'MQL->DQL': [
     { type: 'meeting', meetingType: 'DQL', label: 'Scheduled DQL meeting' },
     /**
-     * Floor plan accepted from either EL or MQL stage folder, or the legacy
-     * floorPlanUrl field (backward-compatible).
+     * Floor plan accepted from the legacy EL folder (old data), MQL folder,
+     * or the legacy floorPlanUrl field (backward-compatible).
      */
     { type: 'file', fileType: 'FLOOR_PLAN', stages: ['EFFECTIVE_LEAD', 'MQL'], label: 'Floor plan uploaded (Files tab)' },
   ],
@@ -75,39 +75,101 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
    * The Quotation file type can still be uploaded voluntarily from the Files
    * tab, but it is no longer mandatory for this transition.
    */
-  'PROPOSAL_PRESENTED->ONBOARDING': [
+  'PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION': [
     { type: 'quote', label: 'Generated quote' },
   ],
-  'ONBOARDING->HANDED_OVER': [
-    { type: 'dip', label: 'Completed DIP checklist' },
+  /**
+   * Proposal Discussion → Onboarding has no configured gate yet — the real
+   * PD→OB transition checklist (with mail triggers) is separate follow-up
+   * work; this transition is intentionally ungated for now.
+   */
+  'PROPOSAL_DISCUSSION->ONBOARDING': [],
+  'ONBOARDING->ONBOARDING_MEETING': [
     { type: 'file', fileType: 'GENERATED_QUOTE', stages: ['ONBOARDING'], label: 'Generated quote document (Files → OB)' },
   ],
-  /**
-   * DQL → PROPOSAL_PRESENTED (direct skip of Proposal Ready).
-   * Requires floor plan + lifestyle capture + PP meeting + pitch presentation.
-   */
-  'DQL->PROPOSAL_PRESENTED': [
-    { type: 'file', fileType: 'FLOOR_PLAN', stages: ['EFFECTIVE_LEAD', 'MQL', 'DQL'], label: 'Floor plan' },
-    { type: 'file', fileType: 'LIFESTYLE_CAPTURE', stages: ['DQL'], label: 'Lifestyle capture sheet (Files → DQL)' },
-    { type: 'meeting', meetingType: 'PP', label: 'Scheduled proposal presentation (PP) meeting' },
-    { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_READY', 'DQL'], label: 'Pitch presentation (Files → DQL or PR)' },
+  'ONBOARDING_MEETING->DESIGN_IN_PROGRESS': [
+    { type: 'dip', label: 'Completed DIP checklist' },
   ],
 };
 
 /**
+ * DQL → PROPOSAL_PRESENTED (direct skip of Proposal Ready) — the only stage
+ * in the funnel that may be skipped. Skipping a stage must never skip its
+ * gate: this accumulates the full MQL→DQL→PROPOSAL_READY→PROPOSAL_PRESENTED
+ * requirement set (data-quality fields, DQL meeting, floor plan, lifestyle
+ * capture, PP meeting, pitch presentation) so a lead can't reach Proposal
+ * Presented with less verification than the normal step-by-step path.
+ * Defined after STAGE_REQUIREMENTS (and merged onto it below) so it can
+ * reference the other legs without duplicating them by hand.
+ */
+STAGE_REQUIREMENTS['DQL->PROPOSAL_PRESENTED'] = [
+  ...STAGE_REQUIREMENTS['MQL->DQL'],
+  ...STAGE_REQUIREMENTS['DQL->PROPOSAL_READY'],
+  ...STAGE_REQUIREMENTS['PROPOSAL_READY->PROPOSAL_PRESENTED'],
+];
+
+/**
  * Linear funnel order. Used to expand a forward stage jump into the set of
  * intermediate adjacent transitions whose requirements must all be satisfied.
- * Stages not listed here (INACTIVE, ON_HOLD) are off-funnel and ungated.
+ * Stages not listed here (EFFECTIVE_LEAD, HANDED_OVER, INACTIVE, ON_HOLD) are
+ * legacy/off-funnel and ungated.
  */
 export const FUNNEL_ORDER = [
-  'EFFECTIVE_LEAD',
   'MQL',
   'DQL',
   'PROPOSAL_READY',
   'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION',
   'ONBOARDING',
-  'HANDED_OVER',
+  'ONBOARDING_MEETING',
+  'DESIGN_IN_PROGRESS',
 ] as const;
+
+/**
+ * Forward jumps besides plain adjacent steps that are explicitly allowed to
+ * skip a stage. DQL is the only stage in the funnel that may be skipped
+ * (directly to Proposal Presented); every other forward move must go one
+ * step at a time even if the accumulated gate would technically be satisfied.
+ */
+const ALLOWED_SKIP_TRANSITIONS = new Set<string>(['DQL->PROPOSAL_PRESENTED']);
+
+/**
+ * Whether a stage change from `fromStage` to `toStage` is structurally
+ * permitted at all (independent of whether its gate requirements are met).
+ * Backward moves within the active funnel are left to the caller's own
+ * backward-move restriction. Legacy stages (EFFECTIVE_LEAD, HANDED_OVER) are
+ * off-funnel for *new* transitions, not an unrestricted bypass of it:
+ *   - EFFECTIVE_LEAD may only move forward into MQL (the funnel's real
+ *     starting point) — it can't be used to jump straight into DQL/PP/etc.
+ *   - HANDED_OVER can never be entered going forward now that
+ *     DESIGN_IN_PROGRESS is the funnel's terminal/incentive stage; it only
+ *     exists on pre-restructure leads.
+ * This only blocks illegal forward skips/entries — off-funnel side moves
+ * (INACTIVE, ON_HOLD) and true backward moves are handled by the caller.
+ */
+export function isStageJumpAllowed(fromStage: string, toStage: string): boolean {
+  if (toStage === 'HANDED_OVER') return false;
+
+  const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
+
+  // EFFECTIVE_LEAD is legacy/off-funnel (not in FUNNEL_ORDER), so it's handled
+  // by two explicit, symmetric rules rather than the index arithmetic below:
+  //   - Moving OUT of EL into an active funnel stage may only land on MQL
+  //     (the funnel's real starting point) — this does NOT restrict EL's
+  //     side moves (ON_HOLD/INACTIVE), which aren't in FUNNEL_ORDER either
+  //     and so fall through to the "unrestricted off-funnel" branch below.
+  //   - Moving INTO EL is only ever the explicit MQL → EL rollback; every
+  //     other stage (DQL and beyond) is blocked from demoting back to EL,
+  //     matching the "only MQL → Effective Lead" rule enforced in leads.ts.
+  if (fromStage === 'EFFECTIVE_LEAD' && toIdx !== -1) return toStage === 'MQL';
+  if (toStage === 'EFFECTIVE_LEAD') return fromStage === 'MQL';
+
+  const fromIdx = FUNNEL_ORDER.indexOf(fromStage as (typeof FUNNEL_ORDER)[number]);
+  if (fromIdx === -1 || toIdx === -1) return true; // other legacy/off-funnel — unrestricted
+  if (toIdx <= fromIdx) return true; // backward/no-op — handled elsewhere
+  if (toIdx === fromIdx + 1) return true; // adjacent forward step always fine
+  return ALLOWED_SKIP_TRANSITIONS.has(`${fromStage}->${toStage}`);
+}
 
 /**
  * Collect all requirements that apply when moving from `fromStage` to

@@ -23,8 +23,16 @@ export async function recalculateMilestones(leadId: string) {
       ? daysBetween(dqlMeeting.scheduledAt, ppMeeting.scheduledAt)
       : null;
 
+  // Reports still read daysPPToOnboarding as the PP -> Onboarding sales-cycle
+  // metric, so it must keep being recorded once a lead reaches Onboarding —
+  // not just while it's still sitting there. Otherwise leads that progress
+  // on to ONBOARDING_MEETING/DESIGN_IN_PROGRESS/HANDED_OVER would silently
+  // lose this timing metric (see .agents/memory/funnel-restructure.md).
+  const REACHED_ONBOARDING_OR_LATER = new Set([
+    'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER',
+  ]);
   let daysPPToOnboarding: number | null = null;
-  if (ppMeeting && lead.stage === 'ONBOARDING') {
+  if (ppMeeting && REACHED_ONBOARDING_OR_LATER.has(lead.stage)) {
     daysPPToOnboarding = daysBetween(ppMeeting.scheduledAt, lead.updatedAt);
   }
 

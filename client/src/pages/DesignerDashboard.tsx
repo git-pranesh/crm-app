@@ -141,13 +141,18 @@ function ProgressBar({ value, max, color = BRAND }: { value: number; max: number
 }
 
 // ── Funnel stage config ───────────────────────────────────────────────────────
+// EFFECTIVE_LEAD/HANDED_OVER are legacy/off-funnel — excluded from this table;
+// new leads start at MQL, and DESIGN_IN_PROGRESS is now the funnel's terminal
+// stage (replacing ONBOARDING's old "Booking" role).
 const FUNNEL_STAGES = [
-  { key: 'EFFECTIVE_LEAD', label: 'Effective Lead', color: '#6366f1' },
   { key: 'MQL', label: 'MQL', color: '#8b5cf6' },
   { key: 'DQL', label: 'DQL', color: '#d946ef' },
   { key: 'PROPOSAL_READY', label: 'Proposal Ready', color: '#f59e0b' },
   { key: 'PROPOSAL_PRESENTED', label: 'Proposal Presented', color: '#f97316' },
-  { key: 'ONBOARDING', label: 'Booking', color: '#22c55e' },
+  { key: 'PROPOSAL_DISCUSSION', label: 'Proposal Discussion', color: '#a855f7' },
+  { key: 'ONBOARDING', label: 'Onboarding', color: '#22c55e' },
+  { key: 'ONBOARDING_MEETING', label: 'Onboarding Meeting', color: '#14b8a6' },
+  { key: 'DESIGN_IN_PROGRESS', label: 'Design in Progress', color: '#059669' },
 ];
 
 const TIER_LABEL: Record<string, string> = { BASIC: 'Basic', STANDARD: 'Standard', PREMIUM: 'Premium' };

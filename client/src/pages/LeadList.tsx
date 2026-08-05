@@ -31,26 +31,37 @@ const STAGE_COLORS: Record<string, string> = {
   DQL: 'bg-orange-100 text-orange-800',
   PROPOSAL_READY: 'bg-brand-50 text-brand-700',
   PROPOSAL_PRESENTED: 'bg-brand-100 text-brand-700',
+  PROPOSAL_DISCUSSION: 'bg-purple-100 text-purple-700',
   ONBOARDING: 'bg-green-100 text-green-700',
+  ONBOARDING_MEETING: 'bg-teal-100 text-teal-700',
+  DESIGN_IN_PROGRESS: 'bg-emerald-100 text-emerald-700',
   HANDED_OVER: 'bg-emerald-100 text-emerald-700',
   INACTIVE: 'bg-stone-100 text-stone-500',
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
+// NOTE: these abbreviations pre-date the funnel restructure and don't match
+// the new PD/PP naming used elsewhere (PROPOSAL_READY→"PP" here is actually
+// Proposal Ready, not Proposal Presented) — kept as-is to avoid an unrelated
+// relabel; only new stages are added below with their real names.
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'EL', MQL: 'MQL', DQL: 'DQL',
   PROPOSAL_READY: 'PP', PROPOSAL_PRESENTED: 'PD',
-  ONBOARDING: 'Onboarding', HANDED_OVER: 'Handed Over',
+  PROPOSAL_DISCUSSION: 'Proposal Discussion',
+  ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
+  DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 
 const STAGE_OPTIONS_ALL = [
-  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
-  'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
+  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
 ];
 const STAGE_OPTIONS_DESIGNER = [
-  'MQL', 'DQL', 'PROPOSAL_READY',
-  'PROPOSAL_PRESENTED', 'ONBOARDING', 'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
+  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
 ];
 
 function getCurrentUserRole(): string {

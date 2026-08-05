@@ -43,7 +43,7 @@ async function createLeadFromWebhook(data: {
       adName: data.adName,
       utmCampaign: data.utmCampaign,
       utmSource: data.utmSource,
-      stage: 'EFFECTIVE_LEAD',
+      stage: 'MQL',
     },
   });
   await logActivity(SYSTEM_USER_ID, 'LEAD_CREATED_VIA_WEBHOOK', lead.id, { source: data.source, leadId });
@@ -164,7 +164,7 @@ leadWebhooksRouter.post('/google', async (req, res) => {
             utmSource: b.utm_source || 'google',
             utmAdSet: b.utm_adset || undefined,
             location: b.city || b.location || undefined,
-            stage: 'EFFECTIVE_LEAD',
+            stage: 'MQL',
             assignedDesignerId: cre?.id || undefined,
           },
         });

@@ -16,3 +16,5 @@
 - [Task completion guard](task-completion-guard.md) — tasks need lead activity after creation; spawning activity logged at task timestamp so it doesn't self-satisfy
 - [Meeting reschedule](meeting-reschedule.md) — RESCHEDULED requires newScheduledAt and flips status back to SCHEDULED; never treat RESCHEDULED as terminal
 - [Discount request integrity](discount-request-fields.md) — discountPct is derived server-side from amounts (approval thresholds depend on it); client pct only cross-checked
+- [Sales funnel restructure](funnel-restructure.md) — active funnel is MQL→...→DESIGN_IN_PROGRESS; EL/HANDED_OVER legacy-only; only DQL→PP skip allowed; incentive trigger moved to DESIGN_IN_PROGRESS
+- [Prisma schema/DB column drift](prisma-schema-drift.md) — schema.prisma vs live DB have pre-existing drift (duplicate camelCase/snake_case columns, missing unique constraint); avoid plain `db push`, patch narrowly with raw SQL

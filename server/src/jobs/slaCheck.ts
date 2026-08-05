@@ -63,7 +63,9 @@ export async function runSLACheck(): Promise<{ totalBreaches: number; details: s
           where: {
             createdAt: { lt: cutoff },
             calls: { none: {} },
-            stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
+            // DESIGN_IN_PROGRESS is the funnel's terminal stage (task #53) —
+            // a lead that has already reached it is done, not overdue.
+            stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
             isSLABreached: false,
           },
           select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },
@@ -71,8 +73,12 @@ export async function runSLACheck(): Promise<{ totalBreaches: number; details: s
       },
     },
     {
+      // EFFECTIVE_LEAD→MQL is off-funnel for new leads (which are created
+      // directly at MQL as of task #53) — this rule only ever fires for
+      // pre-restructure leads still sitting in the legacy EL stage, catching
+      // ones that were never advanced into the active funnel.
       rule: 'LEAD_TO_MQL',
-      label: 'Move to MQL within 5 days',
+      label: 'Move to MQL within 5 days (legacy Effective Lead cleanup)',
       check: async () => {
         const cutoff = new Date(Date.now() - thresholds.LEAD_TO_MQL_5D * 60 * 60 * 1000);
         return prisma.lead.findMany({

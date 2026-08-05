@@ -47,7 +47,7 @@ dipChecklistRouter.patch('/', verifyToken, requireRole('BL'), async (req, res) =
 
     const current = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
     if (!current) {
-      res.status(404).json({ error: 'DIP checklist not found. Lead may not be in ONBOARDING stage yet.' });
+      res.status(404).json({ error: 'DIP checklist not found. Lead may not be in Onboarding Meeting stage yet.' });
       return;
     }
 

@@ -41,10 +41,13 @@ export async function runPerformanceRecalc(): Promise<{ updated: number }> {
   for (const designer of designers) {
     const [totalAssigned, totalConverted, avgValue] = await Promise.all([
       prisma.lead.count({ where: { assignedDesignerId: designer.id } }),
+      // Conversion counts leads that reached Design in Progress — the funnel's
+      // new terminal/incentive-trigger stage (Onboarding no longer counts;
+      // HANDED_OVER kept for legacy leads so historical conversions aren't lost).
       prisma.lead.count({
         where: {
           assignedDesignerId: designer.id,
-          stage: { in: ['ONBOARDING', 'HANDED_OVER'] },
+          stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
         },
       }),
       prisma.lead.aggregate({
@@ -99,7 +102,7 @@ export const performanceRecalcWorker = new Worker(
         prisma.lead.count({
           where: {
             assignedDesignerId: designer.id,
-            stage: { in: ['ONBOARDING', 'HANDED_OVER'] },
+            stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
           },
         }),
         prisma.lead.aggregate({
