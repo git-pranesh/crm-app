@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
@@ -11,7 +11,7 @@ export const projectsRouter = Router();
 // cannot mutate project data — that stays with the assigned Designer/CRE and
 // Branch Head. Lead mutations are unaffected (see leads.ts) — this guard is
 // scoped to project-mutating routes only.
-function blockBLWrite(req: any, res: any, next: any) {
+function blockBLWrite(req: Request, res: Response, next: NextFunction): void {
   if (req.user?.role === 'BL') {
     res.status(403).json({ error: 'BL role has view-only access to projects' });
     return;

@@ -54,10 +54,9 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       projectType, location, dateRange, intent,
       status,
       // New pipeline filters (task #27)
-      originDateFrom, originDateTo, originMonth,
+      originDateFrom, originDateTo,
       budgetMin, budgetMax,
       possessionDateFrom, possessionDateTo,
-      intentMin,
       projectedObFrom, projectedObTo,
       pipelineMode,
     } = req.query as Record<string, string>;
@@ -139,8 +138,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.stage = { not: 'EFFECTIVE_LEAD' as any };
     }
 
-    // Origin date range / billing-cycle month (16th–15th).
-    // originDateFrom/To take precedence over originMonth.
+    // Origin date range.
     if (originDateFrom || originDateTo) {
       const existingCat = where.createdAt ?? {};
       if (originDateFrom) (existingCat as any).gte = new Date(originDateFrom);
@@ -151,13 +149,6 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         (existingCat as any).lte = end;
       }
       where.createdAt = existingCat;
-    } else if (originMonth && !dateRange) {
-      // originMonth = "YYYY-MM"; billing cycle: the 16th of that month →
-      // the 15th of the following month.
-      const [y, m] = originMonth.split('-').map(Number);
-      const from = new Date(y, m - 1, 16);             // e.g. Jul 16
-      const to   = new Date(y, m, 15, 23, 59, 59, 999); // e.g. Aug 15
-      where.createdAt = { gte: from, lte: to };
     }
 
     // Budget / estimated value range.
@@ -184,13 +175,6 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         em.lte = end;
       }
       where.expectedMoveIn = em;
-    }
-
-    // Intent minimum rating (star selector — "at least N stars").
-    // Takes precedence over the existing exact-match `intent` param.
-    if (intentMin) {
-      const min = parseInt(intentMin);
-      if (!isNaN(min)) where.intentRating = { gte: min };
     }
 
     // Projected OB date range: mapped to nextMeetingDate (closest available
