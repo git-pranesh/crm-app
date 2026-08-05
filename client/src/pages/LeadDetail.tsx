@@ -181,6 +181,14 @@ const EMPTY_EDIT = {
   possessionTimeline: '', nextMeetingDate: '',
 };
 
+/** Preset possession timeframes; anything else stored is treated as a custom date. */
+const POSSESSION_PRESETS = ['Immediate', '3 months', '6 months', '1 year+'];
+
+/** true if `v` looks like a YYYY-MM-DD date (what the custom date input produces). */
+function isIsoDateString(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v);
+}
+
 const SOURCE_OPTIONS = [
   'Meta Ads', 'Google Ads', 'Referral', 'Walk-in', 'Manual',
   'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Other',
@@ -255,6 +263,7 @@ export default function LeadDetail() {
 
   const [editDetailsModal, setEditDetailsModal] = useState(false);
   const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
+  const [possessionMode, setPossessionMode] = useState<'preset' | 'custom'>('preset');
   const [savingDetails, setSavingDetails] = useState(false);
 
   const [reassignField, setReassignField] = useState<'designer' | 'bl' | null>(null);
@@ -387,6 +396,10 @@ export default function LeadDetail() {
       possessionTimeline: lead.possessionTimeline ?? '',
       nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
     });
+    const savedPossession = lead.possessionTimeline ?? '';
+    setPossessionMode(
+      savedPossession && !POSSESSION_PRESETS.includes(savedPossession) ? 'custom' : 'preset',
+    );
     setEditDetailsModal(true);
   };
 
@@ -710,10 +723,50 @@ export default function LeadDetail() {
                       {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
+                  {/* Possession — preset timeframe dropdown, or a custom date */}
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-600 mb-1">Possession</label>
+                    <select
+                      value={possessionMode === 'preset' ? editDetails.possessionTimeline : '__custom__'}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setPossessionMode('custom');
+                          setEditDetails({
+                            ...editDetails,
+                            possessionTimeline: isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : '',
+                          });
+                        } else {
+                          setPossessionMode('preset');
+                          setEditDetails({ ...editDetails, possessionTimeline: e.target.value });
+                        }
+                      }}
+                      className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                    >
+                      <option value="">Select timeframe…</option>
+                      {POSSESSION_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                      <option value="__custom__">Custom date…</option>
+                    </select>
+                    {possessionMode === 'custom' && (
+                      <>
+                        <input
+                          type="date"
+                          value={isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : ''}
+                          onChange={(e) => setEditDetails({ ...editDetails, possessionTimeline: e.target.value })}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all mt-2"
+                          style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        />
+                        {editDetails.possessionTimeline && !isIsoDateString(editDetails.possessionTimeline) && (
+                          <p className="text-[11px] text-stone-400 mt-1">
+                            Previously saved as "{editDetails.possessionTimeline}" — pick a date above to replace it.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
                   {([
                     { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
                     { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
-                    { key: 'possessionTimeline', label: 'Possession (text)', placeholder: 'Immediate / 3 months' },
                     { key: 'offer1', label: 'Offer 1', placeholder: '10% discount on modular' },
                     { key: 'offer2', label: 'Offer 2', placeholder: '' },
                     { key: 'offer3', label: 'Offer 3', placeholder: '' },
