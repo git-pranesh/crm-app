@@ -38,12 +38,16 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
-/** Required file types per stage (mirrors stageRequirements.ts) */
+/**
+ * Required file types per stage (mirrors stageRequirements.ts).
+ * PROPOSAL_PRESENTED has no required file here: advancing to Onboarding is
+ * gated on a generated Quote record instead, not a manually-uploaded file.
+ * Quotation documents can still be attached voluntarily from this tab.
+ */
 const REQUIRED_FILES: Record<string, string> = {
   MQL: 'FLOOR_PLAN',
   DQL: 'LIFESTYLE_CAPTURE',
   PROPOSAL_READY: 'PITCH_PRESENTATION',
-  PROPOSAL_PRESENTED: 'QUOTATION',
   ONBOARDING: 'GENERATED_QUOTE',
 };
 

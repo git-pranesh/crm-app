@@ -66,9 +66,17 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
     { type: 'meeting', meetingType: 'PP', label: 'Scheduled proposal presentation (PP) meeting' },
     { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_READY'], label: 'Pitch presentation (Files → PR)' },
   ],
+  /**
+   * A generated quote (created via the Quote Builder callback, which inserts
+   * a Quote row for the lead) is the single source of truth here. There is
+   * no separate manually-uploaded "QUOTATION" file gate: the Quote Builder
+   * callback has no way to attach a real file, so requiring a LeadFile here
+   * used to permanently block leads that had a real, system-generated quote.
+   * The Quotation file type can still be uploaded voluntarily from the Files
+   * tab, but it is no longer mandatory for this transition.
+   */
   'PROPOSAL_PRESENTED->ONBOARDING': [
     { type: 'quote', label: 'Generated quote' },
-    { type: 'file', fileType: 'QUOTATION', stages: ['PROPOSAL_PRESENTED'], label: 'Quotation document (Files → PP)' },
   ],
   'ONBOARDING->HANDED_OVER': [
     { type: 'dip', label: 'Completed DIP checklist' },
