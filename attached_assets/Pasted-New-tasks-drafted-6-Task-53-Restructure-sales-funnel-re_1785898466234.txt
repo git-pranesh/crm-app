@@ -1,0 +1,21 @@
+New tasks drafted (6):
+
+Task #53 — Restructure sales funnel: remove EL, add PD/OBM/DIP, allow DQL→PP path The biggest change. Schema adds 3 new LeadStage values (PROPOSAL_DISCUSSION, ONBOARDING_MEETING, DESIGN_IN_PROGRESS); removes EL and HO from the active funnel; updates the 8-stage FUNNEL_ORDER; enforces DQL as the only skippable stage; allows DQL→PP as a direct path while still running the PR gate requirements and recording a skippedProposalReady flag; triggers auto-project-link on DIP instead of HO; updates all stage labels in the UI. Everything else depends on this.
+
+Task #54 — Build PD→OB and OB→OBM transition checklists with mail triggers (depends on #53) Two new checklist tabs modelled on the existing DIP panel. PD→OB requires: payment screenshot, payment value, project value, OB quote, OB meeting date/time/location, notes, and a send-welcome-mail button that advances the stage. OB→OBM requires: 7 project timeline dates, 7 welcome-document checkboxes, NPS trigger button, and a send-OBM-mail button that advances the stage.
+
+Task #55 — Validate phone and email on lead form; remove pre-meeting placeholder Phone rejects non-numeric/too-short input. Email requires @domain.tld format or shows "Invalid mail ID". Validation fires on blur and on save, both client-side and server-side. The text "No pre-meeting questionnaire submitted yet" (MeetingsTab.tsx line 441) is removed.
+
+Task #56 — Add per-stage SLA breach indicators and update Design Pipeline to 8 stages (depends on #53) SLA thresholds per transition (MQL→DQL: 7–15d, DQL→PR: 2d, PR/DQL→PP: 2d, PD→OB: 7–15d) are served from a config endpoint and shown as coloured badges on the stage roadmap and funnel. Design Pipeline tab updated to the 8 confirmed phases (Site Documentation → Site Discussion → Layout Finalisation → Design Discussion → Pre Sign-Off → Masking → Sign Off → EIP) with 45-day overall SLA. Dashboard labels renamed: "Design quality" → "Design performance", "Delivery" → "Timeline adherence".
+
+Task #57 — Fix pipeline intent filter, remove OB month, enforce BL project view-only Intent filter changed to exact-match (1 star = only 1-star leads). OB month filter removed from pipeline. All lead filters added to pipeline panel. BL role blocked from PATCH/DELETE on project routes (view-only for projects, full access to leads).
+
+Task #58 — Enforce add-only file attachments — remove replace button, group files by stage Replace button removed from all file upload UI. Server-side replace/delete route blocked. Files tab groups files by the stage they were uploaded in.
+
+Existing tasks updated:
+
+Task #37 — updated to match the same add-only file rule (same as #58 — you can archive one from the task panel; they cover identical ground)
+Task #48 — updated with the 8 confirmed design phase names and marked as depending on #53
+One task to archive manually:
+
+Task #31 ("Require a reason when moving back to Effective Lead") — EL is being removed by #53, so this is now irrelevant. You can cancel it from the task panel.

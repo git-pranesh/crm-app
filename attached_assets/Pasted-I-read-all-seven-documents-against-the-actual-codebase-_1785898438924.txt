@@ -1,0 +1,34 @@
+I read all seven documents against the actual codebase (schema, routes, dashboards). Here's the factual breakdown — grouped by what's genuinely new vs. what's a fix/gap in something already built, and cross-checked against your 31 existing tasks.
+
+1. The three Incentive Engine PDFs (Designer / BL / DTL) — 100% new, nothing exists
+Verified in code:
+
+prisma/schema.prisma has no incentive-cycle, credit, booster, milestone, CX-release, or audit-log model at all.
+The Designer dashboard's "Estimated Incentive" is a literal placeholder — the server code comment says "Incentive estimate (placeholder — no incentive model in schema)" and multiplies booking value by hardcoded 1%/1.5%/2% tier rates. Booking/PO targets are hardcoded to null.
+DTL (Design Team Lead) role doesn't exist anywhere — the role enum only has Designer, CRE, Business Lead, Branch Head.
+No admin UI exists to set Booking/PO Target, Credit Allocation, Incentive Slabs, Booster Rules, Milestone Rewards, or CX Release Matrix.
+NPS/CX data is collected, but nothing gates incentive release on it.
+Task #47 ("Replace estimated incentive placeholders...") and #45 (booking targets) only scratch the surface — the three PDFs describe a full engine (dynamic credit rates, eligibility gates, boosters, milestones, furniture incentive, CX-gated release, immutable audit log, three separate role formulas). None of that is covered by any existing task.
+
+2. The two WhatsApp screenshots
+Image 1 (OB-stage checklist: payment screenshot, project/furniture values, OB quote, welcome-mail auto-trigger, OBM checklist) — this is already captured by Task #54.
+Image 2 (remove EL, add PD/OBM, SLA breach colour bands green/orange/red, "expected vs achieved") — the funnel change is already captured by Task #53, and the SLA colour-coding is already captured by Task #56. The "expected vs achieved" booking widget is new and not yet covered by any task.
+3. The CRM_development PDF — mostly fixes/gaps in existing features, not new products
+This is a punch-list of specific defects and missing polish on features that already exist:
+
+Confirmed bug: "generated quote attached but stage still doesn't move PP→OB" — real gating bug in the stage-transition logic.
+UI bugs: date/time fields rendering as free text instead of a calendar picker; "only half the text is visible" on Lead Overview; no mandatory-field-in-red indicator for stage requirements.
+New sub-features not yet tracked: meeting agenda field on every meeting type, numbering repeat PP meetings, multi-file floor plan with filenames shown per file, "Follow-up" tab rename to "Follow-up task" with internal/external tagging, auto-adding the Design Manager on OB by cohort, primary-designer designation restricted to BL/BH with incentive tied to primary only, editable mail templates from an admin screen (confirmed not found anywhere — templates are hardcoded HTML files today).
+4. The feature-checklist spreadsheet — a sign-off document; most rows describe things you already have
+I verified against code: CRE role, Meta/Google ad webhook capture with UTM, bulk Excel/CSV import, duplicate detection, Quote Builder deep-link, discount approval workflow, WhatsApp send/receive + global inbox, meeting confirmation/reschedule/no-show/MOM emails, onboarding/inactivation emails, and the full reports section (CSV export + scheduled emails) all already exist in code. The spreadsheet is largely a confirmation/spec-lock of shipped work.
+
+The Comments column does add a handful of genuinely new asks buried in the "Yes" rows that aren't built:
+
+Excel/XLSX report export (only CSV exists today)
+Lead intent 1–5 star rating layered on High/Medium/Low
+On-Hold auto-reminder + auto mail/WhatsApp trigger on the reopen date (Task #40 only covers displaying the reason/date, not the automated trigger)
+Round-robin BL assignment + CRE-qualify-then-assign flow
+5-RNR escalation prompt flow, "task incomplete at midnight" flagging
+Offer/campaign tagging + "which offer drove which onboarding" report
+Designer discount-authority cap enforced inside the external Quote Builder itself (this lives outside your CRM's codebase — needs confirming with whoever owns proposals.interiorsbydex.com)
+Bottom line: the incentive engine is the single largest genuinely new build (nothing exists for it). The funnel/SLA/OB-checklist items from the images are already on your task list. The CRM_development PDF is mostly real bugs plus some new polish items. The spreadsheet mostly re-confirms what's shipped, with a short list of real gaps buried in the comments.
