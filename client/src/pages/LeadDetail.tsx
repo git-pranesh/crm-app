@@ -872,7 +872,7 @@ export default function LeadDetail() {
             {/* Left: name + subtitle + stage/intent row */}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-extrabold text-stone-900 tracking-tight truncate">{lead.name}</h1>
+                <h1 className="text-xl font-extrabold text-stone-900 tracking-tight truncate min-w-0" title={lead.name}>{lead.name}</h1>
                 {lead.isSLABreached && (
                   <span className="inline-flex items-center gap-1 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
                     <AlertTriangle size={10} strokeWidth={2.5} /> SLA
