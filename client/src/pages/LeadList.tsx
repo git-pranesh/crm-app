@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import { Users, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
-import { validateEmail, validatePhone } from '../lib/validation';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
@@ -149,29 +148,18 @@ export default function LeadList() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '' });
+  const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '', designerId: '' });
+  const [designers, setDesigners] = useState<{ id: string; name: string }[]>([]);
 
   const userRole = getCurrentUserRole();
   const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
-  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
-  const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
 
-  const validateNewLeadField = (key: string, value: string) => {
-    let error: string | null = null;
-    if (key === 'email') error = validateEmail(value);
-    else if (key === 'phone') error = validatePhone(value);
-    else if (['name', 'projectType', 'scope', 'location', 'possessionTimeline'].includes(key) && !value.trim()) {
-      error = 'This field is required';
-    }
-    setNewLeadErrors((prev) => {
-      const next = { ...prev };
-      if (error) next[key] = error; else delete next[key];
-      return next;
-    });
-    return error;
-  };
+  useEffect(() => {
+    if (userRole !== 'BL') return;
+    api.get<{ designers: { id: string; name: string }[] }>('/leads/meta/designers')
+      .then((data) => setDesigners(data.designers))
+      .catch(() => {});
+  }, [userRole]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +169,7 @@ export default function LeadList() {
       if (filters.stage) params.set('stage', filters.stage);
       if (filters.source) params.set('source', filters.source);
       if (filters.status) params.set('status', filters.status);
+      if (filters.designerId) params.set('designerId', filters.designerId);
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
       setTotal(data.total);
@@ -190,40 +179,14 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters.search, filters.stage, filters.source, filters.status]);
+  }, [page, filters.search, filters.stage, filters.source, filters.status, filters.designerId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source || !newLead.projectType || !newLead.scope || !newLead.possessionTimeline) {
-      toast.error('Name, phone, project type, scope of work, location, possession and source are required'); return;
-    }
-    const phoneError = validatePhone(newLead.phone);
-    const emailError = validateEmail(newLead.email);
-    if (phoneError || emailError) {
-      setNewLeadErrors((prev) => ({ ...prev, ...(phoneError ? { phone: phoneError } : {}), ...(emailError ? { email: emailError } : {}) }));
-      toast.error(phoneError ?? emailError ?? 'Please fix the highlighted fields');
-      return;
-    }
-    const digits = newLead.phone.replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '').replace(/^0(?=\d{10}$)/, '');
-    if (digits.length !== 10) {
-      toast.error('Phone number must be exactly 10 digits'); return;
-    }
-    setCreating(true);
-    try {
-      const data = await api.post<{ lead: Lead }>('/leads', { ...newLead, phone: digits });
-      toast.success(`Lead ${data.lead.leadId} created`);
-      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
-      setNewLeadErrors({});
-      setShowCreate(false);
-      await load();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setCreating(false);
-    }
-  };
+  /** The canonical "New Lead" form lives in the global Layout modal (opened from
+   * the sidebar) so there is exactly one create flow, one set of validation
+   * rules, and one field order. This page's "+ New Lead" button just opens it. */
+  const openNewLeadModal = () => window.dispatchEvent(new CustomEvent('open-new-lead-modal'));
 
   const handleExportCSV = async () => {
     setExporting(true);
@@ -259,7 +222,7 @@ export default function LeadList() {
     setPage(1);
   };
 
-  const clearFilters = () => { setFilters({ search: '', stage: '', source: '', status: '' }); setPage(1); };
+  const clearFilters = () => { setFilters({ search: '', stage: '', source: '', status: '', designerId: '' }); setPage(1); };
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
@@ -281,72 +244,16 @@ export default function LeadList() {
               {exporting ? 'Exporting…' : '↓ Export CSV'}
             </button>
             <button
-              onClick={() => { setShowCreate(!showCreate); setNewLeadErrors({}); }}
+              onClick={openNewLeadModal}
               className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 transition-colors"
             >
-              {showCreate ? 'Cancel' : '+ New Lead'}
+              + New Lead
             </button>
           </div>
         </div>
       </div>
 
       <div className="px-6 py-4 space-y-4">
-        {/* Create form */}
-        {showCreate && (
-          <div className="bg-white rounded-2xl p-5 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
-            <h2 className="font-bold text-stone-900 mb-4 tracking-tight">Create New Lead</h2>
-            <form onSubmit={handleCreate} className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { key: 'name', label: 'Full Name', required: true, placeholder: 'Priya Sharma' },
-                { key: 'phone', label: 'Phone', required: true, placeholder: '98765 43210 (10 digits)' },
-                { key: 'email', label: 'Email', placeholder: 'priya@example.com' },
-                { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa / Office' },
-                { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
-                { key: 'scope', label: 'Scope of Work', required: true, placeholder: '2-bedroom / 3-bedroom / Full home' },
-                { key: 'possessionTimeline', label: 'Possession', required: true, type: 'date' },
-                { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
-              ].map((f: any) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1.5">
-                    {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
-                  </label>
-                  <input
-                    type={f.type || 'text'}
-                    value={(newLead as any)[f.key]}
-                    onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
-                    onBlur={(e) => validateNewLeadField(f.key, e.target.value)}
-                    required={f.required}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
-                    style={{
-                      border: newLeadErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
-                      background: '#FDFAF7',
-                    }}
-                  />
-                  {newLeadErrors[f.key] && (
-                    <p className="text-[11px] text-red-500 mt-1">{newLeadErrors[f.key]}</p>
-                  )}
-                </div>
-              ))}
-              <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Source</label>
-                <select value={newLead.source} onChange={(e) => setNewLead({ ...newLead, source: e.target.value })}
-                  className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
-                  <option value="">Select source</option>
-                  {SOURCE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="col-span-2 lg:col-span-3 flex justify-end">
-                <button type="submit" disabled={creating}
-                  className="bg-brand-500 text-white px-6 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
-                  {creating ? 'Creating…' : 'Create Lead'}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* Filter bar */}
         <div className="bg-white rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <input
@@ -376,6 +283,14 @@ export default function LeadList() {
             <option value="">All sources</option>
             {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
+          {userRole === 'BL' && (
+            <select value={filters.designerId} onChange={(e) => setFilter('designerId', e.target.value)}
+              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+              style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+              <option value="">All designers</option>
+              {designers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          )}
           {hasFilters && (
             <button onClick={clearFilters} className="text-xs text-stone-400 hover:text-stone-600 underline">
               Clear
@@ -395,7 +310,7 @@ export default function LeadList() {
             <div className="py-16 text-center text-stone-400 text-sm animate-pulse">Loading leads…</div>
           ) : leads.length === 0 ? (
             <EmptyState Icon={Users} title="No leads found" description="Try adjusting your filters or create a new lead"
-              action={{ label: '+ New Lead', onClick: () => setShowCreate(true) }} />
+              action={{ label: '+ New Lead', onClick: openNewLeadModal }} />
           ) : (
             <>
               <div className="overflow-x-auto">

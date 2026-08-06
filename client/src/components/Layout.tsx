@@ -102,7 +102,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [creating, setCreating] = useState(false);
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
-  const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location'];
+  // Everything is mandatory to create a lead except Estimated/Client Budget and Email.
+  const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location', 'possessionTimeline', 'source'];
+
+  // This is the one canonical "New Lead" flow in the app — other pages (e.g. the
+  // Leads list) just dispatch this event instead of keeping their own form/state.
+  useEffect(() => {
+    const openFromEvent = () => { setNewLeadErrors({}); setShowNewLead(true); };
+    window.addEventListener('open-new-lead-modal', openFromEvent);
+    return () => window.removeEventListener('open-new-lead-modal', openFromEvent);
+  }, []);
 
   const validateNewLeadField = (key: string, value: string) => {
     let error: string | null = null;
@@ -156,8 +165,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location || !newLead.possessionTimeline) {
-      toast.error('Name, phone, project type, scope of work and location are required'); return;
+    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location || !newLead.possessionTimeline || !newLead.source) {
+      toast.error('All fields except email and client budget are required'); return;
     }
     const phoneError = validatePhone(newLead.phone);
     const emailError = validateEmail(newLead.email);
@@ -414,6 +423,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <input
                   type="date"
                   value={newLead.possessionTimeline}
+                  min={new Date().toISOString().slice(0, 10)}
                   onChange={(e) => setNewLead({ ...newLead, possessionTimeline: e.target.value })}
                   onBlur={(e) => validateNewLeadField('possessionTimeline', e.target.value)}
                   required
@@ -436,16 +446,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Source</label>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                  Source<span className="text-brand-500 ml-0.5">*</span>
+                </label>
                 <select
                   value={newLead.source}
                   onChange={(e) => setNewLead({ ...newLead, source: e.target.value })}
+                  onBlur={(e) => validateNewLeadField('source', e.target.value)}
+                  required
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                  style={{ border: newLeadErrors.source ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
                 >
                   <option value="">Select source</option>
                   {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                 </select>
+                {newLeadErrors.source && (
+                  <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.source}</p>
+                )}
               </div>
               <div className="col-span-2 flex justify-end gap-2 pt-1">
                 <button type="button" onClick={() => { setShowNewLead(false); setNewLeadErrors({}); }}

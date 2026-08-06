@@ -267,8 +267,11 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       assignedDesignerId, assignedBLId,
     } = req.body as Record<string, string>;
 
-    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim() || !possessionTimeline?.trim()) {
-      res.status(400).json({ error: 'name, phone, projectType, scope, location and possessionTimeline are required' });
+    // Every field is mandatory to create a lead except email and estimatedValue
+    // (client budget) — this must mirror the client-side required-field rules
+    // in Layout.tsx's New Lead modal, not just be enforced in the UI.
+    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim() || !possessionTimeline?.trim() || !source?.trim()) {
+      res.status(400).json({ error: 'name, phone, projectType, scope, location, possessionTimeline and source are required' });
       return;
     }
     if (!isValidPhone(phone)) {
@@ -493,6 +496,23 @@ leadsRouter.post(
     }
   },
 );
+
+// ── GET /api/leads/meta/designers — designers filterable in this user's scope ─
+leadsRouter.get('/meta/designers', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    let where: any = { role: 'DESIGNER', isActive: true };
+    if (user.role === 'BL') {
+      where = { role: 'DESIGNER', isActive: true, blId: user.id };
+    } else if (user.role === 'DESIGNER') {
+      where = { role: 'DESIGNER', isActive: true, id: user.id };
+    }
+    const designers = await prisma.user.findMany({ where, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+    res.json({ designers });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to load designers' });
+  }
+});
 
 // ── GET /api/leads/export — download filtered leads as CSV ───────────────────
 leadsRouter.get('/export', verifyToken, async (req, res) => {

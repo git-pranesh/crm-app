@@ -895,6 +895,7 @@ export default function LeadDetail() {
                         <input
                           type="date"
                           value={isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : ''}
+                          min={new Date().toISOString().slice(0, 10)}
                           onChange={(e) => setEditDetails({ ...editDetails, possessionTimeline: e.target.value })}
                           className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all mt-2"
                           style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
