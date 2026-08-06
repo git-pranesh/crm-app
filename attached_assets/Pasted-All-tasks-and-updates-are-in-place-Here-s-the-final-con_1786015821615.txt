@@ -1,0 +1,20 @@
+All tasks and updates are in place. Here's the final consolidated picture — this covers everything from both docs, with nothing new added:
+7 new drafted tasks (things not already tracked anywhere):
+#73 — Fix lead form field rules to apply on every entry point (the "possession date not mandatory in the Leads-tab form" complaint, and the general fix-everywhere rule)
+#74 — Fill gaps in PD→OB / OB→OBM checklists (furniture value field, welcome-mail-approved-by-client + screenshot, auto-assign design manager)
+#75 — Replace Offer 1/2/3 with an admin-driven offer dropdown
+#76 — Fix meeting/task workflow bugs (mark-done broken, bad reschedule dates, wrong timestamps) + no-show replan capture + "Client place" meeting option
+#77 — Round-robin lead assignment with CRE qualification
+#78 — Auto-prefill the quote software from known CRM data
+#79 — Add "Design Team Lead" as a role name only, no new permissions (per the founder's explicit ❗️ minimal-scope ruling)
+8 existing drafted tasks updated with the missing specifics from the founder's doc, instead of creating duplicates:
+#14, #32, #69 — SLA thresholds now include the missing OB→OBM window, 3-tier green/yellow/red coding, and the stale-breach-badge bug
+#30, #39 — floor plan reflecting in Files tab now covers EL/MQL/DQL, not just one stage
+#40 — now includes the reactivation-reason flow (dropdown + notes, internal-mandatory/client-optional mail) — explicitly excluding auto-reactivation, which stays paused for v2 per the founder
+#66 — broadened from two mail templates to all mail/WhatsApp templates
+#47 — narrowed to the founder's actual near-term ask: rename to "Estimated incentives," keep the basic formula, full engine deferred
+Deliberately left out, per the founder's own rulings:
+Automated on-hold auto-reactivation, midnight task-incomplete flagging, discount-authority cap in the Quote Builder — all explicitly paused for v2
+Anything from Bucket C (multi-designer teams, schedule-a-call, rep-scoped login, RNR past 5, removing intent rating, separating lead status from lead stage) — still awaiting your yes/no from earlier, not started
+All 19 drafted tasks (7 new + 8 updated, some counted twice above) are sitting in your task list now, ready for you to accept and assign. Nothing has been built yet — this is the scope list for your review.
+
