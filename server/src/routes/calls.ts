@@ -126,6 +126,27 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return [newCall, newTask];
   });
 
+  // Notify the assigned BL (if not the one who logged the call) that a call happened
+  if (lead.assignedBLId && lead.assignedBLId !== user.id) {
+    await createNotification(
+      lead.assignedBLId,
+      'CALL_LOGGED',
+      `Call logged for ${lead.name} (${lead.leadId}) — outcome: ${outcome.replace(/_/g, ' ')}`,
+      leadId,
+    );
+  }
+
+  // Notify the follow-up task's assignee (if not the one who logged the call)
+  if (task.assignedToId !== user.id) {
+    const dueStr = new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    await createNotification(
+      task.assignedToId,
+      'TASK_SCHEDULED',
+      `Follow-up task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}`,
+      leadId,
+    );
+  }
+
   // RNR escalation logic
   const rnrCount = await prisma.call.count({
     where: { leadId, outcome: { in: [...RNR_OUTCOMES] } },

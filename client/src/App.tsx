@@ -18,6 +18,7 @@ import Login from './pages/Login';
 import Tasks from './pages/Tasks';
 import Settings from './pages/Settings';
 import Calendar from './pages/Calendar';
+import Notifications from './pages/Notifications';
 import FeedbackForm from './pages/FeedbackForm';
 import NpsForm from './pages/NpsForm';
 import AcceptInvite from './pages/AcceptInvite';
@@ -112,6 +113,7 @@ export default function App() {
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/calendar" element={<Calendar />} />
+                    <Route path="/notifications" element={<Notifications />} />
                     <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Layout>

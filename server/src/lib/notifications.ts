@@ -16,7 +16,10 @@ export type NotificationType =
   | 'INTENT_RATING_CHANGED'
   | 'ON_HOLD_REOPEN'
   | 'NPS_SUBMITTED'
-  | 'LEAD_REACTIVATED';
+  | 'LEAD_REACTIVATED'
+  | 'MEETING_SCHEDULED'
+  | 'CALL_LOGGED'
+  | 'TASK_SCHEDULED';
 
 export async function createNotification(
   userId: string,

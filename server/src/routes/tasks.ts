@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
+import { createNotification } from '../lib/notifications.js';
 
 export const tasksRouter = Router({ mergeParams: true });
 export const myTasksRouter = Router();
@@ -57,6 +58,16 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
   });
 
   await logActivity(user.id, 'TASK_CREATED', leadId, { dueDate, assignedToId });
+
+  if (task.assignedToId !== user.id) {
+    const dueStr = new Date(dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    await createNotification(
+      task.assignedToId,
+      'TASK_SCHEDULED',
+      `Task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${dueTime ? ` at ${dueTime}` : ''}`,
+      leadId,
+    );
+  }
 
   res.status(201).json({ task });
 });

@@ -117,6 +117,27 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     scheduledAt,
   });
 
+  // Notify the assigned BL/designer (whoever didn't book it) that a meeting was scheduled
+  {
+    const meetingLabel = ppNumber ? `PP${ppNumber}` : type;
+    const dateStr = new Date(scheduledAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+    });
+    const notifyIds = new Set([lead.assignedBLId, lead.assignedDesignerId].filter(
+      (id): id is string => !!id && id !== user.id,
+    ));
+    await Promise.all(
+      [...notifyIds].map((id) =>
+        createNotification(
+          id,
+          'MEETING_SCHEDULED',
+          `${meetingLabel} meeting scheduled for ${lead.name} (${lead.leadId}) on ${dateStr}`,
+          leadId,
+        ),
+      ),
+    );
+  }
+
   // Queue confirmation email (auto-trigger, no checkbox)
   if (lead.email) {
     const designer = await prisma.user.findUnique({

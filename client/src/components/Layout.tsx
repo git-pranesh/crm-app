@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import NotificationList from './NotificationList';
 import { getStoredUser, logout } from '../lib/auth';
 import { validateEmail, validatePhone } from '../lib/validation';
 
@@ -73,15 +74,6 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-stone-100 text-stone-700',
 };
 
-function fmtRelTime(date: string) {
-  const diff = Date.now() - new Date(date).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
 export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -134,6 +126,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     } catch {
       // silent
     }
+  }, []);
+
+  const handleMarkRead = useCallback((id: string) => {
+    // Optimistic: flip local state + decrement badge immediately, no refetch delay
+    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    api.patch(`/notifications/${id}/read`).catch(() => {
+      // Revert on failure
+      setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: false } : n)));
+      setUnreadCount((c) => c + 1);
+    });
   }, []);
 
   useEffect(() => {
@@ -341,23 +344,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               </button>
               {notifsOpen && (
-                <div className="absolute right-0 top-full mt-1 w-80 bg-white rounded-2xl shadow-warm-lg z-50 overflow-hidden" style={{ border: '1px solid #EDE8E3' }}>
+                <div className="absolute right-0 top-full mt-1 w-96 bg-white rounded-2xl shadow-warm-lg z-50 overflow-hidden" style={{ border: '1px solid #EDE8E3' }}>
                   <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #EDE8E3' }}>
                     <p className="text-sm font-semibold text-stone-900">Notifications</p>
                     {unreadCount > 0 && (
                       <span className="text-xs text-brand-600 font-medium">{unreadCount} unread</span>
                     )}
                   </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-cream-100">
-                    {notifs.length === 0 ? (
-                      <p className="text-center text-sm text-stone-400 py-6">No notifications</p>
-                    ) : notifs.slice(0, 10).map((n) => (
-                      <div key={n.id} className={`px-4 py-3 ${!n.isRead ? 'bg-brand-50' : ''}`}>
-                        <p className="text-xs text-stone-700 leading-snug">{n.message}</p>
-                        <p className="text-[10px] text-stone-400 mt-0.5">{fmtRelTime(n.createdAt)}</p>
-                      </div>
-                    ))}
+                  <div className="max-h-80 overflow-y-auto">
+                    <NotificationList notifications={notifs.slice(0, 20)} onMarkRead={handleMarkRead} variant="compact" />
                   </div>
+                  <Link
+                    to="/notifications"
+                    onClick={() => setNotifsOpen(false)}
+                    className="block text-center text-xs font-medium text-brand-600 hover:text-brand-700 py-2.5"
+                    style={{ borderTop: '1px solid #EDE8E3' }}
+                  >
+                    View all notifications
+                  </Link>
                 </div>
               )}
             </div>
