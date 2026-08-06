@@ -486,6 +486,65 @@ adminRouter.post('/assignment-config', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/offer-options — list all offers (incl. inactive) ──────────
+adminRouter.get('/offer-options', async (_req, res) => {
+  try {
+    const offers = await prisma.offerOption.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] });
+    res.json({ offers });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/admin/offer-options ─────────────────────────────────────────────
+adminRouter.post('/offer-options', async (req, res) => {
+  try {
+    const { label, sortOrder } = req.body as { label?: string; sortOrder?: number };
+    if (!label?.trim()) { res.status(400).json({ error: 'label is required' }); return; }
+    const offer = await prisma.offerOption.create({
+      data: { label: label.trim(), sortOrder: sortOrder ?? 0 },
+    });
+    res.status(201).json({ offer });
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      res.status(409).json({ error: 'An offer with this label already exists' });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
+// ── PATCH /api/admin/offer-options/:id ────────────────────────────────────────
+adminRouter.patch('/offer-options/:id', async (req, res) => {
+  try {
+    const { label, isActive, sortOrder } = req.body as { label?: string; isActive?: boolean; sortOrder?: number };
+    const offer = await prisma.offerOption.update({
+      where: { id: req.params.id },
+      data: {
+        ...(label !== undefined && { label: label.trim() }),
+        ...(isActive !== undefined && { isActive }),
+        ...(sortOrder !== undefined && { sortOrder }),
+      },
+    });
+    res.json({ offer });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/admin/offer-options/:id — soft delete (deactivate) ───────────
+adminRouter.delete('/offer-options/:id', async (req, res) => {
+  try {
+    const offer = await prisma.offerOption.update({
+      where: { id: req.params.id },
+      data: { isActive: false },
+    });
+    res.json({ offer, note: 'Soft deleted — leads that already used this offer keep it.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/admin/health — system health ─────────────────────────────────────
 adminRouter.get('/health', async (_req, res) => {
   try {

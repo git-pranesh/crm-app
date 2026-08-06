@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, type LucideIcon } from 'lucide-react';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 
@@ -30,7 +30,9 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers';
+
+interface OfferOption { id: string; label: string; isActive: boolean; sortOrder: number }
 
 interface NpsRow {
   leadDbId: string; leadId: string; leadName: string;
@@ -63,6 +65,11 @@ export default function Admin() {
   const [npsSortCol, setNpsSortCol] = useState<string>('avgNps');
   const [npsSortDir, setNpsSortDir] = useState<'asc' | 'desc'>('desc');
 
+  const [offers, setOffers] = useState<OfferOption[]>([]);
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [newOfferLabel, setNewOfferLabel] = useState('');
+  const [savingOffer, setSavingOffer] = useState(false);
+
   const bls = users.filter((u) => u.role === 'BL' && u.isActive);
   const activeDesigners = users.filter((u) => u.role === 'DESIGNER' && u.isActive);
 
@@ -85,6 +92,42 @@ export default function Admin() {
   };
 
   useEffect(() => { loadAll(); }, []);
+
+  const loadOffers = async () => {
+    setOffersLoading(true);
+    try {
+      const d = await api.get<{ offers: OfferOption[] }>('/admin/offer-options');
+      setOffers(d.offers);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setOffersLoading(false);
+    }
+  };
+
+  const addOffer = async () => {
+    if (!newOfferLabel.trim()) return;
+    setSavingOffer(true);
+    try {
+      await api.post('/admin/offer-options', { label: newOfferLabel.trim(), sortOrder: offers.length });
+      setNewOfferLabel('');
+      await loadOffers();
+      toast.success('Offer added');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingOffer(false);
+    }
+  };
+
+  const toggleOfferActive = async (offer: OfferOption) => {
+    try {
+      await api.patch(`/admin/offer-options/${offer.id}`, { isActive: !offer.isActive });
+      await loadOffers();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const openDeactivate = async (u: User) => {
     setDeactivateTarget(u);
@@ -231,6 +274,7 @@ export default function Admin() {
     { id: 'schedules', label: 'Report Schedules', Icon: CalendarDays },
     { id: 'health', label: 'System Health', Icon: Activity },
     { id: 'nps', label: 'NPS Tracker', Icon: Star },
+    { id: 'offers', label: 'Offers', Icon: Tag },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -332,7 +376,7 @@ export default function Admin() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <nav className="flex gap-1 overflow-x-auto">
             {tabs.map((t) => (
-              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'nps') loadNps({ designerId: npsDesignerFilter || undefined, from: npsDateFrom || undefined, to: npsDateTo || undefined }); }}
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'nps') loadNps({ designerId: npsDesignerFilter || undefined, from: npsDateFrom || undefined, to: npsDateTo || undefined }); if (t.id === 'offers') loadOffers(); }}
                 className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
                   tab === t.id ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -653,6 +697,56 @@ export default function Admin() {
               <h2 className="font-semibold text-gray-900 mb-2">Base URL</h2>
               <p className="text-sm font-mono bg-gray-50 rounded-lg px-3 py-2 text-gray-700">{health.baseUrl}</p>
               <p className="text-xs text-gray-400 mt-1">Set <code>BASE_URL</code> env var to use your custom domain (e.g. https://crm.interiorsbydex.com)</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── OFFERS TAB ─────────────────────────────────────────────────────── */}
+        {tab === 'offers' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-1">Offer Options</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Manage the offers designers/BLs can pick from in a lead's Offer 1/2/3 fields.
+                Deactivating an offer hides it from new selections but keeps it on leads that already used it.
+              </p>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newOfferLabel}
+                  onChange={(e) => setNewOfferLabel(e.target.value)}
+                  placeholder="e.g. 10% discount on modular"
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  onKeyDown={(e) => { if (e.key === 'Enter') addOffer(); }}
+                />
+                <button
+                  onClick={addOffer}
+                  disabled={savingOffer || !newOfferLabel.trim()}
+                  className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+
+              {offersLoading ? (
+                <div className="text-center py-8 text-gray-400 animate-pulse text-sm">Loading…</div>
+              ) : offers.length === 0 ? (
+                <EmptyState title="No offers yet" description="Add your first offer above." />
+              ) : (
+                <div className="space-y-1.5">
+                  {offers.map((o) => (
+                    <div key={o.id} className={`flex items-center justify-between px-3 py-2 rounded-lg ${o.isActive ? 'bg-gray-50' : 'bg-gray-50 opacity-50'}`}>
+                      <span className="text-sm text-gray-800">{o.label}</span>
+                      <button
+                        onClick={() => toggleOfferActive(o)}
+                        className="text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                      >
+                        {o.isActive ? <><Trash2 size={12} strokeWidth={1.8} /> Deactivate</> : 'Reactivate'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

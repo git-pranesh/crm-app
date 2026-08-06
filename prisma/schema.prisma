@@ -747,6 +747,18 @@ model OBOBMChecklist {
   @@map("ob_obm_checklists")
 }
 
+/// Task #75 — admin-managed list of selectable offers, replacing the old
+/// free-text Offer 1/2/3 lead fields.
+model OfferOption {
+  id        String   @id @default(cuid())
+  label     String   @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("offer_options")
+}
+
 model AssignmentConfig {
   id        String   @id @default(cuid())
   /// e.g. "premium_threshold_value", "standard_threshold_pct", "smart_assignment_enabled"

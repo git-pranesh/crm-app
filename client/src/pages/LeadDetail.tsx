@@ -307,6 +307,7 @@ export default function LeadDetail() {
 
   const [avgNps, setAvgNps] = useState<number | null>(null);
   const [npsPerStage, setNpsPerStage] = useState<Record<string, { stage: string; score: number | null; sentAt: string; respondedAt: string | null }>>({});
+  const [offerOptions, setOfferOptions] = useState<{ id: string; label: string }[]>([]);
 
   const loadLead = useCallback(() => {
     if (!leadId) return;
@@ -331,6 +332,9 @@ export default function LeadDetail() {
       .catch(() => {});
     api.get<{ users: AppUser[] }>('/admin/users')
       .then((d) => setUsers(d.users ?? []))
+      .catch(() => {});
+    api.get<{ offers: { id: string; label: string }[] }>('/config/offers')
+      .then((d) => setOfferOptions(d.offers ?? []))
       .catch(() => {});
   }, [leadId]);
 
@@ -842,9 +846,9 @@ export default function LeadDetail() {
                   {([
                     { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
                     { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
-                    { key: 'offer1', label: 'Offer 1', placeholder: '10% discount on modular' },
-                    { key: 'offer2', label: 'Offer 2', placeholder: '' },
-                    { key: 'offer3', label: 'Offer 3', placeholder: '' },
+                    { key: 'offer1', label: 'Offer 1', type: 'offer' },
+                    { key: 'offer2', label: 'Offer 2', type: 'offer' },
+                    { key: 'offer3', label: 'Offer 3', type: 'offer' },
                     { key: 'notes', label: 'Notes', placeholder: 'Any additional context…', colSpan: 2, multiline: true },
                   ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
@@ -858,6 +862,19 @@ export default function LeadDetail() {
                           className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all resize-none"
                           style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                         />
+                      ) : f.type === 'offer' ? (
+                        <select
+                          value={editDetails[f.key]}
+                          onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                          style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                        >
+                          <option value="">No offer</option>
+                          {editDetails[f.key] && !offerOptions.some((o) => o.label === editDetails[f.key]) && (
+                            <option value={editDetails[f.key]}>{editDetails[f.key]} (no longer active)</option>
+                          )}
+                          {offerOptions.map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
+                        </select>
                       ) : (
                         <input
                           type={f.type ?? 'text'}
