@@ -7,10 +7,16 @@ import EmptyState from '../components/ui/EmptyState';
 
 interface User {
   id: string; name: string; email: string; role: string;
+  designation?: string | null;
   isActive: boolean; blId?: string;
   bl?: { id: string; name: string } | null;
   _count: { designerLeads: number; blLeads: number };
 }
+
+// Display-only title layered on role — no permission changes (task #79).
+const DESIGNATION_LABELS: Record<string, string> = {
+  DESIGN_TEAM_LEAD: 'Design Team Lead',
+};
 interface Health {
   db: string; totalLeads: number; totalUsers: number; activeBreaches: number;
   redisConfigured: boolean; smtpConfigured: boolean; twilioConfigured: boolean;
@@ -47,7 +53,7 @@ export default function Admin() {
   const [health, setHealth] = useState<Health | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'DESIGNER', blId: '' });
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'DESIGNER', blId: '', designation: '' });
   const [inviting, setInviting] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({ type: 'WEEKLY', recipientIds: '' });
 
@@ -177,9 +183,9 @@ export default function Admin() {
     if (!inviteForm.name || !inviteForm.email) { toast.error('Name and email required'); return; }
     setInviting(true);
     try {
-      await api.post('/admin/users/invite', { ...inviteForm, blId: inviteForm.blId || undefined });
+      await api.post('/admin/users/invite', { ...inviteForm, blId: inviteForm.blId || undefined, designation: inviteForm.designation || undefined });
       toast.success(`${inviteForm.name} invited successfully`);
-      setInviteForm({ name: '', email: '', role: 'DESIGNER', blId: '' });
+      setInviteForm({ name: '', email: '', role: 'DESIGNER', blId: '', designation: '' });
       await loadAll();
     } catch (e: any) {
       toast.error(e.message);
@@ -413,15 +419,23 @@ export default function Admin() {
                   {inviting ? 'Inviting…' : 'Send Invite'}
                 </button>
               </form>
-              {(inviteForm.role === 'DESIGNER' || inviteForm.role === 'CRE') && bls.length > 0 && (
-                <div className="mt-3">
+              <div className="mt-3 flex flex-wrap gap-3">
+                {(inviteForm.role === 'DESIGNER' || inviteForm.role === 'CRE') && bls.length > 0 && (
                   <select value={inviteForm.blId} onChange={(e) => setInviteForm({ ...inviteForm, blId: e.target.value })}
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400">
                     <option value="">Assign to BL (optional)</option>
                     {bls.map((bl) => <option key={bl.id} value={bl.id}>{bl.name}</option>)}
                   </select>
-                </div>
-              )}
+                )}
+                {inviteForm.role === 'DESIGNER' && (
+                  <select value={inviteForm.designation} onChange={(e) => setInviteForm({ ...inviteForm, designation: e.target.value })}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    title="Display title only — does not change permissions">
+                    <option value="">Designation: Designer (default)</option>
+                    <option value="DESIGN_TEAM_LEAD">Designation: Design Team Lead</option>
+                  </select>
+                )}
+              </div>
             </div>
 
             {/* User list */}
@@ -448,7 +462,7 @@ export default function Admin() {
                           <td className="py-3 px-4 text-gray-500 text-xs">{u.email}</td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                              {u.role}
+                              {u.designation ? DESIGNATION_LABELS[u.designation] ?? u.designation : u.role}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-gray-500 text-xs">{u.bl?.name ?? '—'}</td>

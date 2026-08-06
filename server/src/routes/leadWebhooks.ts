@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { logActivity } from '../lib/activityLog.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+import { selectCREForLead, incrementAssigned } from '../services/assignmentService.js';
 
 export const leadWebhooksRouter = Router();
 
@@ -13,6 +14,19 @@ export const leadWebhooksRouter = Router();
 
 const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
 const META_APP_SECRET = process.env.META_APP_SECRET ?? '';
+
+// The 'system' placeholder isn't a real user row (no SYSTEM_USER_ID env var is
+// configured), so activity logs for webhook-created leads would otherwise fail
+// their FK constraint and silently vanish. Fall back to an active Branch Head
+// so the assignment is still auditable in the lead's activity timeline.
+let cachedSystemUserId: string | null = null;
+async function resolveSystemUserId(): Promise<string> {
+  if (SYSTEM_USER_ID !== 'system') return SYSTEM_USER_ID;
+  if (cachedSystemUserId) return cachedSystemUserId;
+  const bh = await prisma.user.findFirst({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } });
+  cachedSystemUserId = bh?.id ?? SYSTEM_USER_ID;
+  return cachedSystemUserId;
+}
 const META_PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN ?? '';
 const META_FORM_ID = process.env.META_FORM_ID ?? '';
 const GRAPH_API = 'https://graph.facebook.com/v19.0';
@@ -47,6 +61,11 @@ async function createLeadFromWebhook(data: {
   const existing = await prisma.lead.findFirst({ where: { phone: data.phone } });
   if (existing) return existing.id;
 
+  // Ad-sourced leads are routed to a CRE for qualification first, in
+  // round-robin order across active CREs — never left unassigned or handed
+  // straight to a Business Lead.
+  const cre = await selectCREForLead();
+
   const leadId = await generateLeadId();
   const lead = await prisma.lead.create({
     data: {
@@ -59,9 +78,15 @@ async function createLeadFromWebhook(data: {
       utmCampaign: data.utmCampaign,
       utmSource: data.utmSource,
       stage: 'MQL',
+      ...(cre && { assignedDesignerId: cre.id }),
     },
   });
-  await logActivity(SYSTEM_USER_ID, 'LEAD_CREATED_VIA_WEBHOOK', lead.id, { source: data.source, leadId });
+  if (cre) await incrementAssigned(cre.id);
+  await logActivity(await resolveSystemUserId(), 'LEAD_CREATED_VIA_WEBHOOK', lead.id, {
+    source: data.source,
+    leadId,
+    ...(cre && { autoAssignedCREId: cre.id, autoAssignedCREName: cre.name }),
+  });
   return lead.id;
 }
 
@@ -162,15 +187,13 @@ leadWebhooksRouter.post('/google', async (req, res) => {
       if (!isValidPhone(phone)) { console.warn(`[google:webhook] Rejected lead with invalid phone "${phone}"`); return; }
       if (b.email && !isValidEmail(b.email)) { console.warn(`[google:webhook] Rejected lead with invalid email "${b.email}"`); return; }
 
-      // Find CRE to assign to (round-robin: pick first active CRE)
-      const cre = await prisma.user.findFirst({
-        where: { role: 'CRE', isActive: true },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const leadId = await generateLeadId();
       const existing = await prisma.lead.findFirst({ where: { phone } });
       if (!existing) {
+        // Round-robin across active CREs (fewest currently assigned leads first)
+        // so ad leads are always qualified by a CRE before reaching a BL.
+        const cre = await selectCREForLead();
+
+        const leadId = await generateLeadId();
         const lead = await prisma.lead.create({
           data: {
             leadId,
@@ -182,10 +205,15 @@ leadWebhooksRouter.post('/google', async (req, res) => {
             utmAdSet: b.utm_adset || undefined,
             location: b.city || b.location || undefined,
             stage: 'MQL',
-            assignedDesignerId: cre?.id || undefined,
+            ...(cre && { assignedDesignerId: cre.id }),
           },
         });
-        await logActivity(SYSTEM_USER_ID, 'LEAD_CREATED_VIA_WEBHOOK', lead.id, { source: 'GOOGLE_ADS' });
+        if (cre) await incrementAssigned(cre.id);
+        await logActivity(await resolveSystemUserId(), 'LEAD_CREATED_VIA_WEBHOOK', lead.id, {
+          source: 'GOOGLE_ADS',
+          leadId,
+          ...(cre && { autoAssignedCREId: cre.id, autoAssignedCREName: cre.name }),
+        });
         console.log(`[google:webhook] Lead created: ${lead.leadId} for ${name}`);
       } else {
         console.log(`[google:webhook] Duplicate phone ${phone}, skipping`);

@@ -1445,7 +1445,19 @@ export default function LeadDetail() {
               />
             )}
             {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
-            {activeTab === 'quotes' && lead && <QuoteTab leadId={leadId!} leadRef={lead.leadId} />}
+            {activeTab === 'quotes' && lead && (
+              <QuoteTab
+                leadId={leadId!}
+                leadRef={lead.leadId}
+                name={lead.name}
+                phone={lead.phone}
+                email={lead.email}
+                projectType={lead.projectType}
+                scope={lead.scope}
+                location={lead.location}
+                estimatedValue={lead.estimatedValue}
+              />
+            )}
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
             {activeTab === 'files' && lead && (
               <FilesTab leadId={leadId!} currentStage={lead.stage} />

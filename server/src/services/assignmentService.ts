@@ -84,6 +84,20 @@ export async function selectBLForLead(): Promise<{ id: string } | null> {
 }
 
 /**
+ * Returns the CRE with the fewest assigned leads (round-robin across CREs).
+ * Used to route freshly-captured ad leads to a CRE for qualification before
+ * they ever reach a Business Lead.
+ */
+export async function selectCREForLead(): Promise<{ id: string; name: string } | null> {
+  const cres = await prisma.user.findMany({
+    where: { role: 'CRE', isActive: true },
+    select: { id: true, name: true, totalLeadsAssigned: true },
+    orderBy: { totalLeadsAssigned: 'asc' },
+  });
+  return cres[0] ?? null;
+}
+
+/**
  * Increment totalLeadsAssigned for a user atomically.
  * Call after assigning a lead to a designer.
  */

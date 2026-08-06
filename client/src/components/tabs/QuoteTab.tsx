@@ -12,11 +12,21 @@ interface Quote {
   createdAt: string;
 }
 
-interface Props { leadId: string; leadRef: string }
+interface Props {
+  leadId: string;
+  leadRef: string;
+  name?: string;
+  phone?: string;
+  email?: string | null;
+  projectType?: string | null;
+  scope?: string | null;
+  location?: string | null;
+  estimatedValue?: number | string | null;
+}
 
 const QUOTE_BUILDER_URL = import.meta.env.VITE_QUOTE_BUILDER_URL ?? 'https://proposals.interiorsbydex.com';
 
-export default function QuoteTab({ leadId, leadRef }: Props) {
+export default function QuoteTab({ leadId, leadRef, name, phone, email, projectType, scope, location, estimatedValue }: Props) {
   const [showIframe, setShowIframe] = useState(false);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
@@ -35,7 +45,20 @@ export default function QuoteTab({ leadId, leadRef }: Props) {
 
   useState(() => { loadQuotes(); });
 
-  const iframeSrc = `${QUOTE_BUILDER_URL}?leadId=${encodeURIComponent(leadRef)}`;
+  // Prefill the external Quote Builder with everything the CRM already knows
+  // about this lead so nothing has to be re-typed there.
+  const prefillParams = new URLSearchParams();
+  prefillParams.set('leadId', leadRef);
+  if (name) prefillParams.set('name', name);
+  if (phone) prefillParams.set('phone', phone);
+  if (email) prefillParams.set('email', email);
+  if (projectType) prefillParams.set('projectType', projectType);
+  if (scope) prefillParams.set('scope', scope);
+  if (location) prefillParams.set('location', location);
+  if (estimatedValue !== undefined && estimatedValue !== null && estimatedValue !== '') {
+    prefillParams.set('estimatedValue', String(estimatedValue));
+  }
+  const iframeSrc = `${QUOTE_BUILDER_URL}?${prefillParams.toString()}`;
 
   const formatINR = (n: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);

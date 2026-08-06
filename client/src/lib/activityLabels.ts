@@ -73,7 +73,7 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
     case 'LEAD_CREATED_MANUAL':
       return 'Created this lead';
     case 'LEAD_CREATED_VIA_WEBHOOK':
-      return 'Lead captured from web form';
+      return `Lead captured from web form${m.autoAssignedCREName ? ` — auto-assigned to ${m.autoAssignedCREName} for qualification (round-robin)` : ''}`;
     case 'BULK_IMPORT':
       return 'Lead imported';
     case 'BL_ASSIGNED':

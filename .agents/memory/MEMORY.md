@@ -23,3 +23,6 @@
 - [Dev login for API testing](dev-login-testing.md) — seed password often stale; reset a user's password via Supabase admin.auth.admin.updateUserById using SUPABASE_SERVICE_ROLE_KEY to get a real token for curl/API verification
 - [Intent filter: exact vs minimum](intent-filter-exact-vs-min.md) — leads.ts supports both `intent` (exact) and `intentMin` (>=); pick per-UI, don't assume one is legacy
 - [BL role scope](bl-role-scope.md) — BL is full read/write on leads but view-only on projects (PATCH/attention-flag routes 403 for BL); don't conflate the two resources' permission models
+- [SYSTEM_USER_ID FK gotcha](system-user-id-fk.md) — default 'system' placeholder isn't a real user row; logActivity(SYSTEM_USER_ID,...) silently fails FK unless resolved to a real user first
+- [Round-robin assignment layer](round-robin-assignment.md) — assignmentService.ts already has BL/designer round-robin; CRE round-robin for ad leads added task #77; G5 BL auto-assign only fires on stage *transitions*, not leads born already at a stage
+- [Designation vs Role](designation-vs-role.md) — "add a title, no new permissions" → separate Designation enum/column layered on role, never extend the Role enum itself

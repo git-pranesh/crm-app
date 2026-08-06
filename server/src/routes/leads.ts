@@ -922,8 +922,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         createAndSendNps(id, 'SIGN_OFF').catch(() => {});
       }
 
-      // G5: Auto-assign BL when CRE moves lead to MQL and no BL is set
-      if (stage === 'MQL' && !lead.assignedBLId) {
+      // G5: Auto-assign BL (round-robin) once a lead is qualified and no BL is
+      // set yet. Covers both the original "CRE moves lead to MQL" case and
+      // ad-sourced leads that are born directly at MQL for CRE qualification
+      // (task #77) — those never fire a "move into MQL" transition, so we also
+      // catch the moment a CRE progresses one past MQL (DQL or later).
+      const mqlIdx = FUNNEL_ORDER.indexOf('MQL' as any);
+      const stageIdx = FUNNEL_ORDER.indexOf(stage as any);
+      const qualifiedPastMql = mqlIdx !== -1 && stageIdx !== -1 && stageIdx > mqlIdx;
+      if ((stage === 'MQL' || qualifiedPastMql) && !lead.assignedBLId) {
         const bl = await selectBLForLead();
         if (bl) {
           await prisma.lead.update({

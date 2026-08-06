@@ -22,6 +22,14 @@ enum Role {
   BRANCH_HEAD
 }
 
+/// Display-only designation layered on top of a user's Role. Does not affect
+/// permissions/authorization — role checks continue to use `Role` only.
+/// DESIGN_TEAM_LEAD is currently the sole extra designation (task #77b/#79);
+/// more may be added later without touching permission logic.
+enum Designation {
+  DESIGN_TEAM_LEAD
+}
+
 enum LeadStage {
   /// Legacy stage — no longer part of the active funnel (new leads start at MQL).
   /// Kept so existing leads display correctly as legacy/off-funnel.
@@ -147,6 +155,9 @@ model User {
   name       String
   email      String   @unique
   role       Role
+  /// Display-only title layered on top of `role` (e.g. "Design Team Lead").
+  /// Never used for permission checks — those key off `role` only.
+  designation Designation?
   /// For Designers/CREs: the BL they report to
   blId       String?
   isActive   Boolean  @default(true)

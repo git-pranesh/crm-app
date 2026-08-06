@@ -29,8 +29,8 @@ adminRouter.get('/users', async (_req, res) => {
 // ── POST /api/admin/users/invite — create user record (Supabase handles email) ─
 adminRouter.post('/users/invite', async (req, res) => {
   try {
-    const { name, email, role, blId } = req.body as {
-      name?: string; email?: string; role?: string; blId?: string;
+    const { name, email, role, blId, designation } = req.body as {
+      name?: string; email?: string; role?: string; blId?: string; designation?: string;
     };
     if (!name?.trim() || !email?.trim() || !role) {
       res.status(400).json({ error: 'name, email, and role are required' });
@@ -39,6 +39,13 @@ adminRouter.post('/users/invite', async (req, res) => {
     const validRoles = ['DESIGNER', 'CRE', 'BL', 'BRANCH_HEAD'];
     if (!validRoles.includes(role)) {
       res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+      return;
+    }
+    // Designation is a display-only title layered on role — never used for
+    // permission checks. Currently the only value is DESIGN_TEAM_LEAD (task #79).
+    const validDesignations = ['DESIGN_TEAM_LEAD'];
+    if (designation && !validDesignations.includes(designation)) {
+      res.status(400).json({ error: `designation must be one of: ${validDesignations.join(', ')}` });
       return;
     }
 
@@ -60,6 +67,7 @@ adminRouter.post('/users/invite', async (req, res) => {
         name: name.trim(),
         email: email.toLowerCase().trim(),
         role: role as any,
+        ...(designation && { designation: designation as any }),
         blId: blId || undefined,
         isActive: true,
       },
@@ -132,7 +140,12 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
 // ── PATCH /api/admin/users/:id — update user (role, blId, name) ──────────────
 adminRouter.patch('/users/:id', async (req, res) => {
   try {
-    const { name, role, blId, isActive } = req.body;
+    const { name, role, blId, isActive, designation } = req.body;
+    const validDesignations = ['DESIGN_TEAM_LEAD'];
+    if (designation && !validDesignations.includes(designation)) {
+      res.status(400).json({ error: `designation must be one of: ${validDesignations.join(', ')}` });
+      return;
+    }
     const user = await prisma.user.update({
       where: { id: req.params.id },
       data: {
@@ -140,6 +153,7 @@ adminRouter.patch('/users/:id', async (req, res) => {
         ...(role && { role: role as any }),
         ...(blId !== undefined && { blId: blId || null }),
         ...(isActive !== undefined && { isActive }),
+        ...(designation !== undefined && { designation: designation ? (designation as any) : null }),
       },
     });
     res.json({ user });
