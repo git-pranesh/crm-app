@@ -184,8 +184,8 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       where.expectedMoveIn = em;
     }
 
-    // Projected OB date range: mapped to nextMeetingDate (closest available
-    // field; a dedicated projectedObDate column can be added in future).
+    // Projected OB date range — Task #83 added a dedicated expectedObDate
+    // column (Founder spec item 4: PR→PP gate field, also filterable here).
     if (projectedObFrom || projectedObTo) {
       const pb: any = {};
       if (projectedObFrom) pb.gte = new Date(projectedObFrom);
@@ -194,7 +194,7 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
         end.setHours(23, 59, 59, 999);
         pb.lte = end;
       }
-      where.nextMeetingDate = pb;
+      where.expectedObDate = pb;
     }
 
     const pageNum = Math.max(1, parseInt(page));
@@ -686,6 +686,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // Task #20 — new key-facts fields
       builder, offer1, offer2, offer3, expectedMoveIn,
       email2, pan, gst, notes,
+      // Task #83 — Expected OB date (PR→PP gate field, also filterable)
+      expectedObDate,
     } = req.body as Record<string, any>;
 
     // ── Format validation ─────────────────────────────────────────────────────
@@ -776,12 +778,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         });
         return;
       }
-      // Structural skip guard: only the explicit DQL → Proposal Presented jump
-      // may skip a stage. Every other forward move must go one funnel step at
-      // a time, even if the accumulated gate requirements happen to be met.
+      // Structural skip guard: only the three explicitly-allowed skip jumps
+      // (DQL→PP, MQL→PP, PP→Onboarding) may skip a stage. Every other forward
+      // move must go one funnel step at a time, even if the accumulated gate
+      // requirements happen to be met.
       if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage)) {
         res.status(400).json({
-          error: `Cannot move directly from ${prevStage} to ${stage} — stages cannot be skipped except DQL → Proposal Presented.`,
+          error: `Cannot move directly from ${prevStage} to ${stage} — stages cannot be skipped except DQL→Proposal Presented, MQL→Proposal Presented, or Proposal Presented→Onboarding.`,
         });
         return;
       }
@@ -805,6 +808,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(source !== undefined && { source: source || null }),
         ...(location !== undefined && { location: location?.trim() || null }),
         ...(expectedMoveIn !== undefined && { expectedMoveIn: expectedMoveIn ? new Date(expectedMoveIn) : null }),
+        ...(expectedObDate !== undefined && { expectedObDate: expectedObDate ? new Date(expectedObDate) : null }),
       };
       const gate = await checkStageRequirements(prospective, prevStage, stage);
       if (!gate.ok) {
@@ -813,10 +817,11 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       }
     }
 
-    // DQL → Proposal Presented is the only allowed stage skip — persist a
-    // flag so downstream views/reports can tell this lead never had a
-    // Proposal Ready step.
-    const isDqlToPpSkip = stage === 'PROPOSAL_PRESENTED' && prevStage === 'DQL';
+    // Stage-skip flags — persisted so downstream views/reports can tell this
+    // lead bypassed a stage. MQL→PP also skips Proposal Ready, so it sets the
+    // same skippedProposalReady flag as the DQL→PP skip.
+    const isPpToObSkip = stage === 'ONBOARDING' && prevStage === 'PROPOSAL_PRESENTED';
+    const isProposalReadySkip = stage === 'PROPOSAL_PRESENTED' && (prevStage === 'DQL' || prevStage === 'MQL');
 
     const lead = await prisma.lead.update({
       where: { id },
@@ -827,7 +832,8 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(email !== undefined && { email: email || null }),
         ...(source && { source }),
         ...(stage && { stage: stage as any }),
-        ...(isDqlToPpSkip && { skippedProposalReady: true }),
+        ...(isProposalReadySkip && { skippedProposalReady: true }),
+        ...(isPpToObSkip && { skippedProposalDiscussion: true }),
         ...(projectType !== undefined && { projectType: projectType?.trim() || null }),
         ...(scope !== undefined && { scope: scope?.trim() || null }),
         ...(location !== undefined && { location: location?.trim() || null }),
@@ -840,6 +846,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(possessionTimeline !== undefined && { possessionTimeline: possessionTimeline?.trim() || null }),
         ...(nextMeetingDate !== undefined && { nextMeetingDate: nextMeetingDate ? new Date(nextMeetingDate) : null }),
         ...(floorPlanUrl !== undefined && { floorPlanUrl: floorPlanUrl || null }),
+        ...(expectedObDate !== undefined && { expectedObDate: expectedObDate ? new Date(expectedObDate) : null }),
         ...(assignedDesignerId !== undefined && {
           assignedDesignerId: assignedDesignerId || null,
           // Reset firstOpenedAt when designer changes so the new assignee starts unread.

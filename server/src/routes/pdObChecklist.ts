@@ -20,6 +20,7 @@ import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
+import { assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
@@ -33,7 +34,7 @@ async function loadLeadForChecklist(leadId: string, user: { id: string; role: st
     where: { id: leadId },
     select: {
       id: true, leadId: true, name: true, email: true, stage: true,
-      assignedDesignerId: true, assignedBLId: true,
+      assignedDesignerId: true, assignedBLId: true, estimatedValue: true,
     },
   });
   if (!lead) return { lead: null, authorized: false };
@@ -128,14 +129,25 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!checklist) { res.status(404).json({ error: 'PD→OB checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'Welcome mail already sent.' }); return; }
 
-    const [paymentScreenshot, obQuote] = await Promise.all([
+    const [paymentScreenshot, obQuote, pdFinalFile] = await Promise.all([
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
+      // Founder spec item 6: final pitch presentation or PD file, uploaded
+      // during Proposal Discussion — mirrors stageRequirements.ts's
+      // PROPOSAL_DISCUSSION->ONBOARDING `fileAnyOf` gate. This direct
+      // transition (send-welcome-mail bypasses checkStageRequirements
+      // entirely) must enforce the same minimum, or a lead could reach
+      // Onboarding without it.
+      prisma.leadFile.findFirst({
+        where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: { in: ['PITCH_PRESENTATION', 'QUOTATION'] } },
+        select: { id: true },
+      }),
     ]);
 
     const missing: string[] = [];
     if (!paymentScreenshot) missing.push('Payment screenshot (Files tab)');
     if (!obQuote) missing.push('OB Quote (Files tab)');
+    if (!pdFinalFile) missing.push('Final pitch presentation or PD file (Files → Proposal Discussion)');
     if (checklist.paymentValue == null) missing.push('Payment value');
     if (checklist.projectValue == null) missing.push('Project value (excl. furniture)');
     if (checklist.furnitureValue == null) missing.push('Furniture value');
@@ -157,15 +169,46 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
       data: { leadId, type: 'PD_OB_WELCOME', sentTo: lead.email!, subject: emailPayload.subject },
     });
 
+    // Task #83 spec item 6: PD→OB completion must auto-assign a design
+    // manager if the lead doesn't already have one. There's no separate
+    // "design manager" role in the schema — the assigned designer becomes
+    // the design manager once the project reaches Onboarding, so this reuses
+    // the existing designer round-robin (assignmentService) rather than
+    // introducing a new role/field.
+    let assignedDesignManagerId: string | null = null;
+    if (!lead.assignedDesignerId && lead.assignedBLId) {
+      assignedDesignManagerId = await assignLeadToDesigner(
+        lead.estimatedValue != null ? Number(lead.estimatedValue) : null,
+        lead.assignedBLId,
+      );
+    }
+
     const now = new Date();
     const [updatedChecklist] = await prisma.$transaction([
       prisma.pDOBChecklist.update({
         where: { leadId },
         data: { welcomeMailSent: true, welcomeMailSentAt: now, completedAt: now },
       }),
-      prisma.lead.update({ where: { id: leadId }, data: { stage: 'ONBOARDING' } }),
+      prisma.lead.update({
+        where: { id: leadId },
+        data: {
+          stage: 'ONBOARDING',
+          ...(assignedDesignManagerId && { assignedDesignerId: assignedDesignManagerId }),
+        },
+      }),
       prisma.oBOBMChecklist.upsert({ where: { leadId }, create: { leadId }, update: {} }),
     ]);
+
+    if (assignedDesignManagerId) {
+      await incrementAssigned(assignedDesignManagerId);
+      await logActivity(user.id, 'DESIGN_MANAGER_ASSIGNED', leadId, { designManagerId: assignedDesignManagerId });
+      await createNotification(
+        assignedDesignManagerId,
+        'DESIGNER_ASSIGNED',
+        `You've been auto-assigned as design manager for lead ${lead.leadId}, now in Onboarding.`,
+        leadId,
+      ).catch(() => {});
+    }
 
     await logActivity(user.id, 'STAGE_CHANGED', leadId, { from: 'PROPOSAL_DISCUSSION', to: 'ONBOARDING', isBackward: false });
     await logActivity(user.id, 'PD_OB_WELCOME_MAIL_SENT', leadId, { subject: emailPayload.subject });

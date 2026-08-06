@@ -26,7 +26,7 @@ interface Lead {
   email?: string; email2?: string; pan?: string; gst?: string;
   stage: string; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string;
   projectType?: string; scope?: string; location?: string; possessionTimeline?: string;
-  builder?: string; expectedMoveIn?: string | null;
+  builder?: string; expectedMoveIn?: string | null; expectedObDate?: string | null;
   offer1?: string; offer2?: string; offer3?: string;
   notes?: string;
   estimatedValue?: string | number | null; intentRating?: number | null; intentRatingSource?: string | null;
@@ -189,7 +189,7 @@ const EMPTY_EDIT = {
   name: '', phone: '', phone2: '', email: '', email2: '', pan: '', gst: '',
   // Project details
   projectType: '', scope: '', location: '', builder: '', source: '',
-  estimatedValue: '', expectedMoveIn: '',
+  estimatedValue: '', expectedMoveIn: '', expectedObDate: '',
   offer1: '', offer2: '', offer3: '',
   notes: '',
   // Legacy
@@ -435,6 +435,7 @@ export default function LeadDetail() {
       source: lead.source ?? '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
       expectedMoveIn: lead.expectedMoveIn ? lead.expectedMoveIn.slice(0, 10) : '',
+      expectedObDate: lead.expectedObDate ? lead.expectedObDate.slice(0, 10) : '',
       offer1: lead.offer1 ?? '',
       offer2: lead.offer2 ?? '',
       offer3: lead.offer3 ?? '',
@@ -493,6 +494,7 @@ export default function LeadDetail() {
         source: editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
         expectedMoveIn: editDetails.expectedMoveIn ? new Date(editDetails.expectedMoveIn).toISOString() : null,
+        expectedObDate: editDetails.expectedObDate ? new Date(editDetails.expectedObDate).toISOString() : null,
         offer1: editDetails.offer1.trim() || null,
         offer2: editDetails.offer2.trim() || null,
         offer3: editDetails.offer3.trim() || null,
@@ -911,6 +913,7 @@ export default function LeadDetail() {
                   {([
                     { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
                     { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
+                    { key: 'expectedObDate', label: 'Expected OB Date', type: 'date' },
                     { key: 'offer1', label: 'Offer 1', type: 'offer' },
                     { key: 'offer2', label: 'Offer 2', type: 'offer' },
                     { key: 'offer3', label: 'Offer 3', type: 'offer' },
@@ -1452,6 +1455,9 @@ export default function LeadDetail() {
                     <FactRow label="Client Budget" value={fmtVal(lead.estimatedValue)} />
                     <FactRow label="Expected Move-in" value={lead.expectedMoveIn
                       ? new Date(lead.expectedMoveIn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : undefined} />
+                    <FactRow label="Expected OB Date" value={lead.expectedObDate
+                      ? new Date(lead.expectedObDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                       : undefined} />
                     <FactRow label="Possession" value={lead.possessionTimeline} />
                     <FactRow label="Source" value={lead.source?.replace(/_/g, ' ')} />

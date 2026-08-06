@@ -234,9 +234,18 @@ model Lead {
   /// Floor plan reference/URL — required before moving to PROPOSAL_READY
   floorPlanUrl         String?
   stage                LeadStage      @default(MQL)
-  /// True when this lead took the explicit DQL → Proposal Presented skip path
-  /// (bypassing Proposal Ready). Set automatically by the stage-change handler.
+  /// True when this lead took an explicit skip path that bypassed Proposal
+  /// Ready (DQL → Proposal Presented or MQL → Proposal Presented). Set
+  /// automatically by the stage-change handler.
   skippedProposalReady Boolean        @default(false)
+  /// True when this lead took the explicit Proposal Presented → Onboarding
+  /// skip path (bypassing Proposal Discussion). Set automatically by the
+  /// stage-change handler.
+  skippedProposalDiscussion Boolean   @default(false)
+  /// Founder-spec "Expected OB date" — required before Proposal Ready →
+  /// Proposal Presented and filterable on the lead list/pipeline views.
+  /// Distinct from expectedMoveIn (client's own possession date).
+  expectedObDate       DateTime?
   onHoldRevivalDate    DateTime?
   /// Reason for placing on hold — required when stage moves to ON_HOLD
   onHoldReason         String?

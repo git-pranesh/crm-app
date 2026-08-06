@@ -52,21 +52,25 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * Required file types per stage (mirrors stageRequirements.ts).
+ * Required file types per stage (Task #83 — mirrors stageRequirements.ts).
+ * `mode: 'all'` means every listed type must be present; `mode: 'any'` means
+ * at least one of them satisfies the badge.
  * PROPOSAL_PRESENTED has no required file here: advancing to Proposal
- * Discussion is gated on a generated Quote record instead, not a
- * manually-uploaded file. Quotation documents can still be attached
- * voluntarily from this tab.
+ * Discussion is gated on a generated Quote (or an uploaded quotation file —
+ * shown informally under Files → PP), not a specific required upload here.
  */
-const REQUIRED_FILES: Record<string, string> = {
-  MQL: 'FLOOR_PLAN',
-  DQL: 'LIFESTYLE_CAPTURE',
-  PROPOSAL_READY: 'PITCH_PRESENTATION',
-  // PROPOSAL_DISCUSSION requires both a payment screenshot and an OB Quote
-  // (see PD→OB checklist) — badge shows the payment screenshot; both are
-  // enforced by the checklist's send-welcome-mail validation.
-  PROPOSAL_DISCUSSION: 'PAYMENT_SCREENSHOT',
-  ONBOARDING: 'GENERATED_QUOTE',
+const REQUIRED_FILES: Record<string, { types: string[]; mode: 'all' | 'any' }> = {
+  // Floor plan + lifestyle capture sheet, per the MQL→DQL gate.
+  MQL: { types: ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE'], mode: 'all' },
+  // "Pitch-ready" file — DQL→Proposal Ready gate.
+  DQL: { types: ['PITCH_PRESENTATION'], mode: 'all' },
+  // PP presentation attached — Proposal Ready→Proposal Presented gate.
+  PROPOSAL_READY: { types: ['PITCH_PRESENTATION'], mode: 'all' },
+  // Final pitch presentation OR PD file — Proposal Discussion→Onboarding gate.
+  // (The PD→OB checklist itself additionally requires a Payment Screenshot
+  // and OB Quote — see the PD→OB checklist panel, not this folder badge.)
+  PROPOSAL_DISCUSSION: { types: ['PITCH_PRESENTATION', 'QUOTATION'], mode: 'any' },
+  ONBOARDING: { types: ['GENERATED_QUOTE'], mode: 'all' },
 };
 
 const FILE_TYPE_OPTIONS = [
@@ -104,9 +108,15 @@ function fileIcon(fileName: string) {
 interface StageFolder {
   stage: string;
   files: LeadFile[];
-  requiredFileType?: string;
+  requiredTypes?: string[];
+  requiredMode?: 'all' | 'any';
   hasRequired: boolean;
   isLegacy?: boolean;
+}
+
+function requiredBadgeLabel(types: string[], mode: 'all' | 'any'): string {
+  const labels = types.map((t) => FILE_TYPE_LABELS[t] ?? t);
+  return mode === 'any' ? labels.join(' or ') : labels.join(' + ');
 }
 
 export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) {
@@ -195,18 +205,27 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
     return stagesWithContent.has(stage) || idx <= currentIdx;
   }).map((stage) => {
     const stageFiles = files.filter((f) => f.stage === stage);
-    const requiredFileType = REQUIRED_FILES[stage];
-    let hasRequired = !requiredFileType || stageFiles.some((f) => f.fileType === requiredFileType);
+    const required = REQUIRED_FILES[stage];
+    const requiredTypes = required?.types;
+    const requiredMode = required?.mode;
+    let hasRequired = !required || (
+      requiredMode === 'any'
+        ? requiredTypes!.some((t) => stageFiles.some((f) => f.fileType === t))
+        : requiredTypes!.every((t) => stageFiles.some((f) => f.fileType === t))
+    );
     let isLegacy = false;
     if (
-      !hasRequired && requiredFileType === 'FLOOR_PLAN' && floorPlanUrl && !hasAnyFloorPlanFile
+      !hasRequired && requiredTypes?.includes('FLOOR_PLAN') && floorPlanUrl && !hasAnyFloorPlanFile
       && LEGACY_FLOOR_PLAN_STAGES.includes(stage) && !legacyFloorPlanApplied
+      // Only the floor-plan legacy fallback can satisfy an "all" requirement
+      // on its own when it's the sole required type for this stage.
+      && (requiredMode === 'any' || requiredTypes.length === 1)
     ) {
       hasRequired = true;
       isLegacy = true;
       legacyFloorPlanApplied = true;
     }
-    return { stage, files: stageFiles, requiredFileType, hasRequired, isLegacy };
+    return { stage, files: stageFiles, requiredTypes, requiredMode, hasRequired, isLegacy };
   });
 
   if (loading) {
@@ -223,7 +242,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
         <p className="text-xs text-gray-400">Files are organised by stage. Required files are marked with a badge.</p>
       </div>
 
-      {folders.map(({ stage, files: stageFiles, requiredFileType, hasRequired, isLegacy }) => {
+      {folders.map(({ stage, files: stageFiles, requiredTypes, requiredMode, hasRequired, isLegacy }) => {
         const isOpen = openFolders[stage] ?? false;
         const isActive = stage === currentStage;
         const isUploadOpen = showUploadForm === stage;
@@ -246,14 +265,14 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
               {isActive && (
                 <span className="text-[10px] font-bold bg-brand-100 text-brand-600 px-2 py-0.5 rounded-full ml-1">Current</span>
               )}
-              {requiredFileType && (
+              {requiredTypes && (
                 <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium ${hasRequired ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-700'}`}>
                   {hasRequired
-                    ? `✓ ${FILE_TYPE_LABELS[requiredFileType]}${isLegacy ? ' (legacy)' : ''}`
-                    : `⚠ ${FILE_TYPE_LABELS[requiredFileType]} required`}
+                    ? `✓ ${requiredBadgeLabel(requiredTypes, requiredMode ?? 'all')}${isLegacy ? ' (legacy)' : ''}`
+                    : `⚠ ${requiredBadgeLabel(requiredTypes, requiredMode ?? 'all')} required`}
                 </span>
               )}
-              {!requiredFileType && stageFiles.length > 0 && (
+              {!requiredTypes && stageFiles.length > 0 && (
                 <span className="ml-auto text-[10px] text-gray-400">{stageFiles.length} file{stageFiles.length !== 1 ? 's' : ''}</span>
               )}
             </button>
@@ -294,7 +313,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
                   <button
                     onClick={() => {
                       setShowUploadForm(stage);
-                      setUploadFileType(requiredFileType ?? '');
+                      setUploadFileType(requiredTypes?.[0] ?? '');
                       setSelectedFile(null);
                     }}
                     className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium mt-1 pt-1 border-t border-gray-50"
