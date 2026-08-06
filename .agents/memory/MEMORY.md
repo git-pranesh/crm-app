@@ -30,3 +30,4 @@
 - [Admin mail templates](admin-mail-templates.md) — mail template registry is admin-editable via AssignmentConfig blob; WhatsApp templates stay read-only (Meta pre-approval)
 - [pnpm devDependency per package](pnpm-devdep-single-package.md) — `pnpm add -D` must run from the target package dir, not workspace root (ERR_PNPM_ADDING_TO_ROOT)
 - [Design pipeline EIP phase](design-pipeline-eip-phase.md) — phases with `dateField: null` need a fallback start date or they stay "upcoming" forever
+- [Stage roadmap gate popovers](stage-roadmap-gate-popovers.md) — each stage node has its own "Gate to X" popover; check the title before judging red/green colors, easy to click the wrong node
