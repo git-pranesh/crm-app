@@ -7,7 +7,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
-import { selectBLForLead } from '../services/assignmentService.js';
+import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
@@ -1054,6 +1054,40 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
             id,
           );
           await logActivity(user.id, 'BL_ASSIGNED', id, { blId: bl.id });
+        }
+
+        // Task #91 — CRE qualification handoff: ad-webhook leads (and
+        // manually-created ones) park a CRE in assignedDesignerId as a
+        // round-robin placeholder while the CRE qualifies them (see
+        // assignmentService.selectCREForLead / leadWebhooks.ts). Once the
+        // lead is qualified enough to reach a BL, that placeholder must be
+        // released — otherwise it permanently blocks the real designer
+        // round-robin, since assignLeadToDesigner() is only ever invoked
+        // behind a `!lead.assignedDesignerId` guard (pdObChecklist.ts) later
+        // in the funnel. A real DESIGNER already sitting in the field (e.g.
+        // set via direct assignment) must never be cleared here.
+        if (lead.assignedDesigner?.role === 'CRE') {
+          const designer = await assignLeadToDesigner(
+            lead.estimatedValue != null ? Number(lead.estimatedValue) : null,
+            bl?.id ?? lead.assignedBLId ?? '',
+          );
+          await prisma.lead.update({
+            where: { id },
+            data: { assignedDesignerId: designer ?? null, firstOpenedAt: null },
+          });
+          if (designer) {
+            await incrementAssigned(designer);
+            await createNotification(
+              designer,
+              'DESIGNER_ASSIGNED',
+              `You have been assigned as designer for lead ${existing.leadId} — ${existing.name}`,
+              id,
+            );
+          }
+          await logActivity(user.id, 'DESIGNER_ASSIGNED', id, {
+            designerId: designer ?? null,
+            handoffFromCRE: lead.assignedDesigner.id,
+          });
         }
       }
 
