@@ -162,7 +162,7 @@ export default function LeadList() {
     let error: string | null = null;
     if (key === 'email') error = validateEmail(value);
     else if (key === 'phone') error = validatePhone(value);
-    else if (['name', 'projectType', 'scope', 'location'].includes(key) && !value.trim()) {
+    else if (['name', 'projectType', 'scope', 'location', 'possessionTimeline'].includes(key) && !value.trim()) {
       error = 'This field is required';
     }
     setNewLeadErrors((prev) => {
@@ -196,8 +196,8 @@ export default function LeadList() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source || !newLead.projectType || !newLead.scope) {
-      toast.error('Name, phone, project type, scope of work, location and source are required'); return;
+    if (!newLead.name || !newLead.phone || !newLead.location || !newLead.source || !newLead.projectType || !newLead.scope || !newLead.possessionTimeline) {
+      toast.error('Name, phone, project type, scope of work, location, possession and source are required'); return;
     }
     const phoneError = validatePhone(newLead.phone);
     const emailError = validateEmail(newLead.email);
@@ -303,14 +303,15 @@ export default function LeadList() {
                 { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa / Office' },
                 { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
                 { key: 'scope', label: 'Scope of Work', required: true, placeholder: '2-bedroom / 3-bedroom / Full home' },
-                { key: 'possessionTimeline', label: 'Possession', placeholder: 'Immediate / 3 months / 6 months' },
-                { key: 'estimatedValue', label: 'Estimated Value (₹)', placeholder: '1500000', type: 'number' },
+                { key: 'possessionTimeline', label: 'Possession', required: true, type: 'date' },
+                { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
               ].map((f: any) => (
                 <div key={f.key}>
                   <label className="block text-xs font-semibold text-stone-600 mb-1.5">
                     {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
                   </label>
                   <input
+                    type={f.type || 'text'}
                     value={(newLead as any)[f.key]}
                     onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
                     onBlur={(e) => validateNewLeadField(f.key, e.target.value)}

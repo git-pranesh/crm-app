@@ -100,7 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const [showNewLead, setShowNewLead] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '' });
+  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
   const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location'];
 
@@ -156,7 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location) {
+    if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location || !newLead.possessionTimeline) {
       toast.error('Name, phone, project type, scope of work and location are required'); return;
     }
     const phoneError = validatePhone(newLead.phone);
@@ -170,7 +170,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     try {
       const data = await api.post<{ lead: { leadId: string } }>('/leads', newLead);
       toast.success(`Lead ${data.lead.leadId} created`);
-      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '' });
+      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
       setNewLeadErrors({});
       setShowNewLead(false);
     } catch (e: any) {
@@ -407,6 +407,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
               ))}
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">
+                  Possession<span className="text-brand-500 ml-0.5">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={newLead.possessionTimeline}
+                  onChange={(e) => setNewLead({ ...newLead, possessionTimeline: e.target.value })}
+                  onBlur={(e) => validateNewLeadField('possessionTimeline', e.target.value)}
+                  required
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ border: newLeadErrors.possessionTimeline ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
+                />
+                {newLeadErrors.possessionTimeline && (
+                  <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.possessionTimeline}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-600 mb-1.5">Client Budget (₹)</label>
+                <input
+                  type="number"
+                  value={newLead.estimatedValue}
+                  onChange={(e) => setNewLead({ ...newLead, estimatedValue: e.target.value })}
+                  placeholder="1500000"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                />
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-stone-600 mb-1.5">Source</label>
                 <select

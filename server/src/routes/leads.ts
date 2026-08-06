@@ -256,8 +256,8 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       assignedDesignerId, assignedBLId,
     } = req.body as Record<string, string>;
 
-    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim()) {
-      res.status(400).json({ error: 'name, phone, projectType, scope and location are required' });
+    if (!name?.trim() || !phone?.trim() || !projectType?.trim() || !scope?.trim() || !location?.trim() || !possessionTimeline?.trim()) {
+      res.status(400).json({ error: 'name, phone, projectType, scope, location and possessionTimeline are required' });
       return;
     }
     if (!isValidPhone(phone)) {
