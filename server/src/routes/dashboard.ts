@@ -419,24 +419,26 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         _sum: { amount: true },
       }),
 
-      // Upcoming deadlines — today (includes overdue)
+      // Upcoming deadlines — today (includes overdue). status: 'PENDING'
+      // excludes RESCHEDULED/NOT_DONE archive rows, which keep
+      // isCompleted:false on their original (now-stale) due date.
       prisma.followUpTask.count({
-        where: { assignedToId: user.id, isCompleted: false, dueDate: { lte: todayEnd } },
+        where: { assignedToId: user.id, isCompleted: false, status: 'PENDING', dueDate: { lte: todayEnd } },
       }),
 
       // Deadlines tomorrow
       prisma.followUpTask.count({
-        where: { assignedToId: user.id, isCompleted: false, dueDate: { gte: tomorrowStart, lte: tomorrowEnd } },
+        where: { assignedToId: user.id, isCompleted: false, status: 'PENDING', dueDate: { gte: tomorrowStart, lte: tomorrowEnd } },
       }),
 
       // Deadlines this week (days 2–7)
       prisma.followUpTask.count({
-        where: { assignedToId: user.id, isCompleted: false, dueDate: { gt: tomorrowEnd, lte: weekEnd } },
+        where: { assignedToId: user.id, isCompleted: false, status: 'PENDING', dueDate: { gt: tomorrowEnd, lte: weekEnd } },
       }),
 
       // Deadlines next week (days 8–14)
       prisma.followUpTask.count({
-        where: { assignedToId: user.id, isCompleted: false, dueDate: { gt: weekEnd, lte: nextWeekEnd } },
+        where: { assignedToId: user.id, isCompleted: false, status: 'PENDING', dueDate: { gt: weekEnd, lte: nextWeekEnd } },
       }),
 
       // NPS last month for delta comparison

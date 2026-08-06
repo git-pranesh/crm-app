@@ -65,6 +65,22 @@ export async function uploadFile<T>(path: string, formData: FormData): Promise<T
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface NextPlanItem {
+  kind: 'CALL' | 'MEETING' | 'TASK';
+  sendExternalMail?: boolean;
+  dueDate?: string;
+  dueTime?: string;
+  timeFrom?: string;
+  timeTo?: string;
+  taskType?: 'INTERNAL' | 'EXTERNAL';
+  agenda?: string;
+  meetingType?: string;
+  mode?: string;
+  scheduledAt?: string;
+  location?: string;
+  notes?: string;
+}
+
 export interface CallRecord {
   id: string;
   outcome: string;
@@ -76,6 +92,7 @@ export interface CallRecord {
   calledAt?: string;
   attachments?: { type: string; fileUrl?: string }[];
   nextPlanOfAction?: string;
+  nextPlanOfActionItems?: NextPlanItem[];
   createdAt: string;
   loggedBy: { id: string; name: string; role: string };
 }
@@ -85,8 +102,15 @@ export interface FollowUpTask {
   leadId: string;
   dueDate: string;
   dueTime?: string;
+  timeFrom?: string;
+  timeTo?: string;
   isCompleted: boolean;
   isOverdue: boolean;
+  status: 'PENDING' | 'COMPLETED' | 'RESCHEDULED' | 'NOT_DONE';
+  outcome?: string;
+  taskType?: 'INTERNAL' | 'EXTERNAL';
+  agenda?: string;
+  rescheduleHistory?: { dueDate: string; dueTime?: string; reason: string; rescheduledAt: string }[];
   completedAt?: string;
   createdAt: string;
   assignedTo: { id: string; name: string; role: string };
@@ -95,7 +119,7 @@ export interface FollowUpTask {
 
 export interface Meeting {
   id: string;
-  type: 'DQL' | 'PP' | 'ONBOARDING';
+  type: 'DQL' | 'PP' | 'PD' | 'ONBOARDING' | 'OBM' | 'DESIGN_FREEZE' | 'SIGN_OFF';
   ppNumber?: number;
   seqNumber?: number;
   mode: string;
@@ -108,6 +132,10 @@ export interface Meeting {
   location?: string;
   rescheduleHistory?: { scheduledAt: string; reason: string; rescheduledAt: string }[];
   mom?: string;
+  momAgenda?: string;
+  momAttachmentTypes?: string[];
+  momAttachments?: { type: string; fileUrl?: string; storagePath?: string }[];
+  nextPlanOfActionItems?: NextPlanItem[];
   outcome?: string;
   confirmationSent: boolean;
   momSent: boolean;

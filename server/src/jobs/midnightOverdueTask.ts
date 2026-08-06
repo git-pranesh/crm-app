@@ -30,9 +30,13 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   // ── 1. Overdue follow-up tasks ─────────────────────────────────────────────
+  // Only PENDING tasks are actionable — RESCHEDULED/NOT_DONE rows are terminal
+  // archive records (isCompleted stays false on them) and must never be
+  // re-surfaced as overdue or trigger a duplicate BL notification.
   const overdueTasks = await prisma.followUpTask.findMany({
     where: {
       dueDate: { lt: tomorrow },
+      status: 'PENDING',
       isCompleted: false,
       isOverdue: false,
     },

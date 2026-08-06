@@ -1,6 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Mail, ChevronDown, ChevronUp } from 'lucide-react';
-import { api, type Meeting } from '../../lib/api';
+import { useEffect, useRef, useState } from 'react';
+import { Mail, ChevronDown, ChevronUp, Paperclip, X } from 'lucide-react';
+import { api, type Meeting, type NextPlanItem } from '../../lib/api';
+import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
+
+const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Design Draft', 'Contract', 'Other'] as const;
+
+function getApiBase() {
+  return (import.meta as any).env?.VITE_API_BASE ?? '/api';
+}
 
 const MODES = [
   { value: 'EC_VISIT', label: 'EC Visit' },
@@ -22,9 +29,9 @@ function minRescheduleDateTime() {
 const TYPES = [
   { value: 'DQL', label: 'DQL (Initial Meeting)' },
   { value: 'PP', label: 'PP (Proposal Presentation)' },
+  { value: 'PD', label: 'PD (Post-Design)' },
   { value: 'ONBOARDING', label: 'OB (Onboarding)' },
-  { value: 'DESIGN_FREEZE', label: 'Design Freeze' },
-  { value: 'SIGN_OFF', label: 'Sign Off' },
+  { value: 'OBM', label: 'OBM (Onboarding Meeting)' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -62,9 +69,29 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
   } | null>(null);
   const [statusForm, setStatusForm] = useState({
     mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '',
-    replanScheduledAt: '', replanLocation: '',
+    replanScheduledAt: '', replanLocation: '', momAgenda: '', sendMomMail: false,
   });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [momAttachmentTypes, setMomAttachmentTypes] = useState<string[]>([]);
+  const [momFiles, setMomFiles] = useState<File[]>([]);
+  const [uploadingMomAttachment, setUploadingMomAttachment] = useState(false);
+  const momFileRef = useRef<HTMLInputElement>(null);
+  const [nextPlanItems, setNextPlanItems] = useState<NextPlanItem[]>([]);
+
+  // Same exact-one-file-per-category pairing requirement as CallLogTab —
+  // enforced on selection so it's never possible to submit more categories
+  // than files (unmatched category) or more files than categories (orphaned
+  // upload with no category reference).
+  const toggleMomAttachmentType = (type: string) => {
+    setMomAttachmentTypes((prev) => {
+      if (prev.includes(type)) {
+        const next = prev.filter((t) => t !== type);
+        setMomFiles((files) => files.slice(0, next.length));
+        return next;
+      }
+      return [...prev, type];
+    });
+  };
 
   const loadMeetings = async () => {
     try {
@@ -110,19 +137,62 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
 
   const openStatusModal = (meetingId: string, meetingType: string, status: 'COMPLETED' | 'RESCHEDULED' | 'NO_SHOW') => {
     setStatusModal({ meetingId, meetingType, status });
-    setStatusForm({ mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '', replanScheduledAt: '', replanLocation: '' });
+    setStatusForm({
+      mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '', replanScheduledAt: '', replanLocation: '',
+      momAgenda: '', sendMomMail: false,
+    });
+    setMomAttachmentTypes([]);
+    setMomFiles([]);
+    setNextPlanItems([]);
     setError(null);
   };
 
   const handleStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModal) return;
+    if (statusModal.status === 'COMPLETED' && !statusForm.sendMomMail) {
+      setError('You must confirm the MOM email will be sent to the client');
+      return;
+    }
+    if (statusModal.status === 'COMPLETED' && momAttachmentTypes.length !== momFiles.length) {
+      setError('Each selected attachment category must have exactly one uploaded file.');
+      return;
+    }
     setStatusSubmitting(true);
     setError(null);
     try {
+      let momAttachments: { type: string; storagePath?: string }[] | undefined;
+      if (statusModal.status === 'COMPLETED' && momFiles.length > 0 && momAttachmentTypes.length > 0) {
+        setUploadingMomAttachment(true);
+        const token = localStorage.getItem('crm_token') ?? '';
+        const uploadedPaths: string[] = [];
+        for (const file of momFiles) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (!uploadResp.ok) {
+            const err = await uploadResp.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Attachment upload failed');
+          }
+          const uploadData = await uploadResp.json();
+          uploadedPaths.push(uploadData.storagePath);
+        }
+        momAttachments = momAttachmentTypes.map((type, i) => ({ type, storagePath: uploadedPaths[i] }));
+        setUploadingMomAttachment(false);
+      }
+
       await api.patch(`/meetings/${statusModal.meetingId}/status`, {
         status: statusModal.status,
         mom: statusForm.mom || undefined,
+        momAgenda: statusForm.momAgenda || undefined,
+        momAttachmentTypes: momAttachmentTypes.length ? momAttachmentTypes : undefined,
+        momAttachments,
+        sendMomMail: statusModal.status === 'COMPLETED' ? statusForm.sendMomMail : undefined,
+        nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
         rescheduledReason: statusForm.rescheduledReason || undefined,
         noShowReason: statusForm.noShowReason || undefined,
         newScheduledAt: statusForm.newScheduledAt
@@ -142,6 +212,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
       setError(e.message);
     } finally {
       setStatusSubmitting(false);
+      setUploadingMomAttachment(false);
     }
   };
 
@@ -270,6 +341,96 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                   <p className="text-xs text-gray-400 mt-1">MOM will be emailed to the client automatically.</p>
                 </div>
               )}
+              {statusModal.status === 'COMPLETED' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Agenda <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={statusForm.momAgenda}
+                      onChange={(e) => setStatusForm({ ...statusForm, momAgenda: e.target.value })}
+                      required
+                      placeholder="What this meeting covered…"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {MOM_ATTACHMENT_TYPES.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => toggleMomAttachmentType(type)}
+                          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                            momAttachmentTypes.includes(type)
+                              ? 'bg-brand-100 border-brand-400 text-brand-700 font-medium'
+                              : 'border-gray-200 text-gray-500 hover:border-brand-300'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                    {momAttachmentTypes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed w-fit transition-colors ${
+                          momFiles.length >= momAttachmentTypes.length
+                            ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                            : 'border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400'
+                        }`}>
+                          <Paperclip size={11} strokeWidth={2} />
+                          Upload file ({momFiles.length}/{momAttachmentTypes.length})
+                          <input
+                            ref={momFileRef}
+                            type="file"
+                            multiple
+                            disabled={momFiles.length >= momAttachmentTypes.length}
+                            className="hidden"
+                            onChange={(e) => {
+                              const remaining = momAttachmentTypes.length - momFiles.length;
+                              const picked = Array.from(e.target.files ?? []).slice(0, Math.max(remaining, 0));
+                              setMomFiles((prev) => [...prev, ...picked]);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        {momFiles.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {momFiles.map((f, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                {momAttachmentTypes[i]}: {f.name}
+                                <button type="button" onClick={() => setMomFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
+                                  <X size={10} strokeWidth={2} />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {momFiles.length < momAttachmentTypes.length && (
+                          <p className="text-[11px] text-amber-600">
+                            Upload {momAttachmentTypes.length - momFiles.length} more file(s) to match the selected categories, or remove a category.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={statusForm.sendMomMail}
+                      onChange={(e) => setStatusForm({ ...statusForm, sendMomMail: e.target.checked })}
+                      required
+                    />
+                    I confirm the MOM will be emailed to the client <span className="text-red-500">*</span>
+                  </label>
+                  <div className="border-t border-gray-100 pt-3">
+                    <NextPlanOfActionPicker items={nextPlanItems} onChange={setNextPlanItems} />
+                  </div>
+                </>
+              )}
               {statusModal.status === 'RESCHEDULED' && (
                 <>
                   <div>
@@ -361,10 +522,10 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                 </button>
                 <button
                   type="submit"
-                  disabled={statusSubmitting}
+                  disabled={statusSubmitting || uploadingMomAttachment}
                   className="flex-1 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
                 >
-                  {statusSubmitting ? 'Saving…' : 'Confirm'}
+                  {uploadingMomAttachment ? 'Uploading…' : statusSubmitting ? 'Saving…' : 'Confirm'}
                 </button>
               </div>
             </form>

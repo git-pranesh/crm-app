@@ -9,6 +9,7 @@ export interface EmailPayload {
   to: string;
   subject: string;
   html: string;
+  cc?: string[];
 }
 
 let _transporter: nodemailer.Transporter | null = null;
@@ -40,13 +41,15 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
   const isSmtpConfigured = !!process.env.SMTP_HOST;
 
+  const cc = payload.cc?.length ? payload.cc : undefined;
+
   if (isSmtpConfigured) {
-    await transporter.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html });
-    console.log(`[email] Sent "${payload.subject}" → ${payload.to}`);
+    await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
+    console.log(`[email] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`);
   } else {
     // Dev / unconfigured: jsonTransport logs without network I/O
-    const info = await transporter.sendMail({ from, to: payload.to, subject: payload.subject, html: payload.html });
-    console.log(`[email:dev] Would send "${payload.subject}" → ${payload.to}`, JSON.parse(info.message).subject);
+    const info = await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
+    console.log(`[email:dev] Would send "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`, JSON.parse(info.message).subject);
   }
 }
 

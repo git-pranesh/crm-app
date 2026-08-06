@@ -56,15 +56,38 @@ enum CallOutcome {
   RNR_3
   RNR_4
   RNR_5
+  /// "RNR 6 & beyond" — one bucket for all further ring-no-response attempts.
+  RNR_6_PLUS
   CALLBACK
+  /// Outcome used when a meeting was scheduled as the direct result of this call.
+  MEETING_SCHEDULED
 }
 
 enum MeetingType {
   DQL
   PP
+  /// Proposal Discussion meeting — added after PP in the funnel.
+  PD
   ONBOARDING
+  /// Onboarding Meeting — added after ONBOARDING (OB) in the funnel.
+  OBM
+  /// Legacy meeting types — no longer selectable when scheduling a new meeting
+  /// (removed from the UI/valid-type list), kept so historical meetings of
+  /// these types keep displaying correctly.
   DESIGN_FREEZE
   SIGN_OFF
+}
+
+enum TaskStatus {
+  PENDING
+  COMPLETED
+  RESCHEDULED
+  NOT_DONE
+}
+
+enum TaskType {
+  INTERNAL
+  EXTERNAL
 }
 
 enum MeetingMode {
@@ -353,30 +376,53 @@ model Call {
   calledAt         DateTime?
   /// JSON array of { type: string; fileUrl?: string } for call attachments
   attachments      Json?
-  /// Planned next action after this call
+  /// Planned next action after this call (legacy free-text summary, kept for display continuity)
   nextPlanOfAction String?
+  /// Structured "next plan of action" — array of
+  /// { kind: 'CALL'|'MEETING'|'TASK', details, sendExternalMail }.
+  nextPlanOfActionItems Json?
   createdAt        DateTime    @default(now())
 
   lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   loggedBy User @relation(fields: [loggedById], references: [id])
 
+  /// Meetings/tasks auto-created from this call's outcome (callback / meeting-scheduled) —
+  /// lets the UI show a "thread" back to the call that spawned them.
+  meetings      Meeting[]
+  followUpTasks FollowUpTask[]
+
   @@map("calls")
 }
 
 model FollowUpTask {
-  id           String    @id @default(cuid())
+  id           String     @id @default(cuid())
   leadId       String
   assignedToId String
   dueDate      DateTime
-  /// HH:MM 24-hour format
+  /// HH:MM 24-hour format — kept as the canonical "start" time (same value as timeFrom).
   dueTime      String?
-  isCompleted  Boolean   @default(false)
-  isOverdue    Boolean   @default(false)
+  /// HH:MM range for the task, distinct from a single point-in-time due time.
+  timeFrom     String?
+  timeTo       String?
+  isCompleted  Boolean    @default(false)
+  isOverdue    Boolean    @default(false)
   completedAt  DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
 
-  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  assignedTo User @relation(fields: [assignedToId], references: [id])
+  status       TaskStatus @default(PENDING)
+  /// Required outcome note captured immediately before a task is marked COMPLETED/NOT_DONE.
+  outcome      String?
+  taskType     TaskType?
+  /// Typable agenda / purpose of the task.
+  agenda       String?
+  /// Array of { dueDate, dueTime, reason, rescheduledAt } — appended on every reschedule.
+  rescheduleHistory Json?
+  /// Set when this task was auto-created from a call outcome (callback / meeting-scheduled).
+  originatingCallId String?
+
+  lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo      User  @relation(fields: [assignedToId], references: [id])
+  originatingCall Call? @relation(fields: [originatingCallId], references: [id], onDelete: SetNull)
 
   @@map("follow_up_tasks")
 }
@@ -398,17 +444,31 @@ model Meeting {
   replanLocation    String?
   /// Minutes of Meeting — mandatory when status → COMPLETED
   mom               String?
+  /// Agenda captured as part of MOM capture on completion.
+  momAgenda         String?
+  /// Multi-select attachment categories chosen during MOM capture, e.g.
+  /// ["Lifestyle Capture", "Proposal"].
+  momAttachmentTypes Json?
+  /// Array of { type, storagePath } — multi-file attachments captured with the MOM.
+  momAttachments    Json?
   outcome           String?
   /// Physical / virtual location of the meeting
   location          String?
   /// Array of { scheduledAt, reason, rescheduledAt } — appended on every reschedule
   rescheduleHistory Json?
+  /// Structured "next plan of action" captured on MOM completion — array of
+  /// { kind: 'CALL'|'MEETING'|'TASK', details, sendExternalMail }.
+  nextPlanOfActionItems Json?
   confirmationSent  Boolean       @default(false)
   momSent           Boolean       @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  /// Set when this meeting was auto-created from a call outcome (meeting-scheduled).
+  originatingCallId String?
+
+  lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  originatingCall Call? @relation(fields: [originatingCallId], references: [id], onDelete: SetNull)
 
   @@map("meetings")
 }

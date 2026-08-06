@@ -1,8 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
-import { api, type CallRecord } from '../../lib/api';
+import { api, type CallRecord, type NextPlanItem } from '../../lib/api';
+import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
+
+const MEETING_TYPES = [
+  { value: 'DQL', label: 'DQL' },
+  { value: 'PP', label: 'PP' },
+  { value: 'PD', label: 'PD' },
+  { value: 'ONBOARDING', label: 'OB' },
+  { value: 'OBM', label: 'OBM' },
+];
+const MEETING_MODES = [
+  { value: 'EC_VISIT', label: 'EC Visit' },
+  { value: 'SITE_VISIT', label: 'Site Visit' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: 'PUBLIC_PLACE', label: 'Public Place' },
+  { value: 'CLIENT_PLACE', label: "Client's Place" },
+];
 
 function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
@@ -15,7 +31,9 @@ const OUTCOMES = [
   { value: 'RNR_3', label: 'RNR 3' },
   { value: 'RNR_4', label: 'RNR 4' },
   { value: 'RNR_5', label: 'RNR 5' },
+  { value: 'RNR_6_PLUS', label: 'RNR 6 & beyond' },
   { value: 'CALLBACK', label: 'Callback Scheduled' },
+  { value: 'MEETING_SCHEDULED', label: 'Meeting Scheduled' },
 ];
 
 function formatDuration(secs?: number) {
@@ -32,7 +50,9 @@ const OUTCOME_COLORS: Record<string, string> = {
   RNR_3: 'bg-orange-100 text-orange-700',
   RNR_4: 'bg-orange-100 text-orange-700',
   RNR_5: 'bg-red-100 text-red-700',
+  RNR_6_PLUS: 'bg-red-100 text-red-700',
   CALLBACK: 'bg-blue-100 text-blue-700',
+  MEETING_SCHEDULED: 'bg-purple-100 text-purple-700',
 };
 
 interface CardProps { call: CallRecord; onRecordingRefresh: (url: string) => void }
@@ -66,7 +86,7 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${OUTCOME_COLORS[call.outcome] ?? 'bg-gray-100 text-gray-600'}`}>
-            {call.outcome.replace('_', ' ')}
+            {call.outcome.replace(/_/g, ' ')}
           </span>
           <span className="text-xs text-gray-400">{formatDuration(call.duration)}</span>
           {call.location && <span className="text-xs text-gray-400">📍 {call.location}</span>}
@@ -80,9 +100,6 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
         </div>
       </div>
 
-      {call.agenda && (
-        <p className="text-xs text-gray-500 mt-1.5 italic">Agenda: {call.agenda}</p>
-      )}
       {call.notes && (
         <p className="text-sm text-gray-600 mt-2">{call.notes}</p>
       )}
@@ -147,16 +164,24 @@ export default function CallLogTab({ leadId }: Props) {
   const [form, setForm] = useState({
     outcome: '',
     duration: '',
-    agenda: '',
     calledAt: '',
     location: '',
     notes: '',
-    nextPlanOfAction: '',
     dueDate: '',
     dueTime: '',
+    // Callback sub-form
+    callbackDueDate: '',
+    callbackDueTime: '',
+    callbackAgenda: '',
+    // Meeting-scheduled sub-form
+    meetingType: '',
+    meetingMode: '',
+    meetingScheduledAt: '',
+    meetingLocation: '',
   });
+  const [nextPlanItems, setNextPlanItems] = useState<NextPlanItem[]>([]);
   const [selectedAttachmentTypes, setSelectedAttachmentTypes] = useState<string[]>([]);
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const attachmentFileRef = useRef<HTMLInputElement>(null);
 
@@ -177,59 +202,94 @@ export default function CallLogTab({ leadId }: Props) {
 
   useEffect(() => { loadCalls(); }, [leadId]);
 
+  // Attachments require an exact one-file-per-selected-category pairing — enforced
+  // here rather than at submit time, so it's impossible to end up with more
+  // categories than files (an unmatched category) or more files than categories
+  // (an uploaded-but-unreferenced file left orphaned in storage).
   const toggleAttachmentType = (type: string) => {
-    setSelectedAttachmentTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
+    setSelectedAttachmentTypes((prev) => {
+      if (prev.includes(type)) {
+        const next = prev.filter((t) => t !== type);
+        // Trim any extra file beyond the new (smaller) category count.
+        setAttachmentFiles((files) => files.slice(0, next.length));
+        return next;
+      }
+      return [...prev, type];
+    });
+  };
+
+  const resetForm = () => {
+    setForm({
+      outcome: '', duration: '', calledAt: '', location: '', notes: '', dueDate: '', dueTime: '',
+      callbackDueDate: '', callbackDueTime: '', callbackAgenda: '',
+      meetingType: '', meetingMode: '', meetingScheduledAt: '', meetingLocation: '',
+    });
+    setNextPlanItems([]);
+    setSelectedAttachmentTypes([]);
+    setAttachmentFiles([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.outcome || !form.notes.trim() || !form.dueDate || !form.dueTime) return;
+    if (!form.outcome || !form.notes.trim()) return;
+    if (form.outcome === 'CALLBACK' && (!form.callbackDueDate || !form.callbackDueTime)) return;
+    if (form.outcome === 'MEETING_SCHEDULED' && (!form.meetingType || !form.meetingMode || !form.meetingScheduledAt)) return;
+    if (!['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome) && (!form.dueDate || !form.dueTime)) return;
+    if (selectedAttachmentTypes.length !== attachmentFiles.length) {
+      setError('Each selected attachment category must have exactly one uploaded file.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      // Upload attachment file first if provided (returns storagePath for DB + signedUrl for display)
-      let storagePath: string | undefined;
-      if (attachmentFile && selectedAttachmentTypes.length > 0) {
+      // Upload attachment files first if provided (returns storagePath for DB + signedUrl for display)
+      const uploadedPaths: string[] = [];
+      if (attachmentFiles.length > 0 && selectedAttachmentTypes.length > 0) {
         setUploadingAttachment(true);
-        const fd = new FormData();
-        fd.append('file', attachmentFile);
         const token = localStorage.getItem('crm_token') ?? '';
-        const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: fd,
-        });
-        if (!uploadResp.ok) {
-          const err = await uploadResp.json().catch(() => ({}));
-          throw new Error(err.error ?? 'Attachment upload failed');
+        for (const file of attachmentFiles) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (!uploadResp.ok) {
+            const err = await uploadResp.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Attachment upload failed');
+          }
+          const uploadData = await uploadResp.json();
+          uploadedPaths.push(uploadData.storagePath);
         }
-        const uploadData = await uploadResp.json();
-        // Store the storagePath (not the signed URL) so the server can regenerate fresh URLs
-        storagePath = uploadData.storagePath;
         setUploadingAttachment(false);
       }
 
-      // Build attachments payload — storagePath is stored in DB; server generates signed URLs on GET
+      // Pair each selected attachment type with an uploaded file (in order)
       const attachments = selectedAttachmentTypes.length > 0
-        ? selectedAttachmentTypes.map((type) => ({ type, storagePath }))
+        ? selectedAttachmentTypes.map((type, i) => ({ type, storagePath: uploadedPaths[i] }))
         : undefined;
 
       await api.post(`/leads/${leadId}/calls`, {
         outcome: form.outcome,
         duration: form.duration ? Number(form.duration) * 60 : undefined,
         notes: form.notes.trim(),
-        agenda: form.agenda.trim() || undefined,
         calledAt: form.calledAt ? new Date(form.calledAt).toISOString() : undefined,
         location: form.location.trim() || undefined,
-        nextPlanOfAction: form.nextPlanOfAction.trim() || undefined,
         attachments,
-        followUpTask: { dueDate: form.dueDate, dueTime: form.dueTime },
+        followUpTask: !['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome)
+          ? { dueDate: form.dueDate, dueTime: form.dueTime }
+          : undefined,
+        callbackDetails: form.outcome === 'CALLBACK'
+          ? { dueDate: form.callbackDueDate, dueTime: form.callbackDueTime, agenda: form.callbackAgenda.trim() || undefined }
+          : undefined,
+        meetingDetails: form.outcome === 'MEETING_SCHEDULED'
+          ? { type: form.meetingType, mode: form.meetingMode, scheduledAt: new Date(form.meetingScheduledAt).toISOString(), location: form.meetingLocation.trim() || undefined }
+          : undefined,
+        nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
       });
-      setForm({ outcome: '', duration: '', agenda: '', calledAt: '', location: '', notes: '', nextPlanOfAction: '', dueDate: '', dueTime: '' });
-      setSelectedAttachmentTypes([]);
-      setAttachmentFile(null);
+      resetForm();
       setShowForm(false);
       await loadCalls();
     } catch (e: any) {
@@ -328,46 +388,7 @@ export default function CallLogTab({ leadId }: Props) {
             </div>
           </div>
 
-          {/* Agenda */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
-            <input
-              type="text"
-              value={form.agenda}
-              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
-              placeholder="Purpose of this call…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              rows={2}
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="What was discussed on the call…"
-            />
-          </div>
-
-          {/* Next Plan of Action */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Next Plan of Action</label>
-            <input
-              type="text"
-              value={form.nextPlanOfAction}
-              onChange={(e) => setForm({ ...form, nextPlanOfAction: e.target.value })}
-              placeholder="What happens after this call…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
-
-          {/* Attachments */}
+          {/* Attachments — now occupies the slot the free-text Agenda field used to */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -387,53 +408,173 @@ export default function CallLogTab({ leadId }: Props) {
               ))}
             </div>
             {selectedAttachmentTypes.length > 0 && (
-              <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer border border-dashed border-gray-300 rounded-lg px-3 py-1.5 hover:border-brand-400 transition-colors">
+              <div className="space-y-1.5">
+                <label className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed w-fit transition-colors ${
+                  attachmentFiles.length >= selectedAttachmentTypes.length
+                    ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                    : 'border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400'
+                }`}>
                   <Paperclip size={11} strokeWidth={2} />
-                  {attachmentFile ? attachmentFile.name : 'Upload file (optional)'}
+                  Upload file ({attachmentFiles.length}/{selectedAttachmentTypes.length})
                   <input
                     ref={attachmentFileRef}
                     type="file"
+                    multiple
+                    disabled={attachmentFiles.length >= selectedAttachmentTypes.length}
                     className="hidden"
-                    onChange={(e) => setAttachmentFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => {
+                      const remaining = selectedAttachmentTypes.length - attachmentFiles.length;
+                      const picked = Array.from(e.target.files ?? []).slice(0, Math.max(remaining, 0));
+                      setAttachmentFiles((prev) => [...prev, ...picked]);
+                      e.target.value = '';
+                    }}
                   />
                 </label>
-                {attachmentFile && (
-                  <button type="button" onClick={() => setAttachmentFile(null)} className="text-gray-400 hover:text-red-400">
-                    <X size={12} strokeWidth={2} />
-                  </button>
+                {attachmentFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {attachmentFiles.map((f, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {selectedAttachmentTypes[i]}: {f.name}
+                        <button type="button" onClick={() => setAttachmentFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
+                          <X size={10} strokeWidth={2} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {attachmentFiles.length < selectedAttachmentTypes.length && (
+                  <p className="text-[11px] text-amber-600">
+                    Upload {selectedAttachmentTypes.length - attachmentFiles.length} more file(s) to match the selected categories, or remove a category.
+                  </p>
                 )}
               </div>
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">
-              Follow-up Task <span className="text-red-500">*</span>
-              <span className="text-xs font-normal text-gray-400 ml-1">(mandatory)</span>
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Date</label>
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              required
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              placeholder="What was discussed on the call…"
+            />
+          </div>
+
+          {/* Outcome-specific sub-forms */}
+          {form.outcome === 'CALLBACK' && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Callback Details <span className="text-red-500">*</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
                 <input
                   type="date"
-                  value={form.dueDate}
-                  onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                  value={form.callbackDueDate}
+                  onChange={(e) => setForm({ ...form, callbackDueDate: e.target.value })}
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Due Time <span className="text-red-500">*</span></label>
                 <input
                   type="time"
-                  value={form.dueTime}
-                  onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
+                  value={form.callbackDueTime}
+                  onChange={(e) => setForm({ ...form, callbackDueTime: e.target.value })}
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
+                <input
+                  type="text"
+                  value={form.callbackAgenda}
+                  onChange={(e) => setForm({ ...form, callbackAgenda: e.target.value })}
+                  placeholder="Agenda for the callback…"
+                  className="col-span-2 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">A follow-up call task will be created automatically and linked back to this call.</p>
+            </div>
+          )}
+
+          {form.outcome === 'MEETING_SCHEDULED' && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Meeting Details <span className="text-red-500">*</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <select
+                  value={form.meetingType}
+                  onChange={(e) => setForm({ ...form, meetingType: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                >
+                  <option value="">Type…</option>
+                  {MEETING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <select
+                  value={form.meetingMode}
+                  onChange={(e) => setForm({ ...form, meetingMode: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                >
+                  <option value="">Mode…</option>
+                  {MEETING_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                <input
+                  type="datetime-local"
+                  value={form.meetingScheduledAt}
+                  onChange={(e) => setForm({ ...form, meetingScheduledAt: e.target.value })}
+                  required
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+                <input
+                  type="text"
+                  value={form.meetingLocation}
+                  onChange={(e) => setForm({ ...form, meetingLocation: e.target.value })}
+                  placeholder="Location…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">A meeting will be created automatically and linked back to this call.</p>
+            </div>
+          )}
+
+          {!['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome) && (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Follow-up Task <span className="text-red-500">*</span>
+                <span className="text-xs font-normal text-gray-400 ml-1">(mandatory)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Due Time <span className="text-red-500">*</span></label>
+                  <input
+                    type="time"
+                    value={form.dueTime}
+                    onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
+                    required
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  />
+                </div>
               </div>
             </div>
+          )}
+
+          <div className="border-t border-gray-100 pt-4">
+            <NextPlanOfActionPicker items={nextPlanItems} onChange={setNextPlanItems} />
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}

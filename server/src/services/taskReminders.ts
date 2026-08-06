@@ -22,7 +22,9 @@ export async function runTaskReminderSweep() {
   const { start, end } = istDayBounds();
 
   const tasks = await prisma.followUpTask.findMany({
-    where: { isCompleted: false, dueDate: { lt: end } },
+    // status: 'PENDING' excludes RESCHEDULED/NOT_DONE archive rows — those
+    // keep isCompleted:false but are terminal and must not generate reminders.
+    where: { isCompleted: false, status: 'PENDING', dueDate: { lt: end } },
     include: {
       lead: { select: { id: true, leadId: true, name: true } },
       assignedTo: { select: { id: true, isActive: true } },

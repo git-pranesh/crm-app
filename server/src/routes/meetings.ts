@@ -13,6 +13,36 @@ import { recalculateMilestones } from '../lib/milestones.js';
 import { queues } from '../jobs/index.js';
 import { computeAutoRatingFromMode } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
+import { assertAttachmentTypesMatch, validateAttachmentPairing } from '../lib/attachmentValidation.js';
+import { computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
+import { supabaseAdmin } from '../lib/supabase.js';
+
+// Selectable when scheduling a NEW meeting. DESIGN_FREEZE/SIGN_OFF remain valid
+// enum values (and stay readable/reportable) for historical rows only — they
+// are intentionally excluded here per Task #86.
+const CREATABLE_MEETING_TYPES = ['DQL', 'PP', 'PD', 'ONBOARDING', 'OBM'];
+// Kept in lockstep with client/src/components/tabs/MeetingsTab.tsx MOM_ATTACHMENT_TYPES.
+const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Design Draft', 'Proposal', 'Contract', 'Other'];
+// Same private Supabase bucket used by the call-log attachment upload endpoint
+// (server/src/routes/calls.ts) — MOM attachments reuse it via the same
+// /leads/:leadId/calls/upload-attachment route.
+const MOM_ATTACHMENTS_BUCKET = 'crm-call-attachments';
+
+async function hydrateMomAttachments<T extends { momAttachments: unknown }>(meeting: T): Promise<T> {
+  const attachments = meeting.momAttachments as { type: string; storagePath?: string; fileUrl?: string }[] | null;
+  if (!attachments?.length || !supabaseAdmin) return meeting;
+  const hydrated = await Promise.all(
+    attachments.map(async (att) => {
+      if (!att.storagePath) return att; // legacy public URL — return as-is
+      const { data, error } = await supabaseAdmin!.storage
+        .from(MOM_ATTACHMENTS_BUCKET)
+        .createSignedUrl(att.storagePath, 60 * 60); // 1-hour signed URL
+      return { type: att.type, fileUrl: error ? undefined : data?.signedUrl };
+    }),
+  );
+  return { ...meeting, momAttachments: hydrated };
+}
 
 export const meetingsRouter = Router({ mergeParams: true });
 export const meetingStatusRouter = Router();
@@ -38,11 +68,10 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const validTypes = ['DQL', 'PP', 'ONBOARDING', 'DESIGN_FREEZE', 'SIGN_OFF'];
   const validModes = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE', 'CLIENT_PLACE'];
 
-  if (!validTypes.includes(type)) {
-    res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
+  if (!CREATABLE_MEETING_TYPES.includes(type)) {
+    res.status(400).json({ error: `type must be one of: ${CREATABLE_MEETING_TYPES.join(', ')}` });
     return;
   }
   if (!validModes.includes(mode)) {
@@ -79,149 +108,18 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // Auto-number PP meetings — count only non-RESCHEDULED meetings so a
-  // reschedule of PP1 doesn't cause the next genuine PP to become PP3.
-  let ppNumber: number | null = null;
-  if (type === 'PP') {
-    const existingPP = await prisma.meeting.count({
-      where: { leadId, type: 'PP', status: { not: 'RESCHEDULED' } },
-    });
-    ppNumber = existingPP + 1;
-  }
+  const { ppNumber } = await computeMeetingNumbering(leadId, type);
+  const meeting = await createMeetingRecord(prisma, { leadId, type, mode, scheduledAt, location, ppNumber });
 
-  // Compute per-type sequence number — exclude RESCHEDULED so a rescheduled
-  // DQL1 + its replacement both count as "DQL 1" in the active list.
-  const seqCount = await prisma.meeting.count({
-    where: { leadId, type: type as any, status: { not: 'RESCHEDULED' } },
-  });
-  const seqNumber = seqCount + 1;
-
-  const meeting = await prisma.meeting.create({
-    data: {
-      leadId,
-      type: type as any,
-      ppNumber,
-      mode: mode as any,
-      scheduledAt: new Date(scheduledAt),
-      location: location?.trim() || undefined,
-      confirmationSent: true, // will be sent below
-    },
-    include: meetingInclude,
-  });
-
-  await logActivity(user.id, 'MEETING_SCHEDULED', leadId, {
-    meetingId: meeting.id,
+  await runMeetingScheduledSideEffects({
+    meeting,
+    lead: { id: lead.id, leadId: lead.leadId, name: lead.name, email: lead.email, phone: lead.phone, assignedDesignerId: lead.assignedDesignerId, assignedBLId: lead.assignedBLId },
+    user,
     type,
-    ppNumber,
-    seqNumber,
+    mode,
     scheduledAt,
+    ppNumber,
   });
-
-  // Notify the assigned BL/designer (whoever didn't book it) that a meeting was scheduled
-  {
-    const meetingLabel = ppNumber ? `PP${ppNumber}` : type;
-    const dateStr = new Date(scheduledAt).toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
-    });
-    const notifyIds = new Set([lead.assignedBLId, lead.assignedDesignerId].filter(
-      (id): id is string => !!id && id !== user.id,
-    ));
-    await Promise.all(
-      [...notifyIds].map((id) =>
-        createNotification(
-          id,
-          'MEETING_SCHEDULED',
-          `${meetingLabel} meeting scheduled for ${lead.name} (${lead.leadId}) on ${dateStr}`,
-          leadId,
-        ),
-      ),
-    );
-  }
-
-  // Queue confirmation email (auto-trigger, no checkbox)
-  if (lead.email) {
-    const designer = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { name: true },
-    });
-    const meetingDateStr = new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    const rendered = await renderMailTemplate('MEETING_CONFIRMATION', {
-      clientName: lead.name,
-      type: ppNumber ? `PP${ppNumber}` : type,
-      mode,
-      scheduledAt: meetingDateStr,
-      designerName: designer?.name ?? 'Your Designer',
-    });
-    const emailPayload = { to: lead.email, subject: rendered.subject, html: rendered.html };
-
-    queues.emails.add('meeting-confirmation', { emailPayload, leadId, meetingId: meeting.id }).catch(() => {});
-
-    await prisma.emailLog.create({
-      data: {
-        leadId,
-        type: 'MEETING_CONFIRMATION',
-        sentTo: lead.email,
-        subject: emailPayload.subject,
-      },
-    });
-  }
-
-  await recalculateMilestones(leadId);
-
-  // ── Auto intent rating from meeting mode ──────────────────────────────────
-  // Set immediately after a meeting is created so the funnel gate has an
-  // up-to-date rating. Only applies when the current source is "auto" or not
-  // yet set — a manual override from the designer is never auto-downgraded.
-  //
-  // Error semantics: failure here must NOT be silently swallowed, because a
-  // missing IntentRatingLog creates an incomplete audit trail. We throw inside
-  // the transaction so the caller receives a clear 500 if the audit write fails,
-  // while the meeting record itself is already committed (atomic separation).
-  {
-    const currentLead = await prisma.lead.findUnique({
-      where: { id: leadId },
-      select: { intentRatingSource: true, intentRating: true },
-    });
-    // Auto-set if: no rating yet, or last source was also auto
-    if (!currentLead?.intentRatingSource || currentLead.intentRatingSource === 'auto') {
-      const autoRating = computeAutoRatingFromMode(mode);
-      // Both the Lead update AND the IntentRatingLog must succeed together.
-      await prisma.$transaction([
-        prisma.lead.update({
-          where: { id: leadId },
-          data: { intentRating: autoRating, intentRatingSource: 'auto' },
-        }),
-        prisma.intentRatingLog.create({
-          data: {
-            leadId,
-            systemRating: autoRating,
-            finalRating: autoRating,
-            reason: `Auto-set from ${mode} meeting (meeting ID: ${meeting.id})`,
-          },
-        }),
-      ]);
-      await logActivity(user.id, 'INTENT_RATING_UPDATED', leadId, {
-        rating: autoRating,
-        systemRating: autoRating,
-        reason: `Auto-set from ${mode} meeting mode`,
-        isAuto: true,
-      });
-    }
-  }
-
-  // SMS: meeting confirmation (auto-trigger)
-  if (lead.phone) {
-    const meetingLabel = ppNumber ? `PP${ppNumber}` : type;
-    const dateStr = new Date(scheduledAt).toLocaleString('en-IN', {
-      weekday: 'short', day: 'numeric', month: 'short',
-      hour: '2-digit', minute: '2-digit',
-    });
-    sendSms(
-      lead.phone,
-      `Hi ${lead.name}, your ${meetingLabel} meeting is confirmed for ${dateStr}. - Interiors by DeX`,
-      leadId,
-    ).catch((e) => console.warn('[meetings:sms:scheduled]', e.message));
-  }
 
   res.status(201).json({ meeting });
 });
@@ -256,7 +154,7 @@ meetingStatusRouter.get('/', verifyToken, async (req, res) => {
       orderBy: { scheduledAt: 'asc' },
     });
 
-    res.json({ meetings });
+    res.json({ meetings: await Promise.all(meetings.map(hydrateMomAttachments)) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -312,7 +210,9 @@ meetingsRouter.get('/', verifyToken, async (req, res) => {
     if (!seqById.has(m.id)) seqById.set(m.id, n); // only sets for RESCHEDULED records
   });
 
-  const meetings = rawMeetings.map((m) => ({ ...m, seqNumber: seqById.get(m.id) ?? 1 }));
+  const meetings = await Promise.all(
+    rawMeetings.map(async (m) => ({ ...(await hydrateMomAttachments(m)), seqNumber: seqById.get(m.id) ?? 1 })),
+  );
 
   res.json({ meetings });
 });
@@ -322,7 +222,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
   const user = req.user!;
 
-  const { status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation } = req.body as {
+  const {
+    status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation,
+    momAgenda, momAttachmentTypes, momAttachments, sendMomMail, nextPlanOfAction,
+  } = req.body as {
     status?: string;
     mom?: string;
     rescheduledReason?: string;
@@ -331,6 +234,12 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     newScheduledAt?: string;
     replanScheduledAt?: string;
     replanLocation?: string;
+    momAgenda?: string;
+    momAttachmentTypes?: string[];
+    momAttachments?: { type: string; storagePath?: string; fileUrl?: string }[];
+    /// Mandatory checkbox confirming the MOM will be emailed to the client — cannot be submitted false.
+    sendMomMail?: boolean;
+    nextPlanOfAction?: NextPlanItem[];
   };
 
   const validStatuses = ['COMPLETED', 'RESCHEDULED', 'NO_SHOW'];
@@ -339,9 +248,42 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     return;
   }
 
-  if (status === 'COMPLETED' && !mom?.trim()) {
-    res.status(400).json({ error: 'mom (Minutes of Meeting) is required when marking COMPLETED' });
-    return;
+  if (status === 'COMPLETED') {
+    if (!mom?.trim()) {
+      res.status(400).json({ error: 'mom (Minutes of Meeting) is required when marking COMPLETED' });
+      return;
+    }
+    if (!momAgenda?.trim()) {
+      res.status(400).json({ error: 'momAgenda is required when marking COMPLETED' });
+      return;
+    }
+    if (momAttachmentTypes?.some((t) => !MOM_ATTACHMENT_TYPES.includes(t))) {
+      res.status(400).json({ error: `momAttachmentTypes must be a subset of: ${MOM_ATTACHMENT_TYPES.join(', ')}` });
+      return;
+    }
+    if (momAttachmentTypes && new Set(momAttachmentTypes).size !== momAttachmentTypes.length) {
+      res.status(400).json({ error: 'momAttachmentTypes must not contain duplicate categories — exactly one file is allowed per category' });
+      return;
+    }
+    try {
+      validateAttachmentPairing(momAttachments, MOM_ATTACHMENT_TYPES, 'momAttachments');
+      assertAttachmentTypesMatch(momAttachmentTypes, momAttachments, 'momAttachmentTypes');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (sendMomMail !== true) {
+      res.status(400).json({ error: 'You must confirm the MOM email will be sent to the client to complete this meeting' });
+      return;
+    }
+  }
+  if (status === 'COMPLETED' && nextPlanOfAction?.length) {
+    try {
+      validateNextPlanItems(nextPlanOfAction);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
   }
   if (status === 'RESCHEDULED' && !rescheduledReason?.trim()) {
     res.status(400).json({ error: 'rescheduledReason is required when marking RESCHEDULED' });
@@ -352,10 +294,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'newScheduledAt (new date & time) is required when rescheduling' });
       return;
     }
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    if (new Date(newScheduledAt).getTime() <= endOfToday.getTime()) {
-      res.status(400).json({ error: 'The new meeting date must be after today — same-day or earlier reschedules are not allowed' });
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (new Date(newScheduledAt).getTime() < startOfToday.getTime()) {
+      res.status(400).json({ error: 'The new meeting date cannot be before today' });
       return;
     }
   }
@@ -432,6 +374,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
           ppNumber: meeting.ppNumber,
           scheduledAt: new Date(newScheduledAt!),
           confirmationSent: true,
+          // Carry forward the full prior chain (mirrors the task reschedule
+          // pattern) so the active meeting always reflects every reschedule,
+          // not just the one that just happened.
+          rescheduleHistory: archiveData.rescheduleHistory,
         },
         include: meetingInclude,
       });
@@ -459,6 +405,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     const updateData: any = { status, outcome };
     if (status === 'COMPLETED') {
       updateData.mom = mom;
+      updateData.momAgenda = momAgenda?.trim();
+      updateData.momAttachmentTypes = momAttachmentTypes?.length ? momAttachmentTypes : undefined;
+      updateData.momAttachments = momAttachments?.length ? momAttachments : undefined;
+      updateData.nextPlanOfActionItems = nextPlanOfAction?.length ? nextPlanOfAction : undefined;
       updateData.momSent = true;
     }
     if (status === 'NO_SHOW') {
@@ -466,11 +416,57 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       updateData.replanScheduledAt = new Date(replanScheduledAt!);
       updateData.replanLocation = replanLocation!.trim();
     }
-    updated = await prisma.meeting.update({
-      where: { id },
-      data: updateData,
-      include: meetingInclude,
+
+    // A next-plan MEETING item created from MOM completion must obey the same
+    // single-active-meeting guard/numbering as any other scheduler entry point.
+    // The meeting being completed here is about to leave SCHEDULED status, so
+    // it's excluded from the "active meeting" check by virtue of this update
+    // running first inside the same transaction below.
+    let nextPlanMeetingPpNumber: number | null = null;
+    if (status === 'COMPLETED' && nextPlanOfAction?.length) {
+      try {
+        // Exclude the meeting being completed itself — it is still SCHEDULED
+        // at this read (its own status flips to COMPLETED later, inside the
+        // transaction below), so without this exclusion the check would
+        // always see it and incorrectly reject every next-plan meeting.
+        nextPlanMeetingPpNumber = await assertNextPlanMeetingSchedulable(nextPlanOfAction, lead.id, id);
+      } catch (err: any) {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+    }
+
+    // MOM completion + its "next plan of action" batch are committed atomically:
+    // if any next-plan item fails to create, the meeting-completion update
+    // itself rolls back too, instead of reporting success on a partial plan.
+    let nextPlanMeeting: Awaited<ReturnType<typeof createNextPlanRecords>>['meetingCreated'] = null;
+    updated = await prisma.$transaction(async (tx) => {
+      const meetingUpdate = await tx.meeting.update({
+        where: { id },
+        data: updateData,
+        include: meetingInclude,
+      });
+      if (status === 'COMPLETED' && nextPlanOfAction?.length) {
+        ({ meetingCreated: nextPlanMeeting } = await createNextPlanRecords(tx, nextPlanOfAction, {
+          leadId: lead.id, userId: user.id, meetingPpNumber: nextPlanMeetingPpNumber,
+        }));
+      }
+      return meetingUpdate;
     });
+
+    if (nextPlanMeeting) {
+      await runNextPlanMeetingSideEffects(
+        nextPlanMeeting,
+        { id: lead.id, leadId: lead.leadId, name: lead.name, email: lead.email, phone: lead.phone, assignedDesignerId: lead.assignedDesignerId, assignedBLId: lead.assignedBLId },
+        user,
+      );
+    }
+  }
+
+  // Best-effort per-item client mail — only fired once the transaction above
+  // has committed, so a mail failure never rolls back a persisted plan.
+  if (status === 'COMPLETED' && nextPlanOfAction?.length) {
+    await sendNextPlanMails(nextPlanOfAction, { name: lead.name, email: lead.email });
   }
 
   // Auto-triggered emails
@@ -478,11 +474,21 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     let emailPayload;
 
     if (status === 'COMPLETED') {
+      const hydratedForEmail = momAttachments?.length
+        ? (await hydrateMomAttachments({ momAttachments })).momAttachments as { type: string; fileUrl?: string }[]
+        : [];
+      const attachmentsHtml = hydratedForEmail.length
+        ? `<p><strong>Attachments:</strong></p><ul>${hydratedForEmail
+            .filter((a) => a.fileUrl)
+            .map((a) => `<li>${a.type}: <a href="${a.fileUrl}">View</a></li>`)
+            .join('')}</ul>`
+        : '';
       const rendered = await renderMailTemplate('MOM', {
         clientName: lead.name,
         meetingType: meeting.ppNumber ? `PP${meeting.ppNumber}` : meeting.type,
         scheduledAt: meeting.scheduledAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
         mom: mom!.replace(/\n/g, '<br/>'),
+        attachmentsHtml,
       });
       emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     } else if (status === 'RESCHEDULED') {

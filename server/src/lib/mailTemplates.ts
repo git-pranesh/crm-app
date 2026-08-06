@@ -63,13 +63,37 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
     code: 'MOM',
     label: 'Minutes of Meeting (MOM)',
     description: 'Sent automatically when a meeting is marked Completed.',
-    placeholders: ['clientName', 'meetingType', 'scheduledAt', 'mom'],
+    placeholders: ['clientName', 'meetingType', 'scheduledAt', 'mom', 'attachmentsHtml'],
     defaultSubject: 'Minutes of Meeting — Interiors by DeX',
     defaultHtml: `<p>Dear {{clientName}},</p>
 <p>Thank you for your time during our <strong>{{meetingType}}</strong> on {{scheduledAt}}.</p>
 <p><strong>Meeting Summary:</strong></p>
 <p>{{mom}}</p>
+{{attachmentsHtml}}
 <p>We'll be in touch with next steps.<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'CALL_LOG_SUMMARY',
+    label: 'Call summary (sent when a call is logged as answered)',
+    description: 'Sent automatically to the client, CC\u2019d to the designer/BL/management, once a call outcome is logged as Answered.',
+    placeholders: ['clientName', 'notes', 'followUpDate'],
+    defaultSubject: 'Call Summary — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>Thank you for speaking with us today. Here's a quick summary of what we discussed:</p>
+<p>{{notes}}</p>
+<p>Next follow-up: <strong>{{followUpDate}}</strong></p>
+<p>Team Interiors by DeX</p>`,
+  },
+  {
+    code: 'NEXT_PLAN_OF_ACTION',
+    label: 'Next plan of action item',
+    description: 'Sent to the client when a call/meeting/task added to the "next plan of action" is flagged for external notification.',
+    placeholders: ['clientName', 'kind', 'details'],
+    defaultSubject: 'Next Steps — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>As discussed, here are the next steps ({{kind}}):</p>
+<p>{{details}}</p>
+<p>Team Interiors by DeX</p>`,
   },
 ];
 

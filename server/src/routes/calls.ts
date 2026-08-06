@@ -4,7 +4,12 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { createNotification, notifyManagers } from '../lib/notifications.js';
 import { supabaseAdmin } from '../lib/supabase.js';
-import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { isAuthorizedForLead, isAuthorizedToAssignTask } from '../lib/leadAuth.js';
+import { renderMailTemplate } from '../lib/mailTemplates.js';
+import { sendEmail } from '../lib/email.js';
+import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, summarizeNextPlanItems, validateFutureDate, validateMeetingTypeMode, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
+import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
+import { validateAttachmentPairing } from '../lib/attachmentValidation.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -12,9 +17,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 
 const CALL_ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
-const RNR_OUTCOMES = ['RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5'] as const;
+const RNR_OUTCOMES = ['RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS'] as const;
 const ESCALATION_THRESHOLD = 5;
 const INACTIVATION_MONTHS = 3;
+
+const VALID_OUTCOMES = ['ANSWERED', 'RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS', 'CALLBACK', 'MEETING_SCHEDULED'];
 
 // ── POST /api/leads/:leadId/calls ─────────────────────────────────────────────
 callsRouter.post('/', verifyToken, async (req, res) => {
@@ -26,23 +33,28 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     duration,
     notes,
     recordingUrl,
-    agenda,
     location,
     calledAt,
     attachments,
-    nextPlanOfAction,
     followUpTask,
+    callbackDetails,
+    meetingDetails,
+    nextPlanOfAction,
   } = req.body as {
     outcome: string;
     duration?: number;
     notes?: string;
     recordingUrl?: string;
-    agenda?: string;
     location?: string;
     calledAt?: string;
-    attachments?: { type: string; fileUrl?: string }[];
-    nextPlanOfAction?: string;
+    attachments?: { type: string; fileUrl?: string; storagePath?: string }[];
     followUpTask?: { dueDate: string; dueTime?: string; assignedToId?: string };
+    // Required when outcome === 'CALLBACK': asks for date/time + agenda
+    callbackDetails?: { dueDate: string; dueTime?: string; agenda?: string; assignedToId?: string };
+    // Required when outcome === 'MEETING_SCHEDULED': creates a linked Meeting instead of a follow-up task
+    meetingDetails?: { type: string; mode: string; scheduledAt: string; location?: string };
+    // Shared Call/Meeting/Task multi-select "next plan of action" flow
+    nextPlanOfAction?: NextPlanItem[];
   };
 
   if (!outcome) {
@@ -50,9 +62,8 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const validOutcomes = ['ANSWERED', 'RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'CALLBACK'];
-  if (!validOutcomes.includes(outcome)) {
-    res.status(400).json({ error: `outcome must be one of: ${validOutcomes.join(', ')}` });
+  if (!VALID_OUTCOMES.includes(outcome)) {
+    res.status(400).json({ error: `outcome must be one of: ${VALID_OUTCOMES.join(', ')}` });
     return;
   }
 
@@ -62,17 +73,69 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // Enforce mandatory follow-up with both date and time
-  if (!followUpTask?.dueDate || !followUpTask?.dueTime) {
-    res.status(400).json({
-      error: 'A follow-up task with due date and time must be set before saving the call',
-    });
-    return;
+  if (outcome === 'CALLBACK') {
+    if (!callbackDetails?.dueTime) {
+      res.status(400).json({ error: 'callbackDetails.dueDate and dueTime are required when outcome is CALLBACK' });
+      return;
+    }
+    try {
+      validateFutureDate(callbackDetails?.dueDate, 'callbackDetails.dueDate');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+  } else if (outcome === 'MEETING_SCHEDULED') {
+    try {
+      validateMeetingTypeMode(meetingDetails?.type, meetingDetails?.mode, meetingDetails?.scheduledAt);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+  } else {
+    // Enforce mandatory follow-up with both date and time for every other outcome
+    if (!followUpTask?.dueTime) {
+      res.status(400).json({
+        error: 'A follow-up task with due date and time must be set before saving the call',
+      });
+      return;
+    }
+    try {
+      validateFutureDate(followUpTask?.dueDate, 'followUpTask.dueDate');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+  }
+
+  if (attachments?.length) {
+    try {
+      validateAttachmentPairing(attachments, CALL_ATTACHMENT_TYPES, 'attachments');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+  }
+
+  if (nextPlanOfAction?.length) {
+    try {
+      validateNextPlanItems(nextPlanOfAction);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    // The call outcome itself may already schedule a meeting (MEETING_SCHEDULED);
+    // combining that with a next-plan MEETING item would try to create two
+    // meetings for the same lead in one request, defeating the single-active-
+    // meeting guard (which only sees committed state, not this in-flight batch).
+    if (outcome === 'MEETING_SCHEDULED' && nextPlanOfAction.some((item) => item.kind === 'MEETING')) {
+      res.status(400).json({ error: 'Cannot include a next-plan MEETING item when the call outcome itself is MEETING_SCHEDULED' });
+      return;
+    }
   }
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, leadId: true, name: true, phone: true, createdAt: true, assignedDesignerId: true, assignedBLId: true },
+    select: { id: true, leadId: true, name: true, phone: true, email: true, createdAt: true, assignedDesignerId: true, assignedBLId: true },
   });
   if (!lead) {
     res.status(404).json({ error: 'Lead not found' });
@@ -83,8 +146,44 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // Create call + follow-up task in a transaction
-  const [call, task] = await prisma.$transaction(async (tx) => {
+  // callbackDetails/followUpTask may target another user's queue — the same
+  // reporting-scope rule task creation uses applies here so a caller can't
+  // use a call log as a side channel to assign a follow-up to an arbitrary user.
+  for (const target of [callbackDetails?.assignedToId, followUpTask?.assignedToId]) {
+    if (target && !(await isAuthorizedToAssignTask(target, user))) {
+      res.status(403).json({ error: 'Not authorised to assign a follow-up to this user' });
+      return;
+    }
+  }
+
+  // A call that schedules a meeting must obey the same one-active-meeting-per-lead
+  // invariant as the standalone meeting scheduler, and needs the same PP/sequence
+  // numbering — computed up-front so it can be used inside the transaction below.
+  let meetingPpNumber: number | null = null;
+  if (outcome === 'MEETING_SCHEDULED') {
+    try {
+      await assertNoActiveMeeting(leadId);
+    } catch (err: any) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+    ({ ppNumber: meetingPpNumber } = await computeMeetingNumbering(leadId, meetingDetails!.type));
+  }
+
+  // Same guard/numbering for a next-plan-of-action MEETING item (mutually
+  // exclusive with the above per the check earlier in this handler).
+  let nextPlanMeetingPpNumber: number | null = null;
+  if (nextPlanOfAction?.length) {
+    try {
+      nextPlanMeetingPpNumber = await assertNextPlanMeetingSchedulable(nextPlanOfAction, leadId);
+    } catch (err: any) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
+  }
+
+  // Create call + follow-up task / linked meeting in a transaction
+  const { call, task, meeting, nextPlanMeeting } = await prisma.$transaction(async (tx) => {
     const newCall = await tx.call.create({
       data: {
         leadId,
@@ -93,38 +192,115 @@ callsRouter.post('/', verifyToken, async (req, res) => {
         duration,
         notes,
         recordingUrl,
-        agenda: agenda?.trim() || undefined,
         location: location?.trim() || undefined,
         calledAt: calledAt ? new Date(calledAt) : undefined,
         attachments: attachments ?? undefined,
-        nextPlanOfAction: nextPlanOfAction?.trim() || undefined,
+        nextPlanOfAction: nextPlanOfAction?.length ? summarizeNextPlanItems(nextPlanOfAction) : undefined,
+        nextPlanOfActionItems: nextPlanOfAction?.length ? (nextPlanOfAction as any) : undefined,
       },
     });
 
-    const newTask = await tx.followUpTask.create({
-      data: {
+    let newTask: Awaited<ReturnType<typeof tx.followUpTask.create>> | null = null;
+    let newMeeting: Awaited<ReturnType<typeof tx.meeting.create>> | null = null;
+
+    // Timestamp used for the CALL_LOGGED activity row so it lines up with
+    // whatever follow-up record was created (kept for historical consistency
+    // with other activity timestamps on the lead).
+    let logAt = new Date();
+
+    if (outcome === 'CALLBACK') {
+      newTask = await tx.followUpTask.create({
+        data: {
+          leadId,
+          assignedToId: callbackDetails!.assignedToId ?? user.id,
+          dueDate: new Date(callbackDetails!.dueDate),
+          dueTime: callbackDetails!.dueTime,
+          timeFrom: callbackDetails!.dueTime,
+          agenda: callbackDetails!.agenda?.trim() || undefined,
+          originatingCallId: newCall.id,
+        },
+      });
+      logAt = newTask.createdAt;
+    } else if (outcome === 'MEETING_SCHEDULED') {
+      newMeeting = await createMeetingRecord(tx, {
         leadId,
-        assignedToId: followUpTask.assignedToId ?? user.id,
-        dueDate: new Date(followUpTask.dueDate),
-        dueTime: followUpTask.dueTime,
-      },
-    });
+        type: meetingDetails!.type,
+        mode: meetingDetails!.mode,
+        scheduledAt: meetingDetails!.scheduledAt,
+        location: meetingDetails!.location,
+        ppNumber: meetingPpNumber,
+        originatingCallId: newCall.id,
+      });
+      logAt = newMeeting.createdAt;
+    } else {
+      newTask = await tx.followUpTask.create({
+        data: {
+          leadId,
+          assignedToId: followUpTask!.assignedToId ?? user.id,
+          dueDate: new Date(followUpTask!.dueDate),
+          dueTime: followUpTask!.dueTime,
+          timeFrom: followUpTask!.dueTime,
+          originatingCallId: newCall.id,
+        },
+      });
+      logAt = newTask.createdAt;
+    }
 
-    // Log CALL_LOGGED with the same timestamp as the task so this call does
-    // not count as "activity after the task was created" (completion guard
-    // uses a strictly-greater comparison).
     await tx.activityLog.create({
       data: {
         userId: user.id,
         action: 'CALL_LOGGED',
         leadId,
         meta: { outcome, duration },
-        createdAt: newTask.createdAt,
+        createdAt: logAt,
       },
     });
 
-    return [newCall, newTask];
+    // Shared "next plan of action" multi-select — creates any extra linked
+    // Call/Meeting/Task records beyond the mandatory follow-up above, in the
+    // SAME transaction as the call itself so a mid-batch failure rolls the
+    // whole call log back instead of reporting success on a partial plan.
+    let nextPlanMeeting: Awaited<ReturnType<typeof createNextPlanRecords>>['meetingCreated'] = null;
+    if (nextPlanOfAction?.length) {
+      ({ meetingCreated: nextPlanMeeting } = await createNextPlanRecords(tx, nextPlanOfAction, {
+        leadId, userId: user.id, originatingCallId: newCall.id, meetingPpNumber: nextPlanMeetingPpNumber,
+      }));
+    }
+
+    return { call: newCall, task: newTask, meeting: newMeeting, nextPlanMeeting };
   });
+
+  // Best-effort per-item client mail — only fired once the transaction above
+  // has committed, so a mail failure never rolls back a persisted plan.
+  if (nextPlanOfAction?.length) {
+    await sendNextPlanMails(nextPlanOfAction, { name: lead.name, email: lead.email });
+  }
+
+  // A next-plan-created meeting needs the same side effects as any other
+  // scheduled meeting — fired only after the transaction above has committed.
+  if (nextPlanMeeting) {
+    await runNextPlanMeetingSideEffects(
+      nextPlanMeeting,
+      { id: lead.id, leadId: lead.leadId, name: lead.name, email: lead.email, phone: lead.phone, assignedDesignerId: lead.assignedDesignerId, assignedBLId: lead.assignedBLId },
+      user,
+    );
+  }
+
+  // A call-created meeting must go through the same side effects (activity
+  // log, stakeholder notifications, client confirmation email/SMS, milestone
+  // recalculation, auto intent-rating) as the standalone meeting scheduler —
+  // fired only after the transaction above has committed the meeting row.
+  if (outcome === 'MEETING_SCHEDULED' && meeting) {
+    await runMeetingScheduledSideEffects({
+      meeting,
+      lead: { id: lead.id, leadId: lead.leadId, name: lead.name, email: lead.email, phone: lead.phone, assignedDesignerId: lead.assignedDesignerId, assignedBLId: lead.assignedBLId },
+      user,
+      type: meetingDetails!.type,
+      mode: meetingDetails!.mode,
+      scheduledAt: meetingDetails!.scheduledAt,
+      ppNumber: meetingPpNumber,
+    });
+  }
 
   // Notify the assigned BL (if not the one who logged the call) that a call happened
   if (lead.assignedBLId && lead.assignedBLId !== user.id) {
@@ -137,7 +313,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   // Notify the follow-up task's assignee (if not the one who logged the call)
-  if (task.assignedToId !== user.id) {
+  if (task && task.assignedToId !== user.id) {
     const dueStr = new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
     await createNotification(
       task.assignedToId,
@@ -145,6 +321,30 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       `Follow-up task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}`,
       leadId,
     );
+  }
+
+  // Once a call is logged as successfully answered, auto-mail the client with
+  // the notes + follow-up plan, CC'ing the designer, BL, and management.
+  if (outcome === 'ANSWERED' && lead.email) {
+    const followUpDate = task
+      ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${task.dueTime}` : '')
+      : meeting
+        ? new Date(meeting.scheduledAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })
+        : 'To be confirmed';
+
+    const ccIds = [lead.assignedDesignerId, lead.assignedBLId].filter((v): v is string => !!v);
+    const ccUsers = ccIds.length
+      ? await prisma.user.findMany({ where: { id: { in: ccIds } }, select: { email: true } })
+      : [];
+    const managers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
+    const cc = [...ccUsers, ...managers].map((u) => u.email).filter((e): e is string => !!e);
+
+    const { subject, html } = await renderMailTemplate('CALL_LOG_SUMMARY', {
+      clientName: lead.name,
+      notes: notes.trim(),
+      followUpDate,
+    });
+    await sendEmail({ to: lead.email, cc, subject, html }).catch(() => {});
   }
 
   // RNR escalation logic
@@ -174,7 +374,14 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     }
   }
 
-  res.status(201).json({ call, followUpTask: task, needsEscalation, needsInactivationPrompt });
+  res.status(201).json({
+    call,
+    followUpTask: task,
+    meeting,
+    needsEscalation,
+    needsInactivationPrompt,
+    openCallLogTab: true,
+  });
 });
 
 // ── Allowed MIME types for call attachments ───────────────────────────────────

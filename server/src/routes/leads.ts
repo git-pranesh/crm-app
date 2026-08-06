@@ -39,7 +39,9 @@ const LEAD_INCLUDE = {
   currentOffer: { select: { id: true, name: true } },
   _count: { select: { calls: true, meetings: true, followUpTasks: true } },
   followUpTasks: {
-    where: { isOverdue: true, isCompleted: false },
+    // status: 'PENDING' excludes RESCHEDULED/NOT_DONE archive rows — those
+    // are terminal and must never surface as an "overdue" badge on the lead.
+    where: { isOverdue: true, isCompleted: false, status: 'PENDING' },
     select: { id: true },
     take: 1,
   },
