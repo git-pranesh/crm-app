@@ -38,7 +38,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   const validTypes = ['DQL', 'PP', 'ONBOARDING', 'DESIGN_FREEZE', 'SIGN_OFF'];
-  const validModes = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE'];
+  const validModes = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE', 'CLIENT_PLACE'];
 
   if (!validTypes.includes(type)) {
     res.status(400).json({ error: `type must be one of: ${validTypes.join(', ')}` });
@@ -299,13 +299,15 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   const { id } = req.params;
   const user = req.user!;
 
-  const { status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt } = req.body as {
+  const { status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation } = req.body as {
     status?: string;
     mom?: string;
     rescheduledReason?: string;
     noShowReason?: string;
     outcome?: string;
     newScheduledAt?: string;
+    replanScheduledAt?: string;
+    replanLocation?: string;
   };
 
   const validStatuses = ['COMPLETED', 'RESCHEDULED', 'NO_SHOW'];
@@ -327,10 +329,26 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'newScheduledAt (new date & time) is required when rescheduling' });
       return;
     }
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    if (new Date(newScheduledAt).getTime() <= endOfToday.getTime()) {
+      res.status(400).json({ error: 'The new meeting date must be after today — same-day or earlier reschedules are not allowed' });
+      return;
+    }
   }
-  if (status === 'NO_SHOW' && !noShowReason?.trim()) {
-    res.status(400).json({ error: 'noShowReason is required when marking NO_SHOW' });
-    return;
+  if (status === 'NO_SHOW') {
+    if (!noShowReason?.trim()) {
+      res.status(400).json({ error: 'noShowReason is required when marking NO_SHOW' });
+      return;
+    }
+    if (!replanScheduledAt || isNaN(new Date(replanScheduledAt).getTime())) {
+      res.status(400).json({ error: 'replanScheduledAt (next tentative date & time) is required when marking NO_SHOW' });
+      return;
+    }
+    if (!replanLocation?.trim()) {
+      res.status(400).json({ error: 'replanLocation is required when marking NO_SHOW' });
+      return;
+    }
   }
 
   const meeting = await prisma.meeting.findUnique({
@@ -422,6 +440,8 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
     if (status === 'NO_SHOW') {
       updateData.noShowReason = noShowReason!.trim();
+      updateData.replanScheduledAt = new Date(replanScheduledAt!);
+      updateData.replanLocation = replanLocation!.trim();
     }
     updated = await prisma.meeting.update({
       where: { id },
@@ -501,7 +521,8 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       where: { leadId: lead.id, status: 'SCHEDULED' },
       select: { id: true },
     });
-    const hasNoPlan = !plannedMeeting;
+    // A captured replan date/time/location on this record counts as a plan too.
+    const hasNoPlan = !plannedMeeting && !replanScheduledAt;
     const noShowMsg = hasNoPlan
       ? `⚠ Client ${lead.name} (${lead.leadId}) was a no-show for the ${meeting.type} meeting and has NO follow-up meeting scheduled. Immediate action required.`
       : `Client ${lead.name} (${lead.leadId}) was a no-show for the ${meeting.type} meeting.`;

@@ -103,6 +103,8 @@ export interface Meeting {
   scheduledAt: string;
   rescheduledReason?: string;
   noShowReason?: string;
+  replanScheduledAt?: string;
+  replanLocation?: string;
   location?: string;
   rescheduleHistory?: { scheduledAt: string; reason: string; rescheduledAt: string }[];
   mom?: string;

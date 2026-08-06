@@ -64,6 +64,7 @@ enum MeetingMode {
   SITE_VISIT
   VIRTUAL
   PUBLIC_PLACE
+  CLIENT_PLACE
 }
 
 enum MeetingStatus {
@@ -368,6 +369,10 @@ model Meeting {
   scheduledAt       DateTime
   rescheduledReason String?
   noShowReason      String?
+  /// Tentative replan captured immediately when a meeting is marked NO_SHOW —
+  /// informational only (does not create a new Meeting record).
+  replanScheduledAt DateTime?
+  replanLocation    String?
   /// Minutes of Meeting — mandatory when status → COMPLETED
   mom               String?
   outcome           String?

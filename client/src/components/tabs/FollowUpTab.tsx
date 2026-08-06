@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { api, type FollowUpTask } from '../../lib/api';
 
 interface Props { leadId: string }
@@ -45,8 +46,9 @@ export default function FollowUpTab({ leadId }: Props) {
     try {
       await api.patch(`/tasks/${taskId}/complete`, {});
       await loadTasks();
+      toast.success('Task marked complete');
     } catch (e: any) {
-      setError(e.message);
+      toast.error(e.message);
     }
   };
 

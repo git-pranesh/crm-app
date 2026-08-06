@@ -7,7 +7,17 @@ const MODES = [
   { value: 'SITE_VISIT', label: 'Site Visit' },
   { value: 'VIRTUAL', label: 'Virtual' },
   { value: 'PUBLIC_PLACE', label: 'Public Place' },
+  { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
+
+/** Earliest allowed datetime-local value: tomorrow at 00:00 (blocks same-day-or-earlier). */
+function minRescheduleDateTime() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(0, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00`;
+}
 
 const TYPES = [
   { value: 'DQL', label: 'DQL (Initial Meeting)' },
@@ -52,6 +62,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
   } | null>(null);
   const [statusForm, setStatusForm] = useState({
     mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '',
+    replanScheduledAt: '', replanLocation: '',
   });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
 
@@ -99,7 +110,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
 
   const openStatusModal = (meetingId: string, meetingType: string, status: 'COMPLETED' | 'RESCHEDULED' | 'NO_SHOW') => {
     setStatusModal({ meetingId, meetingType, status });
-    setStatusForm({ mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '' });
+    setStatusForm({ mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '', replanScheduledAt: '', replanLocation: '' });
     setError(null);
   };
 
@@ -117,6 +128,10 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
         newScheduledAt: statusForm.newScheduledAt
           ? new Date(statusForm.newScheduledAt).toISOString()
           : undefined,
+        replanScheduledAt: statusForm.replanScheduledAt
+          ? new Date(statusForm.replanScheduledAt).toISOString()
+          : undefined,
+        replanLocation: statusForm.replanLocation || undefined,
       });
       const completedType = statusModal.status === 'COMPLETED' ? statusModal.meetingType : null;
       setStatusModal(null);
@@ -279,6 +294,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                       value={statusForm.newScheduledAt}
                       onChange={(e) => setStatusForm({ ...statusForm, newScheduledAt: e.target.value })}
                       required
+                      min={minRescheduleDateTime()}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
                     <p className="text-xs text-gray-400 mt-1">The meeting stays active and moves to this new time. Client will be notified.</p>
@@ -286,20 +302,53 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                 </>
               )}
               {statusModal.status === 'NO_SHOW' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Reason for no-show <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={statusForm.noShowReason}
-                    onChange={(e) => setStatusForm({ ...statusForm, noShowReason: e.target.value })}
-                    required
-                    placeholder="e.g. Client forgot, unavailable at last minute…"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">A follow-up email will be sent to the client automatically.</p>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Reason for no-show <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={statusForm.noShowReason}
+                      onChange={(e) => setStatusForm({ ...statusForm, noShowReason: e.target.value })}
+                      required
+                      placeholder="e.g. Client forgot, unavailable at last minute…"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">A follow-up email will be sent to the client automatically.</p>
+                  </div>
+                  <div className="border-t border-gray-100 pt-3">
+                    <p className="text-xs font-semibold text-gray-500 mb-2">Next tentative replan</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Date & Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={statusForm.replanScheduledAt}
+                          onChange={(e) => setStatusForm({ ...statusForm, replanScheduledAt: e.target.value })}
+                          required
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Location <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={statusForm.replanLocation}
+                          onChange={(e) => setStatusForm({ ...statusForm, replanLocation: e.target.value })}
+                          required
+                          placeholder="e.g. Office, Client's site…"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">Required so this no-show doesn't fall through the cracks — you can formally reschedule later.</p>
+                  </div>
+                </>
               )}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <div className="flex gap-3 pt-2">
