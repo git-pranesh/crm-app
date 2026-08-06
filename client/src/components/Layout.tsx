@@ -11,6 +11,7 @@ import { api } from '../lib/api';
 import NotificationList from './NotificationList';
 import { getStoredUser, logout } from '../lib/auth';
 import { validateEmail, validatePhone } from '../lib/validation';
+import { SOURCE_OPTIONS } from '../lib/leadSources';
 
 interface SearchLead {
   id: string;
@@ -29,30 +30,37 @@ interface NotifItem {
   lead?: { id: string; leadId: string; name: string };
 }
 
-const SOURCE_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
+interface NavItem { to: string; label: string; Icon: LucideIcon; comingSoon?: boolean }
 
-interface NavItem { to: string; label: string; Icon: LucideIcon }
-interface NavGroup { label: string; items: NavItem[] }
+// Task #90 — "Sales" renamed to "Sales Pipeline" with Sales Pipeline / Design
+// Pipeline / Leads / Projects as its first four items. Design Pipeline already
+// exists as a tab inside Pipeline.tsx (linked via ?tab=design), but Projects
+// has no working standalone page yet (/projects just redirects to /dashboard)
+// so it's marked "Coming soon" rather than linking somewhere broken. Meetings/
+// Calendar/WhatsApp/Discounts keep their existing nav access underneath.
+interface NavItemDef extends NavItem { rolesOnly?: string[] }
+interface NavGroupDef { label: string; items: NavItemDef[] }
 
-const NAV_GROUPS: NavGroup[] = [
+const NAV_GROUPS: NavGroupDef[] = [
   {
     label: 'OVERVIEW',
     items: [{ to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard }],
   },
   {
-    label: 'SALES',
+    label: 'SALES PIPELINE',
     items: [
-      { to: '/pipeline', label: 'Pipeline', Icon: Kanban },
+      { to: '/pipeline', label: 'Sales Pipeline', Icon: Kanban },
+      // Design Pipeline is a real, working tab (Pipeline.tsx), but its API
+      // (GET /api/projects/pipeline) only serves DESIGNER/CRE — matches the
+      // existing tab visibility there, so only those roles see the link.
+      { to: '/pipeline?tab=design', label: 'Design Pipeline', Icon: Building2, rolesOnly: ['DESIGNER', 'CRE'] },
       { to: '/leads', label: 'Leads', Icon: Users },
+      { to: '/projects', label: 'Projects', Icon: Building2, comingSoon: true },
       { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
       { to: '/calendar', label: 'Calendar', Icon: Calendar },
       { to: '/whatsapp', label: 'WhatsApp', Icon: MessageCircle },
       { to: '/discounts', label: 'Discounts', Icon: Tag },
     ],
-  },
-  {
-    label: 'DELIVERY',
-    items: [{ to: '/projects', label: 'Projects', Icon: Building2 }],
   },
   {
     label: 'INSIGHTS',
@@ -195,9 +203,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const toggleSection = (label: string) =>
     setCollapsed((c) => ({ ...c, [label]: !c[label] }));
 
+  // Task #90 review fix: Sales Pipeline (/pipeline) and Design Pipeline
+  // (/pipeline?tab=design) share a path, so matching on pathname alone lit up
+  // both links at once. Compare the `tab` query param too when the nav item
+  // specifies one.
   const isActive = (to: string) => {
-    const path = to.split('?')[0];
-    return location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
+    const [path, query] = to.split('?');
+    const pathMatches = location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
+    if (!pathMatches) return false;
+    const wantedTab = new URLSearchParams(query).get('tab');
+    const currentTab = new URLSearchParams(location.search).get('tab');
+    if (wantedTab) return currentTab === wantedTab;
+    // Item has no tab param (e.g. plain /pipeline) — only active when the
+    // current URL doesn't have one either, so it doesn't also light up for
+    // /pipeline?tab=design.
+    return path !== '/pipeline' || !currentTab;
   };
 
   return (
@@ -217,9 +237,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        {/* Nav groups */}
+        {/* Nav groups — WORKSPACE (admin) is hidden from everyone except
+            BRANCH_HEAD, since the server already restricts those routes to
+            that role (task #90). */}
         <nav className="flex-1 py-3 px-2">
-          {NAV_GROUPS.map((group) => (
+          {NAV_GROUPS.filter((group) => group.label !== 'WORKSPACE' || user?.role === 'BRANCH_HEAD').map((group) => (
             <div key={group.label} className="mb-1">
               <button
                 onClick={() => toggleSection(group.label)}
@@ -233,7 +255,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </button>
               {!collapsed[group.label] && (
                 <div className="space-y-0.5">
-                  {group.items.map((item) => {
+                  {group.items.filter((item) => !item.rolesOnly || item.rolesOnly.includes(user?.role ?? '')).map((item) => {
+                    if (item.comingSoon) {
+                      return (
+                        <div
+                          key={item.to}
+                          title="Coming soon"
+                          className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-stone-300 cursor-not-allowed select-none"
+                        >
+                          <item.Icon size={15} strokeWidth={1.8} className="shrink-0" />
+                          <span>{item.label}</span>
+                          <span className="ml-auto text-[9px] font-bold uppercase tracking-wide bg-stone-100 text-stone-400 px-1.5 py-0.5 rounded-full">Soon</span>
+                        </div>
+                      );
+                    }
                     const active = isActive(item.to);
                     return (
                       <Link

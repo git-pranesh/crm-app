@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { Users, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
+import StatusBadge, { STATUS_LABELS, STATUS_COLORS } from '../components/StatusBadge';
+import { SOURCE_OPTIONS } from '../lib/leadSources';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
@@ -74,15 +76,6 @@ function getCurrentUserRole(): string {
     return JSON.parse(raw)?.role ?? '';
   } catch { return ''; }
 }
-
-const SOURCE_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
-
-const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', ON_HOLD: 'On Hold', INACTIVE: 'Inactive' };
-const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: 'bg-green-100 text-green-700',
-  ON_HOLD: 'bg-amber-100 text-amber-700',
-  INACTIVE: 'bg-gray-100 text-gray-500',
-};
 
 function intentLabel(r?: number | null) {
   if (!r) return '—';
@@ -194,7 +187,7 @@ export default function LeadList() {
    * rules, and one field order. This page's "+ New Lead" button just opens it. */
   const openNewLeadModal = () => window.dispatchEvent(new CustomEvent('open-new-lead-modal'));
 
-  const handleExportCSV = async () => {
+  const handleExport = async (fmt: 'csv' | 'xlsx') => {
     setExporting(true);
     try {
       const exportParams = new URLSearchParams();
@@ -202,6 +195,7 @@ export default function LeadList() {
       if (filters.stage) exportParams.set('stage', filters.stage);
       if (filters.source) exportParams.set('source', filters.source);
       if (filters.status) exportParams.set('status', filters.status);
+      if (fmt === 'xlsx') exportParams.set('format', 'xlsx');
       const resp = await fetch(`/api/leads/export?${exportParams}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('crm_token')}` },
       });
@@ -210,12 +204,12 @@ export default function LeadList() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `leads_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `leads_export_${new Date().toISOString().slice(0, 10)}.${fmt}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success('CSV downloaded');
+      toast.success(`${fmt.toUpperCase()} downloaded`);
     } catch {
       toast.error('Export failed');
     } finally {
@@ -241,14 +235,29 @@ export default function LeadList() {
             <p className="text-xs text-stone-400 mt-0.5">All leads in your scope</p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportCSV}
-              disabled={exporting}
-              className="text-stone-600 px-3 py-2 rounded-xl text-sm hover:bg-stone-50 disabled:opacity-50 transition-colors font-medium"
-              style={{ border: '1px solid #EDE8E3' }}
-            >
-              {exporting ? 'Exporting…' : '↓ Export CSV'}
-            </button>
+            {/* Task #90 — export controls are admin/BL only; the designer/CRE
+                portal no longer surfaces them (they're read-only on scope
+                anyway). Excel export is Branch Head admin-only. */}
+            {userRole !== 'DESIGNER' && userRole !== 'CRE' && (
+              <button
+                onClick={() => handleExport('csv')}
+                disabled={exporting}
+                className="text-stone-600 px-3 py-2 rounded-xl text-sm hover:bg-stone-50 disabled:opacity-50 transition-colors font-medium"
+                style={{ border: '1px solid #EDE8E3' }}
+              >
+                {exporting ? 'Exporting…' : '↓ Export CSV'}
+              </button>
+            )}
+            {userRole === 'BRANCH_HEAD' && (
+              <button
+                onClick={() => handleExport('xlsx')}
+                disabled={exporting}
+                className="text-stone-600 px-3 py-2 rounded-xl text-sm hover:bg-stone-50 disabled:opacity-50 transition-colors font-medium"
+                style={{ border: '1px solid #EDE8E3' }}
+              >
+                {exporting ? 'Exporting…' : '↓ Export Excel'}
+              </button>
+            )}
             <button
               onClick={openNewLeadModal}
               className="bg-brand-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-brand-600 transition-colors"
@@ -339,7 +348,7 @@ export default function LeadList() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ background: '#FAF6F2', borderBottom: '1px solid #EDE8E3' }}>
-                      {['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'NPS', 'Updated'].map((h) => (
+                      {['Lead ID', 'Name', 'Stage', 'Status', 'Value', 'Designer', 'Source', 'Intent', 'Rating', 'Updated'].map((h) => (
                         <th key={h} className="text-left py-2.5 px-4 text-xs font-bold text-stone-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -367,7 +376,11 @@ export default function LeadList() {
                             {isUnread && <span className="ml-1.5 text-[9px] font-bold bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full">NEW</span>}
                           </td>
                           <td className="py-3 px-4 whitespace-nowrap">
-                            <span className={isUnread ? 'font-extrabold text-stone-900' : 'font-semibold text-stone-900'}>{lead.name}</span>
+                            {/* Task #90 — NPS shown right next to the name instead of its own column */}
+                            <span className="flex items-center gap-1.5">
+                              <span className={isUnread ? 'font-extrabold text-stone-900' : 'font-semibold text-stone-900'}>{lead.name}</span>
+                              <NpsBadge score={lead.avgNps} />
+                            </span>
                           </td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}>
@@ -375,12 +388,10 @@ export default function LeadList() {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[status]}`}
+                            <StatusBadge
+                              status={status}
                               title={status === 'ON_HOLD' && lead.onHoldRevivalDate ? `Reopens ${new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN')}` : undefined}
-                            >
-                              {STATUS_LABELS[status] ?? status}
-                            </span>
+                            />
                             {status === 'ON_HOLD' && lead.onHoldRevivalDate && (
                               <span className="ml-1.5 text-[10px] text-stone-400 whitespace-nowrap">
                                 ↺ {new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
@@ -392,7 +403,6 @@ export default function LeadList() {
                           <td className="py-3 px-4 text-stone-500 text-xs whitespace-nowrap">{lead.source?.replace(/_/g, ' ') ?? '—'}</td>
                           <td className={`py-3 px-4 text-xs ${intentColor(lead.intentRating)}`}>{intentLabel(lead.intentRating)}</td>
                           <td className="py-3 px-4"><Stars rating={lead.intentRating} /></td>
-                          <td className="py-3 px-4"><NpsBadge score={lead.avgNps} /></td>
                           <td className="py-3 px-4 text-stone-400 text-xs whitespace-nowrap">{relTime(lead.updatedAt)}</td>
                         </tr>
                       );

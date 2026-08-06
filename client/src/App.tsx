@@ -33,6 +33,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Task #90 — admin-only pages (WORKSPACE nav group) were reachable by typing
+// the URL directly even though the sidebar hid them; only BRANCH_HEAD has any
+// server-side access to /api/admin/*, so gate the client routes the same way.
+function RequireRole({ role, children }: { role: string; children: React.ReactNode }) {
+  let userRole = '';
+  try { userRole = JSON.parse(localStorage.getItem('crm_user') ?? '{}')?.role ?? ''; } catch { /* ignore */ }
+  if (userRole !== role) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 // ── Home redirect ─────────────────────────────────────────────────────────────
 
 function Home() {
@@ -110,8 +120,8 @@ export default function App() {
                     <Route path="/discounts" element={<Discounts />} />
                     <Route path="/tasks" element={<Tasks />} />
                     <Route path="/reports" element={<Reports />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/admin" element={<RequireRole role="BRANCH_HEAD"><Admin /></RequireRole>} />
+                    <Route path="/settings" element={<RequireRole role="BRANCH_HEAD"><Settings /></RequireRole>} />
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/notifications" element={<Notifications />} />
                     <Route path="/projects" element={<Navigate to="/dashboard" replace />} />

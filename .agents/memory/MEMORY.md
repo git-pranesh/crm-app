@@ -35,3 +35,4 @@
 - [Next plan of action pattern](next-plan-of-action-pattern.md) — shared Call/Meeting/Task multi-select JSON field + processor/picker, reuse rather than rebuild per page
 - [MeetingType enum restriction](meeting-type-enum-restriction.md) — retire a Postgres enum value at the app layer via an allowlist, not by dropping it from the DB enum, when historical rows/code reference it
 - [Project scope post-handover](project-scope-post-handover.md) — lead.assignedDesignerId/assignedBLId go empty after handover; use project.designerId (+approved team members) for project-level auth
+- [DIP checklist stage-gate is transitive](dip-checklist-gate.md) — make DIP-checklist completion explicit in incentive queries, not just implicit via the stage-gate

@@ -220,7 +220,7 @@ function isIsoDateString(v: string): boolean {
 
 const SOURCE_OPTIONS = [
   'Meta Ads', 'Google Ads', 'Referral', 'Walk-in', 'Manual',
-  'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Other',
+  'Website', 'Instagram', 'WhatsApp', 'LinkedIn', 'Affiliate Marketing', 'Other',
 ];
 
 /** Gate requirements to show in the stage roadmap ℹ popover (mirrors stageRequirements.ts) */

@@ -550,16 +550,24 @@ leadsRouter.get('/meta/designers', verifyToken, async (req, res) => {
   }
 });
 
-// ── GET /api/leads/export — download filtered leads as CSV ───────────────────
+// ── GET /api/leads/export — download filtered leads as CSV (or, with
+// ?format=xlsx, Excel — task #90 made the Excel option admin-only) ───────────
 leadsRouter.get('/export', verifyToken, async (req, res) => {
   try {
     const {
       stage, source, designerId, blId, search,
       projectType, location, dateRange, intent,
-      status,
+      status, format,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
+
+    // Excel export is admin-only (task #90); CSV keeps its existing scoped access.
+    if (format === 'xlsx' && user.role !== 'BRANCH_HEAD') {
+      res.status(403).json({ error: 'Excel export is only available to Branch Head admins' });
+      return;
+    }
+
     const where: any = {};
 
     // Role scoping (same rules as list)
@@ -613,21 +621,38 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    const header = 'Lead ID,Name,Phone,Email,Stage,Source,Estimated Value,Intent Rating,Designer,BL,Created At\n';
-    const rows = leads.map((l: any) => [
+    const columns = ['Lead ID', 'Name', 'Phone', 'Email', 'Stage', 'Source', 'Estimated Value', 'Intent Rating', 'Designer', 'BL', 'Created At'];
+    const dataRows = leads.map((l: any) => [
       l.leadId,
-      `"${(l.name ?? '').replace(/"/g, '""')}"`,
+      l.name ?? '',
       l.phone ?? '',
       l.email ?? '',
       l.stage,
       l.source ?? '',
       l.estimatedValue ?? '',
       l.intentRating ?? '',
-      `"${(l.assignedDesigner?.name ?? '').replace(/"/g, '""')}"`,
-      `"${(l.assignedBL?.name ?? '').replace(/"/g, '""')}"`,
+      l.assignedDesigner?.name ?? '',
+      l.assignedBL?.name ?? '',
       l.createdAt.toISOString(),
-    ].join(','));
-    const csv = header + rows.join('\n');
+    ]);
+
+    if (format === 'xlsx') {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Leads');
+      sheet.addRow(columns).font = { bold: true };
+      dataRows.forEach((row) => sheet.addRow(row));
+      sheet.columns.forEach((col) => { col.width = 18; });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="leads_export_${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      await workbook.xlsx.write(res);
+      res.end();
+      return;
+    }
+
+    const header = columns.join(',') + '\n';
+    const csv = header + dataRows.map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="leads_export_${new Date().toISOString().slice(0, 10)}.csv"`);

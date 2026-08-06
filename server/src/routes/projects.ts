@@ -176,6 +176,7 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
             leadId: true,
             name: true,
             phone: true,
+            status: true,
             expectedMoveIn: true,
             estimatedValue: true,
             obObmChecklist: {
@@ -223,6 +224,7 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
         leadId: p.lead.leadId,
         name: p.lead.name,
         phone: p.lead.phone,
+        status: p.lead.status,
         expectedMoveIn: p.lead.expectedMoveIn?.toISOString() ?? null,
         estimatedValue: p.lead.estimatedValue != null ? Number(p.lead.estimatedValue) : null,
       },

@@ -1,9 +1,10 @@
 // Pipeline — two tabs: Sales Pipeline + Design Pipeline
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Search, SlidersHorizontal, X, ChevronRight, Clock, Activity, AlertCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronRight, Activity, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
+import StatusBadge from '../components/StatusBadge';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Lead {
@@ -49,6 +50,7 @@ interface DesignProject {
     leadId: string;
     name: string;
     phone: string;
+    status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE';
     expectedMoveIn: string | null;
     estimatedValue: number | null;
   };
@@ -187,23 +189,6 @@ function fmtDate(d: string | null | undefined) {
 }
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
-const INTENT_COLOR = (r: number | null | undefined) => {
-  if (!r) return 'bg-gray-300';
-  if (r >= 4) return 'bg-green-500';
-  if (r >= 3) return 'bg-amber-400';
-  return 'bg-red-500';
-};
-
-function StarRating({ rating }: { rating: number | null | undefined }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span key={i} className={`text-xs ${(rating ?? 0) >= i ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
-      ))}
-    </div>
-  );
-}
-
 /** Clickable star input for exact-match intent filter (e.g. "2 stars" shows only 2-star leads). */
 function StarFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const selected = parseInt(value) || 0;
@@ -262,23 +247,21 @@ function LeadCard({
 
       {/* Task #88 — status badge, since status no longer maps to stage */}
       {lead.status !== 'ACTIVE' && (
-        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full mb-1.5 ${
-          lead.status === 'ON_HOLD' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-        }`}>
-          {lead.status === 'ON_HOLD' ? 'On Hold' : 'Inactive'}
-        </span>
+        <StatusBadge status={lead.status} className="inline-block mb-1.5" />
       )}
 
       {scope && <p className="text-xs text-stone-500 mb-1.5 truncate">{scope}</p>}
 
+      {/* Task #90 — per-stage budget value replaces the old intent-rating
+          stars here; the client's estimated value is tagged with the stage
+          it's currently sitting at (no historical per-stage value log exists
+          yet — see follow-up task for tracking value changes over time). */}
       <div className="flex items-center gap-2 mb-2">
         {val && <span className="text-sm font-bold text-stone-800">{val}</span>}
+        <span className="text-[10px] font-semibold text-stone-400 px-1.5 py-0.5 rounded-full shrink-0" style={{ background: '#F5F0EB' }}>
+          {STAGE_LABELS[lead.stage] ?? lead.stage}
+        </span>
         {lead.location && <span className="text-xs text-stone-400 truncate flex-1">{lead.location}</span>}
-      </div>
-
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${INTENT_COLOR(lead.intentRating)}`} />
-        <StarRating rating={lead.intentRating} />
       </div>
 
       <div className="flex flex-wrap gap-1 mb-2.5">
@@ -437,6 +420,7 @@ function DesignPipelineView() {
                         <span className="text-sm font-bold text-stone-900 group-hover:text-brand-600 transition-colors">
                           {proj.lead.name}
                         </span>
+                        {proj.lead.status !== 'ACTIVE' && <StatusBadge status={proj.lead.status} />}
                         <span className="text-[10px] font-mono text-stone-400">{proj.lead.leadId}</span>
                         <span className="text-[10px] text-stone-400">·</span>
                         <span className="text-[10px] font-mono text-stone-500">{proj.projectCode}</span>
@@ -465,10 +449,15 @@ function DesignPipelineView() {
 
                   {/* Stats row */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500">
-                    <span className="flex items-center gap-1">
-                      <Clock size={11} />
-                      <span>{proj.totalActiveDays}d active</span>
-                    </span>
+                    {/* Task #90 — per-stage budget replaces the raw "days active"
+                        stat; tags the contract value with the current design
+                        phase (no historical per-phase budget log exists yet). */}
+                    {proj.contractValue != null && (
+                      <span className="flex items-center gap-1">
+                        <span className="font-medium text-stone-700">{fmt(proj.contractValue)}</span>
+                        <span className="text-stone-400">· {PHASE_LABELS[proj.phase] ?? proj.phase} budget</span>
+                      </span>
+                    )}
 
                     {proj.lead.expectedMoveIn && (
                       <span>
@@ -1118,7 +1107,12 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
 export default function Pipeline() {
   const userRole = getCurrentUserRole();
   const isDesigner = userRole === 'DESIGNER' || userRole === 'CRE';
-  const [tab, setTab] = useState<'sales' | 'design'>('sales');
+  // Task #90 — nav can deep-link here via /pipeline?tab=design (the "Design
+  // Pipeline" sidebar item), so read the initial tab from the URL instead of
+  // always defaulting to sales.
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'design' && isDesigner ? 'design' : 'sales';
+  const [tab, setTab] = useState<'sales' | 'design'>(initialTab);
 
   return (
     <div className="flex flex-col h-full">
