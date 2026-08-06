@@ -27,6 +27,7 @@ import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
+import { DESIGN_PHASES, DESIGN_PHASE_DEFAULT_DAYS, MS_PER_DAY } from '../config/slaConfig.js';
 
 export const obObmChecklistRouter = Router({ mergeParams: true });
 
@@ -63,8 +64,8 @@ const TIMELINE_LABELS: Record<TimelineField, string> = {
 };
 
 /** Admin-configurable default (see lib/mailTemplates.ts, code OB_OBM_WELCOME). */
-export async function obmMailTemplate(clientName: string): Promise<{ subject: string; html: string }> {
-  return renderMailTemplate('OB_OBM_WELCOME', { clientName });
+export async function obmMailTemplate(clientName: string, timelineHtml: string = ''): Promise<{ subject: string; html: string }> {
+  return renderMailTemplate('OB_OBM_WELCOME', { clientName, timeline: timelineHtml });
 }
 
 async function loadLeadForChecklist(leadId: string, user: { id: string; role: string }) {
@@ -72,7 +73,7 @@ async function loadLeadForChecklist(leadId: string, user: { id: string; role: st
     where: { id: leadId },
     select: {
       id: true, leadId: true, name: true, email: true, stage: true,
-      assignedDesignerId: true, assignedBLId: true,
+      assignedDesignerId: true, assignedBLId: true, createdAt: true,
     },
   });
   if (!lead) return { lead: null, authorized: false };
@@ -84,6 +85,55 @@ function allDocsDone(c: Record<string, any>): boolean {
   return DOC_ITEMS.every((item) => c[`${item}Done`]);
 }
 
+/**
+ * Task #84 — project the remaining (not-yet-recorded) Design Pipeline phase
+ * dates from whichever of the 7 manual timeline dates ARE filled in, so the
+ * OBM welcome mail can show the client an estimated schedule rather than
+ * just the phases already booked. Each unrecorded phase's projected date is
+ * the previous phase's date (actual or projected) plus that previous
+ * phase's default day budget (config/slaConfig.ts) — mirrors the allocation
+ * model already used for SLA status on the Design Pipeline view. EIP has no
+ * date field of its own and simply starts when Sign Off does.
+ */
+function projectDesignPhaseDates(
+  checklist: Record<string, any> | null | undefined,
+  fallbackStart: Date,
+): { label: string; date: Date; isProjected: boolean }[] {
+  const results: { label: string; date: Date; isProjected: boolean }[] = [];
+  let prevDate: Date | null = null;
+  let prevKey: string | null = null;
+
+  for (const phase of DESIGN_PHASES) {
+    const actual = phase.dateField ? (checklist?.[phase.dateField] as Date | null | undefined) : null;
+    let date: Date;
+    if (actual) {
+      date = actual;
+    } else if (phase.dateField === null) {
+      // EIP starts the moment the previous phase (Sign Off) is recorded/projected.
+      date = prevDate ?? fallbackStart;
+    } else {
+      const base = prevDate ?? fallbackStart;
+      const addDays = prevKey ? (DESIGN_PHASE_DEFAULT_DAYS[prevKey] ?? 0) : 0;
+      date = new Date(base.getTime() + addDays * MS_PER_DAY);
+    }
+    results.push({ label: phase.label, date, isProjected: !actual });
+    prevDate = date;
+    prevKey = phase.key;
+  }
+  return results;
+}
+
+function fmtTimelineDate(d: Date): string {
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderTimelineHtml(entries: { label: string; date: Date; isProjected: boolean }[]): string {
+  const rows = entries
+    .map((e) => `<li>${e.label}: <strong>${fmtTimelineDate(e.date)}</strong>${e.isProjected ? ' (estimated)' : ''}</li>`)
+    .join('');
+  return `<ul>${rows}</ul>`;
+}
+
 // ── GET /api/leads/:leadId/ob-obm-checklist ───────────────────────────────────
 obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
   try {
@@ -93,16 +143,12 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
 
     const checklist = await prisma.oBOBMChecklist.findUnique({ where: { leadId } });
-    const welcomeMailScreenshot = await prisma.leadFile.findFirst({
-      where: { leadId, fileType: 'WELCOME_MAIL_SCREENSHOT' },
-      select: { id: true },
-    });
+    const timelineHtml = renderTimelineHtml(projectDesignPhaseDates(checklist, lead.createdAt));
     res.json({
       checklist: checklist ?? null,
       docItems: DOC_ITEMS.map((key) => ({ key, label: DOC_ITEM_LABELS[key] })),
       timelineFields: TIMELINE_FIELDS,
-      obmMailTemplate: await obmMailTemplate(lead.name),
-      hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
+      obmMailTemplate: await obmMailTemplate(lead.name, timelineHtml),
     });
   } catch (err: any) {
     console.error('[ob-obm-checklist:get]', err.message);
@@ -142,10 +188,6 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
       if (body[doneKey] !== undefined) data[doneKey] = !!body[doneKey];
       if (body[confirmedKey] !== undefined) data[confirmedKey] = !!body[confirmedKey];
     }
-    if (body.welcomeMailApprovedByClient !== undefined) {
-      data.welcomeMailApprovedByClient = !!body.welcomeMailApprovedByClient;
-    }
-
     const checklist = await prisma.oBOBMChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'OB_OBM_CHECKLIST_UPDATED', leadId, data);
 
@@ -174,21 +216,13 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     if (!checklist) { res.status(404).json({ error: 'OB→OBM checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'OBM mail already sent.' }); return; }
 
-    const [generatedQuote, welcomeMailScreenshot] = await Promise.all([
-      prisma.leadFile.findFirst({
-        where: { leadId, fileType: 'GENERATED_QUOTE', stage: 'ONBOARDING' },
-        select: { id: true },
-      }),
-      prisma.leadFile.findFirst({
-        where: { leadId, fileType: 'WELCOME_MAIL_SCREENSHOT' },
-        select: { id: true },
-      }),
-    ]);
+    const generatedQuote = await prisma.leadFile.findFirst({
+      where: { leadId, fileType: 'GENERATED_QUOTE', stage: 'ONBOARDING' },
+      select: { id: true },
+    });
 
     const missing: string[] = [];
     if (!generatedQuote) missing.push('Generated quote document (Files → OB)');
-    if (!checklist.welcomeMailApprovedByClient) missing.push('Welcome mail approved by client');
-    if (!welcomeMailScreenshot) missing.push('Welcome mail approval screenshot (Files tab)');
     if (!allDocsDone(checklist)) {
       for (const item of DOC_ITEMS) {
         if (!(checklist as any)[`${item}Done`]) missing.push(DOC_ITEM_LABELS[item]);
@@ -205,7 +239,8 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     }
 
     const { subject, html } = req.body as { subject?: string; html?: string };
-    const template = await obmMailTemplate(lead.name);
+    const timelineHtml = renderTimelineHtml(projectDesignPhaseDates(checklist, lead.createdAt));
+    const template = await obmMailTemplate(lead.name, timelineHtml);
     const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
 
     await sendEmail(emailPayload);

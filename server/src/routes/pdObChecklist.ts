@@ -54,15 +54,20 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
 
     // Uploaded-file status is sourced from LeadFile (single source of truth —
     // mirrors how stageRequirements.ts checks file gates).
-    const [paymentScreenshot, obQuote] = await Promise.all([
+    const [paymentScreenshot, obQuote, welcomeMailScreenshot] = await Promise.all([
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
+      // Task #84 — client approval-of-wording proof now belongs to the PD→OB
+      // welcome mail (moved from OBOBMChecklist), scoped to this checklist's
+      // own upload stage so it can't be satisfied by an OBM-stage screenshot.
+      prisma.leadFile.findFirst({ where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: 'WELCOME_MAIL_SCREENSHOT' }, select: { id: true } }),
     ]);
 
     res.json({
       checklist: checklist ?? null,
       hasPaymentScreenshot: !!paymentScreenshot,
       hasObQuote: !!obQuote,
+      hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
       welcomeMailTemplate: await pdObWelcomeMailTemplate(lead.name),
     });
   } catch (err: any) {
@@ -91,6 +96,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
 
     const {
       paymentValue, projectValue, furnitureValue, obMeetingScheduledAt, obMeetingLocation, notes,
+      welcomeMailApprovedByClient,
     } = req.body as Record<string, any>;
 
     const data: Record<string, any> = {};
@@ -100,6 +106,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
     if (obMeetingScheduledAt !== undefined) data.obMeetingScheduledAt = obMeetingScheduledAt ? new Date(obMeetingScheduledAt) : null;
     if (obMeetingLocation !== undefined) data.obMeetingLocation = obMeetingLocation?.trim() || null;
     if (notes !== undefined) data.notes = notes?.trim() || null;
+    if (welcomeMailApprovedByClient !== undefined) data.welcomeMailApprovedByClient = !!welcomeMailApprovedByClient;
 
     const checklist = await prisma.pDOBChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'PD_OB_CHECKLIST_UPDATED', leadId, data);
@@ -129,7 +136,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!checklist) { res.status(404).json({ error: 'PD→OB checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'Welcome mail already sent.' }); return; }
 
-    const [paymentScreenshot, obQuote, pdFinalFile] = await Promise.all([
+    const [paymentScreenshot, obQuote, pdFinalFile, welcomeMailScreenshot] = await Promise.all([
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
       // Founder spec item 6: final pitch presentation or PD file, uploaded
@@ -142,6 +149,8 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
         where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: { in: ['PITCH_PRESENTATION', 'QUOTATION'] } },
         select: { id: true },
       }),
+      // Task #84: client approval-of-wording proof for THIS mail.
+      prisma.leadFile.findFirst({ where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: 'WELCOME_MAIL_SCREENSHOT' }, select: { id: true } }),
     ]);
 
     const missing: string[] = [];
@@ -154,6 +163,8 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!checklist.obMeetingScheduledAt) missing.push('OB meeting date/time');
     if (!checklist.obMeetingLocation) missing.push('OB meeting location');
     if (!checklist.notes || !checklist.notes.trim()) missing.push('Notes');
+    if (!checklist.welcomeMailApprovedByClient) missing.push('Welcome mail approved by client');
+    if (!welcomeMailScreenshot) missing.push('Welcome mail approval screenshot (Files tab)');
     if (!lead.email) missing.push("Client's email address");
     if (missing.length) {
       res.status(400).json({ error: 'Cannot send welcome mail — missing requirements', missing });

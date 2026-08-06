@@ -40,11 +40,12 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
     code: 'OB_OBM_WELCOME',
     label: 'OBM mail (Onboarding → Onboarding Meeting)',
     description: 'Sent when the OB→OBM checklist is completed and the lead moves to Onboarding Meeting.',
-    placeholders: ['clientName'],
+    placeholders: ['clientName', 'timeline'],
     defaultSubject: 'Your Onboarding is Complete — Interiors by DeX',
     defaultHtml: `<p>Dear {{clientName}},</p>
 <p>Great news — your onboarding with <strong>Interiors by DeX</strong> is now complete!</p>
-<p>Your dedicated design team will reach out shortly to schedule your onboarding meeting and kick off the design process.</p>
+<p>Your dedicated design team will reach out shortly to kick off the design process. Here's your project timeline:</p>
+{{timeline}}
 <p>Thank you for your trust — we're excited to get started!<br/><em>Team Interiors by DeX</em></p>`,
   },
   {

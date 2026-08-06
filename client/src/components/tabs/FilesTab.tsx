@@ -51,26 +51,36 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
+interface RequiredFileGroup { types: string[]; mode: 'all' | 'any' }
+
 /**
- * Required file types per stage (Task #83 — mirrors stageRequirements.ts).
- * `mode: 'all'` means every listed type must be present; `mode: 'any'` means
- * at least one of them satisfies the badge.
+ * Required file types per stage (Task #83/#84 — mirrors stageRequirements.ts
+ * and the PD→OB / OB→OBM checklist gates). Each stage maps to one or more
+ * independent groups (all groups must be satisfied); within a group,
+ * `mode: 'all'` means every listed type must be present, `mode: 'any'` means
+ * at least one of them satisfies it.
  * PROPOSAL_PRESENTED has no required file here: advancing to Proposal
  * Discussion is gated on a generated Quote (or an uploaded quotation file —
  * shown informally under Files → PP), not a specific required upload here.
  */
-const REQUIRED_FILES: Record<string, { types: string[]; mode: 'all' | 'any' }> = {
+const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
   // Floor plan + lifestyle capture sheet, per the MQL→DQL gate.
-  MQL: { types: ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE'], mode: 'all' },
+  MQL: [{ types: ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE'], mode: 'all' }],
   // "Pitch-ready" file — DQL→Proposal Ready gate.
-  DQL: { types: ['PITCH_PRESENTATION'], mode: 'all' },
+  DQL: [{ types: ['PITCH_PRESENTATION'], mode: 'all' }],
   // PP presentation attached — Proposal Ready→Proposal Presented gate.
-  PROPOSAL_READY: { types: ['PITCH_PRESENTATION'], mode: 'all' },
-  // Final pitch presentation OR PD file — Proposal Discussion→Onboarding gate.
+  PROPOSAL_READY: [{ types: ['PITCH_PRESENTATION'], mode: 'all' }],
+  // Final pitch presentation OR PD file — Proposal Discussion→Onboarding gate,
+  // AND (independently) the welcome-mail approval screenshot required by the
+  // PD→OB checklist's "Share welcome mail" action (Task #84 — moved here
+  // from the OB→OBM checklist, since it now gates the PD→OB mail).
   // (The PD→OB checklist itself additionally requires a Payment Screenshot
   // and OB Quote — see the PD→OB checklist panel, not this folder badge.)
-  PROPOSAL_DISCUSSION: { types: ['PITCH_PRESENTATION', 'QUOTATION'], mode: 'any' },
-  ONBOARDING: { types: ['GENERATED_QUOTE'], mode: 'all' },
+  PROPOSAL_DISCUSSION: [
+    { types: ['PITCH_PRESENTATION', 'QUOTATION'], mode: 'any' },
+    { types: ['WELCOME_MAIL_SCREENSHOT'], mode: 'all' },
+  ],
+  ONBOARDING: [{ types: ['GENERATED_QUOTE'], mode: 'all' }],
 };
 
 const FILE_TYPE_OPTIONS = [
@@ -105,13 +115,16 @@ function fileIcon(fileName: string) {
   return '📎';
 }
 
+interface RequiredGroupStatus extends RequiredFileGroup {
+  satisfied: boolean;
+  isLegacy?: boolean;
+}
+
 interface StageFolder {
   stage: string;
   files: LeadFile[];
-  requiredTypes?: string[];
-  requiredMode?: 'all' | 'any';
+  requiredGroups: RequiredGroupStatus[];
   hasRequired: boolean;
-  isLegacy?: boolean;
 }
 
 function requiredBadgeLabel(types: string[], mode: 'all' | 'any'): string {
@@ -205,27 +218,27 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
     return stagesWithContent.has(stage) || idx <= currentIdx;
   }).map((stage) => {
     const stageFiles = files.filter((f) => f.stage === stage);
-    const required = REQUIRED_FILES[stage];
-    const requiredTypes = required?.types;
-    const requiredMode = required?.mode;
-    let hasRequired = !required || (
-      requiredMode === 'any'
-        ? requiredTypes!.some((t) => stageFiles.some((f) => f.fileType === t))
-        : requiredTypes!.every((t) => stageFiles.some((f) => f.fileType === t))
-    );
-    let isLegacy = false;
-    if (
-      !hasRequired && requiredTypes?.includes('FLOOR_PLAN') && floorPlanUrl && !hasAnyFloorPlanFile
-      && LEGACY_FLOOR_PLAN_STAGES.includes(stage) && !legacyFloorPlanApplied
-      // Only the floor-plan legacy fallback can satisfy an "all" requirement
-      // on its own when it's the sole required type for this stage.
-      && (requiredMode === 'any' || requiredTypes.length === 1)
-    ) {
-      hasRequired = true;
-      isLegacy = true;
-      legacyFloorPlanApplied = true;
-    }
-    return { stage, files: stageFiles, requiredTypes, requiredMode, hasRequired, isLegacy };
+    const groups = REQUIRED_FILES[stage] ?? [];
+    const requiredGroups: RequiredGroupStatus[] = groups.map((g) => {
+      let satisfied = g.mode === 'any'
+        ? g.types.some((t) => stageFiles.some((f) => f.fileType === t))
+        : g.types.every((t) => stageFiles.some((f) => f.fileType === t));
+      let isLegacy = false;
+      if (
+        !satisfied && g.types.includes('FLOOR_PLAN') && floorPlanUrl && !hasAnyFloorPlanFile
+        && LEGACY_FLOOR_PLAN_STAGES.includes(stage) && !legacyFloorPlanApplied
+        // Only the floor-plan legacy fallback can satisfy an "all" requirement
+        // on its own when it's the sole required type in this group.
+        && (g.mode === 'any' || g.types.length === 1)
+      ) {
+        satisfied = true;
+        isLegacy = true;
+        legacyFloorPlanApplied = true;
+      }
+      return { ...g, satisfied, isLegacy };
+    });
+    const hasRequired = requiredGroups.every((g) => g.satisfied);
+    return { stage, files: stageFiles, requiredGroups, hasRequired };
   });
 
   if (loading) {
@@ -242,7 +255,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
         <p className="text-xs text-gray-400">Files are organised by stage. Required files are marked with a badge.</p>
       </div>
 
-      {folders.map(({ stage, files: stageFiles, requiredTypes, requiredMode, hasRequired, isLegacy }) => {
+      {folders.map(({ stage, files: stageFiles, requiredGroups }) => {
         const isOpen = openFolders[stage] ?? false;
         const isActive = stage === currentStage;
         const isUploadOpen = showUploadForm === stage;
@@ -265,14 +278,21 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
               {isActive && (
                 <span className="text-[10px] font-bold bg-brand-100 text-brand-600 px-2 py-0.5 rounded-full ml-1">Current</span>
               )}
-              {requiredTypes && (
-                <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium ${hasRequired ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-700'}`}>
-                  {hasRequired
-                    ? `✓ ${requiredBadgeLabel(requiredTypes, requiredMode ?? 'all')}${isLegacy ? ' (legacy)' : ''}`
-                    : `⚠ ${requiredBadgeLabel(requiredTypes, requiredMode ?? 'all')} required`}
+              {requiredGroups.length > 0 && (
+                <span className="ml-auto flex flex-wrap justify-end gap-1">
+                  {requiredGroups.map((g, i) => (
+                    <span
+                      key={i}
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${g.satisfied ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-700'}`}
+                    >
+                      {g.satisfied
+                        ? `✓ ${requiredBadgeLabel(g.types, g.mode)}${g.isLegacy ? ' (legacy)' : ''}`
+                        : `⚠ ${requiredBadgeLabel(g.types, g.mode)} required`}
+                    </span>
+                  ))}
                 </span>
               )}
-              {!requiredTypes && stageFiles.length > 0 && (
+              {requiredGroups.length === 0 && stageFiles.length > 0 && (
                 <span className="ml-auto text-[10px] text-gray-400">{stageFiles.length} file{stageFiles.length !== 1 ? 's' : ''}</span>
               )}
             </button>
@@ -313,7 +333,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
                   <button
                     onClick={() => {
                       setShowUploadForm(stage);
-                      setUploadFileType(requiredTypes?.[0] ?? '');
+                      setUploadFileType(requiredGroups[0]?.types[0] ?? '');
                       setSelectedFile(null);
                     }}
                     className="flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 font-medium mt-1 pt-1 border-t border-gray-50"

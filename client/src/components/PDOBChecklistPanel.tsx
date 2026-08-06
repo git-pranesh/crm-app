@@ -13,6 +13,7 @@ interface PDOBChecklist {
   obMeetingScheduledAt: string | null;
   obMeetingLocation: string | null;
   notes: string | null;
+  welcomeMailApprovedByClient: boolean;
   welcomeMailSent: boolean;
   welcomeMailSentAt: string | null;
   completedAt: string | null;
@@ -38,13 +39,14 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [checklist, setChecklist] = useState<PDOBChecklist | null>(null);
   const [hasPaymentScreenshot, setHasPaymentScreenshot] = useState(false);
   const [hasObQuote, setHasObQuote] = useState(false);
+  const [hasWelcomeMailScreenshot, setHasWelcomeMailScreenshot] = useState(false);
   const [template, setTemplate] = useState({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [showMailModal, setShowMailModal] = useState(false);
 
-  const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '' });
+  const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', welcomeMailApprovedByClient: false });
 
   const isEditable = stage === 'PROPOSAL_DISCUSSION';
 
@@ -54,11 +56,13 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         checklist: PDOBChecklist | null;
         hasPaymentScreenshot: boolean;
         hasObQuote: boolean;
+        hasWelcomeMailScreenshot: boolean;
         welcomeMailTemplate: { subject: string; html: string };
       }>(`/leads/${leadId}/pd-ob-checklist`);
       setChecklist(data.checklist);
       setHasPaymentScreenshot(data.hasPaymentScreenshot);
       setHasObQuote(data.hasObQuote);
+      setHasWelcomeMailScreenshot(data.hasWelcomeMailScreenshot);
       setTemplate(data.welcomeMailTemplate);
       if (data.checklist) {
         setForm({
@@ -68,6 +72,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           obMeetingScheduledAt: toLocalInputValue(data.checklist.obMeetingScheduledAt),
           obMeetingLocation: data.checklist.obMeetingLocation ?? '',
           notes: data.checklist.notes ?? '',
+          welcomeMailApprovedByClient: data.checklist.welcomeMailApprovedByClient,
         });
       }
     } catch (e: any) {
@@ -92,6 +97,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         obMeetingScheduledAt: form.obMeetingScheduledAt || null,
         obMeetingLocation: form.obMeetingLocation || null,
         notes: form.notes || null,
+        welcomeMailApprovedByClient: form.welcomeMailApprovedByClient,
       });
       setChecklist(data.checklist);
       toast.success('Details saved');
@@ -148,6 +154,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
     !checklist.obMeetingScheduledAt && 'OB meeting date/time',
     !checklist.obMeetingLocation && 'OB meeting location',
     !checklist.notes?.trim() && 'Notes',
+    !form.welcomeMailApprovedByClient && 'Welcome mail approved by client',
+    !hasWelcomeMailScreenshot && 'Welcome mail approval screenshot',
     !clientEmail && "Client's email",
   ].filter(Boolean) as string[];
 
@@ -174,6 +182,19 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         <div className={`text-xs px-3 py-2 rounded-lg ${hasObQuote ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
           {hasObQuote ? '✓' : '⚠'} OB Quote {hasObQuote ? 'uploaded' : '— upload in Files tab'}
         </div>
+        <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}
+        </div>
+        <label className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer ${form.welcomeMailApprovedByClient ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} ${!isEditable ? 'pointer-events-none opacity-70' : ''}`}>
+          <input
+            type="checkbox"
+            disabled={!isEditable || saving}
+            checked={form.welcomeMailApprovedByClient}
+            onChange={(e) => setForm((f) => ({ ...f, welcomeMailApprovedByClient: e.target.checked }))}
+            className="rounded border-gray-300"
+          />
+          Welcome mail wording approved by client
+        </label>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
@@ -251,8 +272,9 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           </button>
           <button
             onClick={() => setShowMailModal(true)}
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            disabled={saving || requiredMissing.length > 0}
+            title={requiredMissing.length > 0 ? `Missing: ${requiredMissing.join(', ')}` : undefined}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Mail size={13} strokeWidth={2.5} /> Share welcome mail
           </button>
