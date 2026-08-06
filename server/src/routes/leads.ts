@@ -302,6 +302,17 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
 
     const leadId = await generateLeadId();
 
+    // Task #77 — a CRE (or designer) with no BL of their own yet still needs
+    // this lead to reach a Business Lead, so fall back to round robin rather
+    // than leaving it unassigned. (The G5 auto-assign-on-transition trigger
+    // in PATCH /:id never fires for leads born already at MQL, so this
+    // create path needs its own resolution.)
+    let resolvedBLId = assignedBLId || (user.role === 'BL' ? user.id : (['CRE', 'DESIGNER'].includes(user.role) ? user.blId ?? undefined : undefined));
+    if (!resolvedBLId && ['CRE', 'DESIGNER'].includes(user.role)) {
+      const bl = await selectBLForLead();
+      if (bl) resolvedBLId = bl.id;
+    }
+
     const lead = await prisma.lead.create({
       data: {
         leadId,
@@ -322,7 +333,7 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
         intentRating: intentRating ? parseInt(intentRating) : undefined,
         // Auto-assign to creator based on role
         assignedDesignerId: assignedDesignerId || (['CRE', 'DESIGNER'].includes(user.role) ? user.id : undefined),
-        assignedBLId: assignedBLId || (user.role === 'BL' ? user.id : (['CRE', 'DESIGNER'].includes(user.role) && user.blId ? user.blId : undefined)),
+        assignedBLId: resolvedBLId,
         createdById: user.id,
         stage: 'MQL',
       },
@@ -418,6 +429,13 @@ leadsRouter.post(
 
       if (user.role === 'CRE') {
         assignedDesignerId = user.id;
+        // Task #77 — a CRE creating a lead directly (not via the ad-webhook
+        // qualification queue) has already qualified it, so it should get a
+        // round-robin BL immediately rather than sitting unassigned forever.
+        // (The G5 auto-assign-on-transition trigger in PATCH /:id never fires
+        // for leads born already at a stage, so this path needs its own call.)
+        const bl = await selectBLForLead();
+        if (bl) assignedBLId = bl.id;
       } else if (user.role === 'BL') {
         assignedBLId = user.id;
         if (designerId) {
@@ -676,6 +694,20 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     // permanently uneditable via any endpoint other than the exact field
     // that's missing. Format validation above still applies to any value
     // that IS supplied.
+    //
+    // expectedMoveIn / possessionTimeline are the exception: the primary
+    // lead-creation forms treat these as mandatory (Task #73), so clearing
+    // them back to blank via this same PATCH must be blocked too — otherwise
+    // the rule only holds at creation time and silently stops applying the
+    // moment someone edits an existing lead.
+    if (expectedMoveIn !== undefined && !expectedMoveIn) {
+      res.status(400).json({ error: 'Expected Move-in date cannot be cleared — it is a required field.' });
+      return;
+    }
+    if (possessionTimeline !== undefined && !possessionTimeline?.trim()) {
+      res.status(400).json({ error: 'Possession cannot be cleared — it is a required field.' });
+      return;
+    }
 
     const existing = await prisma.lead.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }

@@ -287,7 +287,7 @@ export default function LeadDetail() {
   const [possessionMode, setPossessionMode] = useState<'preset' | 'custom'>('preset');
   const [savingDetails, setSavingDetails] = useState(false);
 
-  const REQUIRED_EDIT_FIELDS = ['name', 'phone', 'projectType', 'scope', 'location'] as const;
+  const REQUIRED_EDIT_FIELDS = ['name', 'phone', 'projectType', 'scope', 'location', 'expectedMoveIn', 'possessionTimeline'] as const;
 
   const validateEditField = (key: string, value: string) => {
     let error: string | null = null;
@@ -459,7 +459,7 @@ export default function LeadDetail() {
     const changedKeys = (Object.keys(editDetails) as (keyof typeof EMPTY_EDIT)[]).filter(
       (key) => editDetails[key] !== originalEditDetails[key],
     );
-    const validatableKeys = ['name', 'phone', 'phone2', 'email', 'email2', 'projectType', 'scope', 'location'] as const;
+    const validatableKeys = ['name', 'phone', 'phone2', 'email', 'email2', 'projectType', 'scope', 'location', 'expectedMoveIn', 'possessionTimeline'] as const;
     const errors: Record<string, string> = {};
     for (const key of changedKeys) {
       if ((validatableKeys as readonly string[]).includes(key)) {
