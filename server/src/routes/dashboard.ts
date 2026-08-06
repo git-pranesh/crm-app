@@ -406,6 +406,13 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
             },
           },
           estimatedValue: { not: null },
+          // Defense-in-depth (task #89): the ONBOARDING_MEETING->DESIGN_IN_PROGRESS
+          // stage-gate (config/stageRequirements.ts) already refuses the
+          // transition until the DIP checklist is completed, so a lead cannot
+          // reach DIP without it. This filter makes that requirement explicit
+          // at the incentive query itself, rather than only relying on the
+          // gate having run correctly earlier.
+          dipChecklist: { completedAt: { not: null } },
         },
         _sum: { estimatedValue: true },
       }),
@@ -478,7 +485,14 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         by: ['assignedDesignerId'],
         where: {
           assignedDesignerId: { in: peerIds },
-          stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
+          // HANDED_OVER is kept unconditionally for legacy leads that predate
+          // the DIP checklist model; current-funnel DESIGN_IN_PROGRESS leads
+          // must have a completed DIP checklist (task #89 defense-in-depth —
+          // see bookingAchievedAgg above for the full rationale).
+          OR: [
+            { stage: 'DESIGN_IN_PROGRESS', dipChecklist: { completedAt: { not: null } } },
+            { stage: 'HANDED_OVER' },
+          ],
           updatedAt: { gte: rangeFrom, lte: rangeTo },
           estimatedValue: { not: null },
         },

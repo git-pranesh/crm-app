@@ -235,6 +235,7 @@ model User {
   intentRatingOverrides     IntentRatingLog[]
   designerProjects          Project[]
   uploadedFiles             LeadFile[]
+  uploadedQuoteFiles        QuoteFile[]
 
   /// Task #87 — project team assignment
   pdProjects                Project[]           @relation("ProjectPD")
@@ -521,8 +522,28 @@ model Quote {
 
   lead             Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
   discountRequests DiscountRequest[]
+  files            QuoteFile[]
 
   @@map("quotes")
+}
+
+/// Task #89 — the actual quote document, stored as a real attachment (private
+/// Supabase Storage object) rather than displayed as a bare external link.
+/// Mirrors the LeadFile pattern (see files.ts / LEAD_FILES_BUCKET).
+model QuoteFile {
+  id           String   @id @default(cuid())
+  quoteId      String
+  fileName     String
+  /// Path within the private `crm-quote-files` bucket
+  storagePath  String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  quote      Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation(fields: [uploadedById], references: [id])
+
+  @@index([quoteId])
+  @@map("quote_files")
 }
 
 model DiscountRequest {
@@ -538,8 +559,14 @@ model DiscountRequest {
   woodworkValueExGst Decimal?       @db.Decimal(12, 2)
   /// Total project value excluding GST
   totalValueExGst    Decimal?       @db.Decimal(12, 2)
-  /// Link to the quote (quote builder link or attachment URL)
+  /// Legacy link to the quote (quote builder link or attachment URL). Superseded
+  /// by the quoteFileName/quoteStoragePath attachment (task #89) — kept
+  /// read-only so pre-existing requests still display their old link.
   quoteLink          String?
+  /// Real file attachment for the quote document (private `crm-quote-files`
+  /// bucket), replacing the bare link above for all new requests.
+  quoteFileName      String?
+  quoteStoragePath   String?
   status             DiscountStatus @default(PENDING)
   /// Server-computed approval routing: SELF | BL | BRANCH_HEAD
   approverRole       String?

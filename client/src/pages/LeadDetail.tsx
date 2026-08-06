@@ -40,7 +40,7 @@ interface Lead {
   assignedBL?: { id: string; name: string } | null;
   assignedDesignerId?: string | null; assignedBLId?: string | null;
   currentOffer?: { id: string; name: string } | null;
-  project?: { id: string } | null;
+  project?: { id: string; projectCode?: string | null } | null;
   _count: { calls: number; meetings: number; followUpTasks: number };
 }
 
@@ -1712,6 +1712,7 @@ export default function LeadDetail() {
               <QuoteTab
                 leadId={leadId!}
                 leadRef={lead.leadId}
+                pid={lead.project?.projectCode}
                 name={lead.name}
                 phone={lead.phone}
                 email={lead.email}

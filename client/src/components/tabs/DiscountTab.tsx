@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Check, X, Tag, AlertTriangle, Info } from 'lucide-react';
-import { api } from '../../lib/api';
+import { Check, X, Tag, AlertTriangle, Info, Paperclip } from 'lucide-react';
+import { api, uploadFile } from '../../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../ui/ConfirmDialog';
 
@@ -12,7 +12,10 @@ interface DiscountRequest {
   reason: string;
   woodworkValueExGst?: number | null;
   totalValueExGst?: number | null;
+  /// Legacy link, superseded by the file attachment below (task #89).
   quoteLink?: string | null;
+  quoteFileName?: string | null;
+  quoteFileUrl?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approverRole?: string | null;  // 'SELF' | 'BL' | 'BRANCH_HEAD'
   isSpecialCase?: boolean;
@@ -106,7 +109,8 @@ export default function DiscountTab({ leadId }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirm, setConfirm] = useState<{ open: boolean }>({ open: false });
-  const [form, setForm] = useState({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
+  const [form, setForm] = useState({ woodworkValue: '', totalValue: '', discountPct: '', reason: '' });
+  const [quoteFile, setQuoteFile] = useState<File | null>(null);
 
   const userRole = getStoredRole();
   const isBL = userRole === 'BL' || userRole === 'BRANCH_HEAD';
@@ -156,15 +160,15 @@ export default function DiscountTab({ leadId }: Props) {
     setSubmitting(true);
     try {
       const total = Number(form.totalValue);
-      await api.post(`/leads/${leadId}/discount-request`, {
-        originalAmount: total,
-        amount: +(total * (1 - pctNum / 100)).toFixed(2),
-        discountPct: pctNum,
-        reason: form.reason,
-        woodworkValueExGst: Number(form.woodworkValue),
-        totalValueExGst: total,
-        quoteLink: form.quoteLink.trim() || undefined,
-      });
+      const fd = new FormData();
+      fd.set('originalAmount', String(total));
+      fd.set('amount', String(+(total * (1 - pctNum / 100)).toFixed(2)));
+      fd.set('discountPct', String(pctNum));
+      fd.set('reason', form.reason);
+      fd.set('woodworkValueExGst', form.woodworkValue);
+      fd.set('totalValueExGst', form.totalValue);
+      if (quoteFile) fd.set('quoteFile', quoteFile);
+      await uploadFile(`/leads/${leadId}/discount-request`, fd);
 
       const info = getApprovalInfo(pctNum, Number(form.woodworkValue));
       if (info.approverRole === 'SELF') {
@@ -172,7 +176,8 @@ export default function DiscountTab({ leadId }: Props) {
       } else {
         toast.success(`Request submitted — sent to ${info.approverRole === 'BL' ? 'your BL' : 'Branch Head'} for approval`);
       }
-      setForm({ woodworkValue: '', totalValue: '', discountPct: '', reason: '', quoteLink: '' });
+      setForm({ woodworkValue: '', totalValue: '', discountPct: '', reason: '' });
+      setQuoteFile(null);
       setShowForm(false);
       await loadRequests();
     } catch (e: any) {
@@ -375,14 +380,14 @@ export default function DiscountTab({ leadId }: Props) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Quote Attachment / Link
+                Quote Attachment
               </label>
               <input
-                type="url" value={form.quoteLink}
-                onChange={(e) => setForm({ ...form, quoteLink: e.target.value })}
-                placeholder="https://…"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
+                onChange={(e) => setQuoteFile(e.target.files?.[0] ?? null)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-600 file:mr-3 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
+              {quoteFile && <p className="text-xs text-gray-500 mt-1 truncate">{quoteFile.name}</p>}
             </div>
           </div>
 
@@ -487,7 +492,7 @@ export default function DiscountTab({ leadId }: Props) {
                 </div>
               </div>
 
-              {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteLink) && (
+              {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteFileUrl || req.quoteLink) && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
                   {req.woodworkValueExGst != null && (
                     <span>
@@ -513,11 +518,15 @@ export default function DiscountTab({ leadId }: Props) {
                       </span>
                     </span>
                   )}
-                  {req.quoteLink && (
-                    <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
-                      View quote
+                  {req.quoteFileUrl ? (
+                    <a href={req.quoteFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-600 underline">
+                      <Paperclip size={11} /> {req.quoteFileName ?? 'Quote attachment'}
                     </a>
-                  )}
+                  ) : req.quoteLink ? (
+                    <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
+                      View quote (legacy link)
+                    </a>
+                  ) : null}
                 </div>
               )}
 

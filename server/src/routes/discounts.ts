@@ -1,11 +1,25 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
+import { supabaseAdmin } from '../lib/supabase.js';
+import { isAuthorizedForLead } from '../lib/leadAuth.js';
 
 export const discountsRouter = Router();
 export const leadDiscountRouter = Router({ mergeParams: true });
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
+// Shared with quotes.ts's quote-document uploads (task #89) — same document type.
+const QUOTE_FILES_BUCKET = 'crm-quote-files';
+const ALLOWED_QUOTE_MIMES = new Set([
+  'application/pdf',
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+const ALLOWED_QUOTE_EXTS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp', 'xls', 'xlsx']);
 
 // ── Discount approval authority ceiling (used in approve/reject check) ────────
 const AUTHORITY_CEILING: Record<string, number> = {
@@ -58,15 +72,38 @@ const discountInclude = {
   forwardedBy: { select: { id: true, name: true } },
 } as const;
 
+// Hydrate a fresh 1-hour signed URL for each request's quote attachment
+// (never store long-lived URLs — mirrors files.ts/quotes.ts). Requests
+// created before this migration only have the legacy `quoteLink`, which is
+// left as-is for display.
+async function withQuoteFileUrl<T extends { quoteStoragePath: string | null }>(requests: T[]): Promise<(T & { quoteFileUrl?: string })[]> {
+  if (!supabaseAdmin) return requests;
+  return Promise.all(
+    requests.map(async (r) => {
+      if (!r.quoteStoragePath) return r;
+      const { data } = await supabaseAdmin!.storage.from(QUOTE_FILES_BUCKET).createSignedUrl(r.quoteStoragePath, 60 * 60);
+      return { ...r, quoteFileUrl: data?.signedUrl };
+    }),
+  );
+}
+
 // ── POST /api/leads/:leadId/discount-request ──────────────────────────────────
-leadDiscountRouter.post('/', verifyToken, async (req, res) => {
+// Task #89: the quote document is now a real attachment (multipart `quoteFile`
+// field), not a pasted link — mirrors files.ts/quotes.ts's upload pattern.
+leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, async (req, res) => {
   try {
     const { leadId } = req.params as { leadId: string };
     const user = req.user!;
 
-    const { originalAmount, amount, discountPct, reason, woodworkValueExGst, totalValueExGst, quoteLink } = req.body as {
-      originalAmount?: number; amount?: number; discountPct?: number; reason?: string;
-      woodworkValueExGst?: number; totalValueExGst?: number; quoteLink?: string;
+    // multer with a file field puts other fields on req.body as strings —
+    // numeric fields are parsed explicitly below.
+    const { originalAmount, amount, discountPct, reason, woodworkValueExGst, totalValueExGst } = {
+      originalAmount: req.body.originalAmount != null ? Number(req.body.originalAmount) : undefined,
+      amount: req.body.amount != null ? Number(req.body.amount) : undefined,
+      discountPct: req.body.discountPct != null ? Number(req.body.discountPct) : undefined,
+      reason: req.body.reason as string | undefined,
+      woodworkValueExGst: req.body.woodworkValueExGst != null ? Number(req.body.woodworkValueExGst) : undefined,
+      totalValueExGst: req.body.totalValueExGst != null ? Number(req.body.totalValueExGst) : undefined,
     };
 
     if (!originalAmount || !amount || !reason) {
@@ -89,6 +126,15 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
 
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+
+    // Task #89: this route accepts and stores a private file upload, so it
+    // must be scoped the same way as quotes.ts's lead-quote endpoints —
+    // otherwise any authenticated user could create/auto-approve a discount
+    // request (and attach a file) for a lead they have no access to.
+    if (!(await isAuthorizedForLead(lead, user))) {
+      res.status(403).json({ error: 'Not authorised to submit a discount request for this lead' });
+      return;
+    }
 
     // Check for existing pending request
     const existing = await prisma.discountRequest.findFirst({
@@ -113,6 +159,29 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
     // ≤ 10%: auto-approve (designer has authority; no upstream review needed)
     const isAutoApproved = approverRole === 'SELF';
 
+    // ── Quote document attachment (task #89 — real file, not a pasted link) ──
+    let quoteFileName: string | null = null;
+    let quoteStoragePath: string | null = null;
+    const file = req.file;
+    if (file) {
+      const ext = (file.originalname.split('.').pop() ?? '').toLowerCase();
+      if (!ALLOWED_QUOTE_MIMES.has(file.mimetype) || !ALLOWED_QUOTE_EXTS.has(ext)) {
+        res.status(400).json({ error: 'Unsupported quote file type. Allowed: PDF, images, Excel.' });
+        return;
+      }
+      if (!supabaseAdmin) { res.status(500).json({ error: 'Storage not configured' }); return; }
+
+      await supabaseAdmin.storage.createBucket(QUOTE_FILES_BUCKET, { public: false }).catch(() => {});
+      const storagePath = `discount-requests/${leadId}/${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from(QUOTE_FILES_BUCKET)
+        .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: false });
+      if (uploadError) { res.status(500).json({ error: uploadError.message }); return; }
+
+      quoteFileName = file.originalname;
+      quoteStoragePath = storagePath;
+    }
+
     const request = await prisma.discountRequest.create({
       data: {
         leadId,
@@ -123,7 +192,8 @@ leadDiscountRouter.post('/', verifyToken, async (req, res) => {
         reason,
         woodworkValueExGst,
         totalValueExGst,
-        quoteLink: quoteLink?.trim() || null,
+        quoteFileName,
+        quoteStoragePath,
         approverRole: isAutoApproved ? 'SELF' : approverRole,
         isSpecialCase,
         status: isAutoApproved ? 'APPROVED' : 'PENDING',
@@ -212,7 +282,7 @@ discountsRouter.get('/pending', verifyToken, requireRole('BL', 'BRANCH_HEAD'), a
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({ requests });
+    res.json({ requests: await withQuoteFileUrl(requests) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -233,7 +303,7 @@ discountsRouter.get('/', verifyToken, async (req, res) => {
       take: 100,
     });
 
-    res.json({ requests });
+    res.json({ requests: await withQuoteFileUrl(requests) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

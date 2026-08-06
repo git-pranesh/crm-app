@@ -10,7 +10,11 @@ interface DiscountRequest {
   id: string; status: string;
   originalAmount: number; amount: number; discountPct: number;
   reason: string; reviewerComment?: string | null;
-  woodworkValueExGst?: number | null; totalValueExGst?: number | null; quoteLink?: string | null;
+  woodworkValueExGst?: number | null; totalValueExGst?: number | null;
+  /// Legacy link, superseded by the file attachment below (task #89).
+  quoteLink?: string | null;
+  quoteFileName?: string | null;
+  quoteFileUrl?: string;
   forwardedToRole?: string | null;
   createdAt: string; reviewedAt?: string | null;
   lead: Lead;
@@ -273,8 +277,8 @@ export default function Discounts() {
                         <span>{relTime(req.createdAt)}</span>
                       </div>
 
-                      {/* Row 3: ex-GST values + quote link */}
-                      {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteLink) && (
+                      {/* Row 3: ex-GST values + quote attachment */}
+                      {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteFileUrl || req.quoteLink) && (
                         <div className="flex items-center gap-3 flex-wrap text-xs text-gray-500">
                           {req.woodworkValueExGst != null && (
                             <span>Woodwork ex-GST: <span className="text-gray-700 font-medium">{fmtVal(Number(req.woodworkValueExGst))}</span></span>
@@ -282,11 +286,15 @@ export default function Discounts() {
                           {req.totalValueExGst != null && (
                             <span>Total ex-GST: <span className="text-gray-700 font-medium">{fmtVal(Number(req.totalValueExGst))}</span></span>
                           )}
-                          {req.quoteLink && (
-                            <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
-                              View quote
+                          {req.quoteFileUrl ? (
+                            <a href={req.quoteFileUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
+                              {req.quoteFileName ?? 'Quote attachment'}
                             </a>
-                          )}
+                          ) : req.quoteLink ? (
+                            <a href={req.quoteLink} target="_blank" rel="noopener noreferrer" className="text-brand-600 underline">
+                              View quote (legacy link)
+                            </a>
+                          ) : null}
                         </div>
                       )}
 

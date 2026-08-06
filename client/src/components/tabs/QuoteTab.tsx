@@ -1,7 +1,13 @@
-import { useState } from 'react';
-import { FileText, X as XIcon, RefreshCw } from 'lucide-react';
-import { api } from '../../lib/api';
+import { useState, useRef } from 'react';
+import { FileText, X as XIcon, RefreshCw, Paperclip, Upload } from 'lucide-react';
+import { api, uploadFile } from '../../lib/api';
 import toast from 'react-hot-toast';
+
+interface QuoteFile {
+  id: string;
+  fileName: string;
+  signedUrl?: string;
+}
 
 interface Quote {
   id: string;
@@ -10,11 +16,13 @@ interface Quote {
   discountPct?: number;
   status: string;
   createdAt: string;
+  files?: QuoteFile[];
 }
 
 interface Props {
   leadId: string;
   leadRef: string;
+  pid?: string | null;
   name?: string;
   phone?: string;
   email?: string | null;
@@ -26,10 +34,12 @@ interface Props {
 
 const QUOTE_BUILDER_URL = import.meta.env.VITE_QUOTE_BUILDER_URL ?? 'https://proposals.interiorsbydex.com';
 
-export default function QuoteTab({ leadId, leadRef, name, phone, email, projectType, scope, location, estimatedValue }: Props) {
+export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, projectType, scope, location, estimatedValue }: Props) {
   const [showIframe, setShowIframe] = useState(false);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadQuotes = async () => {
     setLoadingQuotes(true);
@@ -45,10 +55,26 @@ export default function QuoteTab({ leadId, leadRef, name, phone, email, projectT
 
   useState(() => { loadQuotes(); });
 
+  const handleAttach = async (quoteId: string, file: File) => {
+    setUploadingFor(quoteId);
+    try {
+      const fd = new FormData();
+      fd.set('file', file);
+      await uploadFile(`/quotes/${quoteId}/files`, fd);
+      toast.success('Quote document attached');
+      await loadQuotes();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not attach file');
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
   // Prefill the external Quote Builder with everything the CRM already knows
   // about this lead so nothing has to be re-typed there.
   const prefillParams = new URLSearchParams();
   prefillParams.set('leadId', leadRef);
+  if (pid) prefillParams.set('pid', pid);
   if (name) prefillParams.set('name', name);
   if (phone) prefillParams.set('phone', phone);
   if (email) prefillParams.set('email', email);
@@ -127,28 +153,63 @@ export default function QuoteTab({ leadId, leadRef, name, phone, email, projectT
       ) : (
         <div className="space-y-3">
           {quotes.map((q) => (
-            <div key={q.id} className="bg-white border border-gray-200 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[q.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {q.status}
-                  </span>
-                  {q.quoteBuilderRef && (
-                    <span className="text-xs text-gray-400 font-mono">Ref: {q.quoteBuilderRef}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {q.amount && <span className="font-semibold text-gray-900">{formatINR(q.amount)}</span>}
-                  {q.discountPct && q.discountPct > 0 && (
-                    <span className="text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
-                      {Number(q.discountPct).toFixed(1)}% off
+            <div key={q.id} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${STATUS_COLORS[q.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {q.status}
                     </span>
-                  )}
+                    {q.quoteBuilderRef && (
+                      <span className="text-xs text-gray-400 font-mono">Ref: {q.quoteBuilderRef}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {q.amount && <span className="font-semibold text-gray-900">{formatINR(q.amount)}</span>}
+                    {q.discountPct && q.discountPct > 0 && (
+                      <span className="text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded">
+                        {Number(q.discountPct).toFixed(1)}% off
+                      </span>
+                    )}
+                  </div>
                 </div>
+                <span className="text-xs text-gray-400">
+                  {new Date(q.createdAt).toLocaleDateString('en-IN')}
+                </span>
               </div>
-              <span className="text-xs text-gray-400">
-                {new Date(q.createdAt).toLocaleDateString('en-IN')}
-              </span>
+
+              {/* ── Quote document attachments (task #89) ─────────────────── */}
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+                {(q.files ?? []).map((f) => (
+                  <a
+                    key={f.id}
+                    href={f.signedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-brand-600 bg-brand-50 px-2 py-1 rounded-lg hover:bg-brand-100 transition-colors"
+                  >
+                    <Paperclip size={11} /> {f.fileName}
+                  </a>
+                ))}
+                <input
+                  ref={(el) => { fileInputRefs.current[q.id] = el; }}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleAttach(q.id, file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRefs.current[q.id]?.click()}
+                  disabled={uploadingFor === q.id}
+                  className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  <Upload size={11} /> {uploadingFor === q.id ? 'Uploading…' : 'Attach document'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -43,11 +43,19 @@ export async function runPerformanceRecalc(): Promise<{ updated: number }> {
       prisma.lead.count({ where: { assignedDesignerId: designer.id } }),
       // Conversion counts leads that reached Design in Progress — the funnel's
       // new terminal/incentive-trigger stage (Onboarding no longer counts;
-      // HANDED_OVER kept for legacy leads so historical conversions aren't lost).
+      // HANDED_OVER kept unconditionally for legacy leads that predate the
+      // DIP checklist model). Current-funnel DESIGN_IN_PROGRESS leads must
+      // additionally have a completed DIP checklist (task #89
+      // defense-in-depth — the ONBOARDING_MEETING->DESIGN_IN_PROGRESS
+      // stage-gate already refuses this transition otherwise, but this makes
+      // the requirement explicit at the incentive-driving query itself).
       prisma.lead.count({
         where: {
           assignedDesignerId: designer.id,
-          stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
+          OR: [
+            { stage: 'DESIGN_IN_PROGRESS', dipChecklist: { completedAt: { not: null } } },
+            { stage: 'HANDED_OVER' },
+          ],
         },
       }),
       prisma.lead.aggregate({
@@ -102,7 +110,12 @@ export const performanceRecalcWorker = new Worker(
         prisma.lead.count({
           where: {
             assignedDesignerId: designer.id,
-            stage: { in: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
+            // See runPerformanceRecalc() above for the DIP-checklist
+            // defense-in-depth rationale (task #89).
+            OR: [
+              { stage: 'DESIGN_IN_PROGRESS', dipChecklist: { completedAt: { not: null } } },
+              { stage: 'HANDED_OVER' },
+            ],
           },
         }),
         prisma.lead.aggregate({
