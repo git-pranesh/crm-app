@@ -8,6 +8,8 @@ import { runPerformanceRecalc } from '../jobs/performanceRecalc.js';
 import { SALES_STAGE_SLA, type StageSlaThreshold } from '../config/slaConfig.js';
 import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { getEffectiveMailTemplates, setMailTemplateOverride, resetMailTemplateOverride, MAIL_TEMPLATES } from '../lib/mailTemplates.js';
+import { logActivity } from '../lib/activityLog.js';
+import { createNotification } from '../lib/notifications.js';
 
 export const adminRouter = Router();
 
@@ -160,6 +162,80 @@ adminRouter.patch('/users/:id', async (req, res) => {
       },
     });
     res.json({ user });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/admin/projects/:id/pd — assign/clear "Project Designer" ───────
+// Task #87 — admin-portal-only control. `userId: null` clears the assignment.
+adminRouter.patch('/projects/:id/pd', async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { userId } = req.body as { userId?: string | null };
+
+    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true } } } });
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+    if (userId) {
+      const candidate = await prisma.user.findUnique({ where: { id: userId } });
+      if (!candidate || !candidate.isActive || candidate.role !== 'DESIGNER') {
+        res.status(400).json({ error: 'userId must be an active DESIGNER user' });
+        return;
+      }
+    }
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { pdUserId: userId || null },
+      include: { pd: { select: { id: true, name: true } } },
+    });
+
+    await logActivity(user.id, 'PROJECT_PD_ASSIGNED', project.lead.id, { projectId: id, pdUserId: userId || null });
+    if (userId) {
+      await createNotification(userId, 'PD_ASSIGNED', `You were assigned as Project Designer (PD) for lead ${project.lead.leadId}`, project.lead.id);
+    }
+
+    res.json({ project: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/admin/projects/:id/dtl — assign/clear "Design Team Lead" ──────
+// Restricted to users carrying the DESIGN_TEAM_LEAD designation, so this
+// stays consistent with the existing (display-only) Designation system
+// rather than introducing a second, disconnected notion of "team lead".
+adminRouter.patch('/projects/:id/dtl', async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { userId } = req.body as { userId?: string | null };
+
+    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true } } } });
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+    if (userId) {
+      const candidate = await prisma.user.findUnique({ where: { id: userId } });
+      if (!candidate || !candidate.isActive || candidate.designation !== 'DESIGN_TEAM_LEAD') {
+        res.status(400).json({ error: 'userId must be an active user with the Design Team Lead designation' });
+        return;
+      }
+    }
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { dtlUserId: userId || null },
+      include: { dtl: { select: { id: true, name: true } } },
+    });
+
+    await logActivity(user.id, 'PROJECT_DTL_ASSIGNED', project.lead.id, { projectId: id, dtlUserId: userId || null });
+    if (userId) {
+      await createNotification(userId, 'DTL_ASSIGNED', `You were assigned as Design Team Lead (DTL) for lead ${project.lead.leadId}`, project.lead.id);
+    }
+
+    res.json({ project: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

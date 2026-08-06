@@ -19,7 +19,12 @@ export type NotificationType =
   | 'LEAD_REACTIVATED'
   | 'MEETING_SCHEDULED'
   | 'CALL_LOGGED'
-  | 'TASK_SCHEDULED';
+  | 'TASK_SCHEDULED'
+  | 'TEAM_MEMBER_REQUESTED'
+  | 'TEAM_MEMBER_APPROVED'
+  | 'TEAM_MEMBER_REJECTED'
+  | 'PD_ASSIGNED'
+  | 'DTL_ASSIGNED';
 
 export async function createNotification(
   userId: string,

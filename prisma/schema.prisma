@@ -170,6 +170,13 @@ enum CollectionStatus {
   COLLECTED
 }
 
+/// Approval state for a project team-member request (task #87).
+enum TeamMemberStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─── Models ──────────────────────────────────────────────────────────────────
 
 model User {
@@ -214,6 +221,13 @@ model User {
   intentRatingOverrides     IntentRatingLog[]
   designerProjects          Project[]
   uploadedFiles             LeadFile[]
+
+  /// Task #87 — project team assignment
+  pdProjects                Project[]           @relation("ProjectPD")
+  dtlProjects               Project[]           @relation("ProjectDTL")
+  projectTeamMemberships    ProjectTeamMember[] @relation("ProjectTeamMemberUser")
+  projectTeamMemberRequests ProjectTeamMember[] @relation("ProjectTeamMemberRequestedBy")
+  projectTeamMemberReviews  ProjectTeamMember[] @relation("ProjectTeamMemberReviewedBy")
 
   @@map("users")
 }
@@ -918,14 +932,55 @@ model Project {
   outstandingAmount  Float         @default(0)
   location           String?
   handoverTargetDate DateTime?
+  /// Task #87 — admin-portal-only "Project Designer" assignment, distinct
+  /// from `designerId` (the lead's originally-assigned designer). Set only
+  /// via PATCH /api/admin/projects/:id/pd.
+  pdUserId           String?
+  pd                 User?         @relation("ProjectPD", fields: [pdUserId], references: [id])
+  /// Task #87 — admin-portal-only "Design Team Lead" assignment for this
+  /// project. Set only via PATCH /api/admin/projects/:id/dtl.
+  dtlUserId          String?
+  dtl                User?         @relation("ProjectDTL", fields: [dtlUserId], references: [id])
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
   npsResponses   NPSResponse[]
   collections    Collection[]
   attentionFlags ProjectAttentionFlag[]
+  teamMembers    ProjectTeamMember[]
 
   @@map("projects")
+}
+
+/// Task #87 — additional designers on a project's team, beyond the project's
+/// own `designerId`. A DESIGNER-initiated request stays PENDING until a BL
+/// approves/rejects it; a BL/BRANCH_HEAD-initiated request is auto-approved.
+model ProjectTeamMember {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User             @relation("ProjectTeamMemberUser", fields: [userId], references: [id])
+  /// Enforced (not just UI convention) — see server/src/routes/projects.ts:
+  /// at most one APPROVED team member per project may have isPrimary=true.
+  isPrimary       Boolean          @default(false)
+  status          TeamMemberStatus @default(PENDING)
+  requestedById   String
+  requestedBy     User             @relation("ProjectTeamMemberRequestedBy", fields: [requestedById], references: [id])
+  reviewedById    String?
+  reviewedBy      User?            @relation("ProjectTeamMemberReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?
+  /// Required when status is set to REJECTED.
+  rejectionReason String?
+  createdAt       DateTime         @default(now())
+
+  // A user can only have one active (non-rejected-and-resubmittable) row per
+  // project at a time; rejected rows are kept for history and a fresh request
+  // creates a new row rather than reusing the old one (enforced in the route,
+  // not by this constraint alone, since REJECTED rows must remain queryable).
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_team_members")
 }
 
 model Collection {

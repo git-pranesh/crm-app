@@ -23,6 +23,11 @@ export const NOTIF_ICON: Record<string, string> = {
   INTENT_RATING_CHANGED: '🎯',
   ON_HOLD_REOPEN: '🔓',
   LEAD_REACTIVATED: '🔁',
+  TEAM_MEMBER_REQUESTED: '🙋',
+  TEAM_MEMBER_APPROVED: '✅',
+  TEAM_MEMBER_REJECTED: '🚫',
+  PD_ASSIGNED: '🏗️',
+  DTL_ASSIGNED: '🏗️',
 };
 
 export const NOTIF_LABEL: Record<string, string> = {
@@ -45,6 +50,11 @@ export const NOTIF_LABEL: Record<string, string> = {
   INTENT_RATING_CHANGED: 'Intent rating changed',
   ON_HOLD_REOPEN: 'On-hold reopened',
   LEAD_REACTIVATED: 'Lead reactivated',
+  TEAM_MEMBER_REQUESTED: 'Team member request',
+  TEAM_MEMBER_APPROVED: 'Team member approved',
+  TEAM_MEMBER_REJECTED: 'Team member rejected',
+  PD_ASSIGNED: 'PD assigned',
+  DTL_ASSIGNED: 'DTL assigned',
 };
 
 export function notifIcon(type: string): string {

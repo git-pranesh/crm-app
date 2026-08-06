@@ -633,6 +633,7 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
         leadOffers: { include: { offer: { select: { id: true, name: true } } }, orderBy: { appliedAt: 'desc' } },
         emailLogs: { orderBy: { sentAt: 'desc' }, take: 50 },
         smsLogs: { orderBy: { createdAt: 'desc' }, take: 50 },
+        project: { select: { id: true } },
       },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }

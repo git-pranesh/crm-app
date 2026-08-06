@@ -15,11 +15,12 @@ import WhatsAppTab from '../components/tabs/WhatsAppTab';
 import DiscountTab from '../components/tabs/DiscountTab';
 import QuoteTab from '../components/tabs/QuoteTab';
 import FilesTab from '../components/tabs/FilesTab';
+import TeamTab from '../components/tabs/TeamTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 
-type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount' | 'files';
+type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount' | 'files' | 'team';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; phone2?: string;
@@ -39,6 +40,7 @@ interface Lead {
   assignedBL?: { id: string; name: string } | null;
   assignedDesignerId?: string | null; assignedBLId?: string | null;
   currentOffer?: { id: string; name: string } | null;
+  project?: { id: string } | null;
   _count: { calls: number; meetings: number; followUpTasks: number };
 }
 
@@ -660,6 +662,7 @@ export default function LeadDetail() {
     { id: 'quotes', label: 'Quotes' },
     { id: 'discount', label: 'Discount' },
     { id: 'files', label: 'Files' },
+    ...(lead?.project ? [{ id: 'team' as Tab, label: 'Team' }] : []),
   ];
 
   const latestQuote = quotes[0];
@@ -1621,6 +1624,9 @@ export default function LeadDetail() {
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
             {activeTab === 'files' && lead && (
               <FilesTab leadId={leadId!} currentStage={lead.stage} floorPlanUrl={lead.floorPlanUrl} />
+            )}
+            {activeTab === 'team' && lead?.project && (
+              <TeamTab projectId={lead.project.id} leadDisplayId={lead.leadId} />
             )}
           </div>
         </div>

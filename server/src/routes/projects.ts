@@ -3,8 +3,68 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
+import { isAuthorizedForProject, isBLForProject } from '../lib/projectAuth.js';
+import { createNotification } from '../lib/notifications.js';
 
 export const projectsRouter = Router();
+
+const TEAM_MEMBER_INCLUDE = {
+  user: { select: { id: true, name: true, role: true, isActive: true } },
+  requestedBy: { select: { id: true, name: true, role: true } },
+  reviewedBy: { select: { id: true, name: true } },
+} as const;
+
+async function findProjectForAuth(projectId: string) {
+  return prisma.project.findUnique({
+    where: { id: projectId },
+    include: { lead: { select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true } } },
+  });
+}
+
+/**
+ * Enforces "at most one APPROVED team member is flagged primary" (task #87).
+ *
+ * The original `Project.designerId` is always implicitly the project's
+ * primary designer (shown as "Project Designer" in the UI) unless a BL/
+ * BRANCH_HEAD explicitly designates a specific additional team member as
+ * primary instead. So this deliberately does NOT auto-pick a fallback
+ * "primary" the moment a team member is approved — an approved member with
+ * no explicit primary request stays `isPrimary=false`, leaving the original
+ * designer as the (implicit) primary. It only steps in to (a) apply an
+ * explicit `preferredPrimaryId` request, or (b) collapse an invalid state
+ * where more than one approved member ended up flagged primary.
+ */
+async function reconcilePrimary(
+  tx: any,
+  projectId: string,
+  preferredPrimaryId?: string,
+) {
+  const approved = await tx.projectTeamMember.findMany({
+    where: { projectId, status: 'APPROVED' },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (approved.length === 0) return;
+
+  const currentPrimaries = approved.filter((m: any) => m.isPrimary);
+  let keepId: string | undefined;
+  if (preferredPrimaryId && approved.some((m: any) => m.id === preferredPrimaryId)) {
+    keepId = preferredPrimaryId;
+  } else if (currentPrimaries.length === 1) {
+    keepId = currentPrimaries[0].id; // already valid — no change needed
+  } else if (currentPrimaries.length > 1) {
+    // Invalid state (shouldn't happen via normal flow) — collapse to the
+    // earliest-requested of the conflicting primaries.
+    keepId = currentPrimaries[0].id;
+  }
+  // else: zero current primaries and no explicit request — leave everyone
+  // false; the original project designer remains the implicit primary.
+
+  await Promise.all(
+    approved
+      .filter((m: any) => m.isPrimary !== (m.id === keepId))
+      .map((m: any) => tx.projectTeamMember.update({ where: { id: m.id }, data: { isPrimary: m.id === keepId } })),
+  );
+}
 
 // ── BL is view-only on projects ───────────────────────────────────────────────
 // BL can see everything a project exposes (list, pipeline, detail, files) but
@@ -20,16 +80,36 @@ function blockBLWrite(req: Request, res: Response, next: NextFunction): void {
 }
 
 // ── Build designer-scope where clause ─────────────────────────────────────────
+// Task #87: an APPROVED ProjectTeamMember has real working access to a
+// project, not just the original `designerId` owner — include those project
+// IDs in scope alongside the existing designerId-based rules.
+async function approvedTeamProjectIds(userId: string): Promise<string[]> {
+  const rows = await prisma.projectTeamMember.findMany({
+    where: { userId, status: 'APPROVED' },
+    select: { projectId: true },
+  });
+  return rows.map((r) => r.projectId);
+}
+
 async function buildProjectWhere(user: { id: string; role: string; blId?: string | null }) {
   if (user.role === 'DESIGNER' || user.role === 'CRE') {
-    return { designerId: user.id };
+    const teamProjectIds = await approvedTeamProjectIds(user.id);
+    return teamProjectIds.length > 0
+      ? { OR: [{ designerId: user.id }, { id: { in: teamProjectIds } }] }
+      : { designerId: user.id };
   }
   if (user.role === 'BL') {
     const members = await prisma.user.findMany({
       where: { blId: user.id, isActive: true },
       select: { id: true },
     });
-    return { designerId: { in: [user.id, ...members.map((m) => m.id)] } };
+    const memberIds = [user.id, ...members.map((m) => m.id)];
+    const teamProjectIds = (
+      await Promise.all(memberIds.map((id) => approvedTeamProjectIds(id)))
+    ).flat();
+    return teamProjectIds.length > 0
+      ? { OR: [{ designerId: { in: memberIds } }, { id: { in: teamProjectIds } }] }
+      : { designerId: { in: memberIds } };
   }
   return {}; // BRANCH_HEAD — all projects
 }
@@ -80,9 +160,13 @@ projectsRouter.get('/pipeline', verifyToken, async (req, res) => {
       return;
     }
 
+    const teamProjectIds = await approvedTeamProjectIds(user.id);
+
     const projects = await prisma.project.findMany({
       where: {
-        designerId: user.id,
+        ...(teamProjectIds.length > 0
+          ? { OR: [{ designerId: user.id }, { id: { in: teamProjectIds } }] }
+          : { designerId: user.id }),
         phase: { not: 'COMPLETED' },
       },
       include: {
@@ -157,19 +241,293 @@ projectsRouter.get('/:id', verifyToken, async (req, res) => {
     const project = await prisma.project.findUnique({
       where: { id: req.params.id },
       include: {
-        lead: { select: { id: true, leadId: true, name: true, phone: true, email: true } },
+        lead: { select: { id: true, leadId: true, name: true, phone: true, email: true, assignedDesignerId: true, assignedBLId: true } },
         designer: { select: { id: true, name: true } },
+        pd: { select: { id: true, name: true } },
+        dtl: { select: { id: true, name: true } },
         collections: { orderBy: { dueDate: 'asc' } },
         attentionFlags: { orderBy: { createdAt: 'desc' } },
         npsResponses: { orderBy: { createdAt: 'desc' } },
+        teamMembers: { include: TEAM_MEMBER_INCLUDE, orderBy: { createdAt: 'asc' } },
       },
     });
     if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    // Task #87 added team-member/PD/DTL data here — scope this route now that
+    // it carries more than the previously-unscoped collections/NPS summary.
+    if (!(await isAuthorizedForProject(project, req.user!))) {
+      res.status(403).json({ error: 'Not authorised to view this project' });
+      return;
+    }
     res.json({ project });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── GET /api/projects/:id/eligible-team-members — active designers not yet on the team ─
+// Available to DESIGNER/BL/BRANCH_HEAD (task #87: all three may initiate a
+// team-member request), scoped to project-authorized users only.
+projectsRouter.get('/:id/eligible-team-members', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const project = await findProjectForAuth(req.params.id);
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (!(await isAuthorizedForProject(project, user))) {
+      res.status(403).json({ error: 'Not authorised to view this project' });
+      return;
+    }
+
+    const existingIds = new Set(
+      (
+        await prisma.projectTeamMember.findMany({
+          where: { projectId: project.id, status: { in: ['PENDING', 'APPROVED'] } },
+          select: { userId: true },
+        })
+      ).map((m) => m.userId),
+    );
+    if (project.designerId) existingIds.add(project.designerId);
+
+    const designers = await prisma.user.findMany({
+      where: { role: 'DESIGNER', isActive: true, id: { notIn: [...existingIds] } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ designers });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/projects/:id/team-members — request/add a team member ──────────
+// DESIGNER requests require BL approval (created PENDING); BL/BRANCH_HEAD
+// additions take effect immediately (created APPROVED).
+projectsRouter.post(
+  '/:id/team-members',
+  verifyToken,
+  requireRole('DESIGNER', 'BL', 'BRANCH_HEAD'),
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const { userId, isPrimary } = req.body as { userId?: string; isPrimary?: boolean };
+
+      if (!userId?.trim()) {
+        res.status(400).json({ error: 'userId is required' });
+        return;
+      }
+
+      const project = await findProjectForAuth(req.params.id);
+      if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+      if (!(await isAuthorizedForProject(project, user))) {
+        res.status(403).json({ error: 'Not authorised to modify this project' });
+        return;
+      }
+
+      const candidate = await prisma.user.findUnique({ where: { id: userId } });
+      if (!candidate || !candidate.isActive || candidate.role !== 'DESIGNER') {
+        res.status(400).json({ error: 'userId must be an active DESIGNER user' });
+        return;
+      }
+      if (project.designerId === userId) {
+        res.status(400).json({ error: 'This user is already the project designer' });
+        return;
+      }
+
+      const existing = await prisma.projectTeamMember.findFirst({
+        where: { projectId: project.id, userId, status: { in: ['PENDING', 'APPROVED'] } },
+      });
+      if (existing) {
+        res.status(409).json({ error: `This user already has a ${existing.status.toLowerCase()} team-member entry on this project` });
+        return;
+      }
+
+      // BL/BRANCH_HEAD additions are self-approving — a BL approving their
+      // own addition would be a no-op step, and BRANCH_HEAD outranks the
+      // approval gate entirely. Only a DESIGNER-initiated request needs a
+      // BL's sign-off.
+      const autoApprove = user.role === 'BL' || user.role === 'BRANCH_HEAD';
+
+      const member = await prisma.$transaction(async (tx) => {
+        const created = await tx.projectTeamMember.create({
+          data: {
+            projectId: project.id,
+            userId,
+            isPrimary: !!isPrimary,
+            status: autoApprove ? 'APPROVED' : 'PENDING',
+            requestedById: user.id,
+            ...(autoApprove && { reviewedById: user.id, reviewedAt: new Date() }),
+          },
+          include: TEAM_MEMBER_INCLUDE,
+        });
+        if (autoApprove) {
+          await reconcilePrimary(tx, project.id, isPrimary ? created.id : undefined);
+        }
+        return tx.projectTeamMember.findUnique({ where: { id: created.id }, include: TEAM_MEMBER_INCLUDE });
+      });
+
+      await logActivity(user.id, autoApprove ? 'PROJECT_TEAM_MEMBER_ADDED' : 'PROJECT_TEAM_MEMBER_REQUESTED', project.lead.id, {
+        projectId: project.id, memberUserId: userId, autoApprove,
+      });
+
+      if (autoApprove) {
+        await createNotification(userId, 'TEAM_MEMBER_APPROVED', `You were added to the project team for lead ${project.lead.leadId}`, project.lead.id);
+      } else {
+        // Notify the project's BL(s) that a request needs approval.
+        const blIds = new Set<string>();
+        if (project.lead.assignedBLId) blIds.add(project.lead.assignedBLId);
+        if (project.designerId) {
+          const designer = await prisma.user.findUnique({ where: { id: project.designerId }, select: { blId: true } });
+          if (designer?.blId) blIds.add(designer.blId);
+        }
+        await Promise.all(
+          [...blIds].map((blId) =>
+            createNotification(blId, 'TEAM_MEMBER_REQUESTED', `${user.name} requested to add a team member to project for lead ${project.lead.leadId}`, project.lead.id),
+          ),
+        );
+      }
+
+      res.status(201).json({ member });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── PATCH /api/projects/:id/team-members/:memberId/approve — BL only ─────────
+projectsRouter.patch(
+  '/:id/team-members/:memberId/approve',
+  verifyToken,
+  requireRole('BL'),
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const { id, memberId } = req.params;
+      const { isPrimary } = req.body as { isPrimary?: boolean };
+
+      const project = await findProjectForAuth(id);
+      if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+      if (!(await isBLForProject(project, user))) {
+        res.status(403).json({ error: 'Only the project\'s BL can approve team-member requests' });
+        return;
+      }
+
+      const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
+      if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member request not found' }); return; }
+      if (member.status !== 'PENDING') {
+        res.status(400).json({ error: `Cannot approve a request that is already ${member.status}` });
+        return;
+      }
+
+      const resolvedPrimary = isPrimary !== undefined ? isPrimary : member.isPrimary;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const approved = await tx.projectTeamMember.update({
+          where: { id: memberId },
+          data: { status: 'APPROVED', reviewedById: user.id, reviewedAt: new Date(), isPrimary: resolvedPrimary },
+          include: TEAM_MEMBER_INCLUDE,
+        });
+        await reconcilePrimary(tx, id, resolvedPrimary ? approved.id : undefined);
+        return tx.projectTeamMember.findUnique({ where: { id: memberId }, include: TEAM_MEMBER_INCLUDE });
+      });
+
+      await logActivity(user.id, 'PROJECT_TEAM_MEMBER_APPROVED', project.lead.id, { projectId: id, memberId });
+      await createNotification(member.userId, 'TEAM_MEMBER_APPROVED', `You were approved as a team member for lead ${project.lead.leadId}`, project.lead.id);
+      await createNotification(member.requestedById, 'TEAM_MEMBER_APPROVED', `Your team-member request for lead ${project.lead.leadId} was approved`, project.lead.id);
+
+      res.json({ member: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── PATCH /api/projects/:id/team-members/:memberId/reject — BL only ──────────
+projectsRouter.patch(
+  '/:id/team-members/:memberId/reject',
+  verifyToken,
+  requireRole('BL'),
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const { id, memberId } = req.params;
+      const { reason } = req.body as { reason?: string };
+
+      if (!reason?.trim()) {
+        res.status(400).json({ error: 'A reason is required to reject a team-member request' });
+        return;
+      }
+
+      const project = await findProjectForAuth(id);
+      if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+      if (!(await isBLForProject(project, user))) {
+        res.status(403).json({ error: 'Only the project\'s BL can reject team-member requests' });
+        return;
+      }
+
+      const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
+      if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member request not found' }); return; }
+      if (member.status !== 'PENDING') {
+        res.status(400).json({ error: `Cannot reject a request that is already ${member.status}` });
+        return;
+      }
+
+      const updated = await prisma.projectTeamMember.update({
+        where: { id: memberId },
+        data: { status: 'REJECTED', reviewedById: user.id, reviewedAt: new Date(), rejectionReason: reason.trim() },
+        include: TEAM_MEMBER_INCLUDE,
+      });
+
+      await logActivity(user.id, 'PROJECT_TEAM_MEMBER_REJECTED', project.lead.id, { projectId: id, memberId, reason: reason.trim() });
+      await createNotification(member.requestedById, 'TEAM_MEMBER_REJECTED', `Your team-member request for lead ${project.lead.leadId} was rejected: ${reason.trim()}`, project.lead.id);
+
+      res.json({ member: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+// ── PATCH /api/projects/:id/team-members/:memberId/primary — switch primary ──
+// Lets a BL/BRANCH_HEAD re-designate which already-APPROVED member is
+// primary after the fact, without re-running the approval flow.
+projectsRouter.patch(
+  '/:id/team-members/:memberId/primary',
+  verifyToken,
+  requireRole('BL', 'BRANCH_HEAD'),
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const { id, memberId } = req.params;
+
+      const project = await findProjectForAuth(id);
+      if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+      if (user.role === 'BL' && !(await isBLForProject(project, user))) {
+        res.status(403).json({ error: 'Not authorised to manage this project\'s team' });
+        return;
+      }
+
+      const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
+      if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member not found' }); return; }
+      if (member.status !== 'APPROVED') {
+        res.status(400).json({ error: 'Only an approved team member can be marked primary' });
+        return;
+      }
+
+      await prisma.$transaction((tx) => reconcilePrimary(tx, id, memberId));
+      const updated = await prisma.projectTeamMember.findMany({
+        where: { projectId: id, status: 'APPROVED' },
+        include: TEAM_MEMBER_INCLUDE,
+        orderBy: { createdAt: 'asc' },
+      });
+
+      await logActivity(user.id, 'PROJECT_TEAM_MEMBER_PRIMARY_CHANGED', project.lead.id, { projectId: id, memberId });
+
+      res.json({ members: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // ── PATCH /api/projects/:id — update phase, health, progress, dates ───────────
 projectsRouter.patch('/:id', verifyToken, blockBLWrite, async (req, res) => {
@@ -181,8 +539,12 @@ projectsRouter.patch('/:id', verifyToken, blockBLWrite, async (req, res) => {
       handoverTargetDate?: string; outstandingAmount?: number;
     };
 
-    const existing = await prisma.project.findUnique({ where: { id } });
+    const existing = await findProjectForAuth(id);
     if (!existing) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (!(await isAuthorizedForProject(existing, user))) {
+      res.status(403).json({ error: 'Not authorised to modify this project' });
+      return;
+    }
 
     const project = await prisma.project.update({
       where: { id },
@@ -222,11 +584,12 @@ projectsRouter.post('/:id/attention-flag', verifyToken, blockBLWrite, async (req
       return;
     }
 
-    const project = await prisma.project.findUnique({
-      where: { id },
-      include: { lead: { select: { id: true, leadId: true } } },
-    });
+    const project = await findProjectForAuth(id);
     if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (!(await isAuthorizedForProject(project, user))) {
+      res.status(403).json({ error: 'Not authorised to modify this project' });
+      return;
+    }
 
     const flag = await prisma.projectAttentionFlag.create({
       data: { projectId: id, category, description },
@@ -252,18 +615,19 @@ projectsRouter.patch('/:id/attention-flag/:flagId/resolve', verifyToken, blockBL
     if (!flag) { res.status(404).json({ error: 'Flag not found' }); return; }
     if (flag.projectId !== id) { res.status(400).json({ error: 'Flag does not belong to this project' }); return; }
 
+    const project = await findProjectForAuth(id);
+    if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (!(await isAuthorizedForProject(project, user))) {
+      res.status(403).json({ error: 'Not authorised to modify this project' });
+      return;
+    }
+
     const resolved = await prisma.projectAttentionFlag.update({
       where: { id: flagId },
       data: { resolvedAt: new Date() },
     });
 
-    const project = await prisma.project.findUnique({
-      where: { id },
-      include: { lead: { select: { id: true } } },
-    });
-    if (project?.lead) {
-      await logActivity(user.id, 'ATTENTION_FLAG_RESOLVED', project.lead.id, { flagId });
-    }
+    await logActivity(user.id, 'ATTENTION_FLAG_RESOLVED', project.lead.id, { flagId });
 
     res.json({ flag: resolved });
   } catch (err: any) {
