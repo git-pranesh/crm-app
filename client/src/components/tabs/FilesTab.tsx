@@ -42,6 +42,7 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   GENERATED_QUOTE: 'Generated Quote',
   PAYMENT_SCREENSHOT: 'Payment Screenshot',
   OB_QUOTE: 'OB Quote',
+  WELCOME_MAIL_SCREENSHOT: 'Welcome Mail Approval Screenshot',
   OTHER: 'Other',
 };
 
@@ -71,6 +72,7 @@ const FILE_TYPE_OPTIONS = [
   { value: 'GENERATED_QUOTE', label: 'Generated Quote' },
   { value: 'PAYMENT_SCREENSHOT', label: 'Payment Screenshot' },
   { value: 'OB_QUOTE', label: 'OB Quote' },
+  { value: 'WELCOME_MAIL_SCREENSHOT', label: 'Welcome Mail Approval Screenshot' },
   { value: 'OTHER', label: 'Other' },
 ];
 

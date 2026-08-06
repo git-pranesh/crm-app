@@ -112,6 +112,8 @@ enum LeadFileType {
   PAYMENT_SCREENSHOT
   /// Task #54 — PD→OB checklist upload
   OB_QUOTE
+  /// Task #74 — OB→OBM checklist upload: proof the client approved the welcome mail wording
+  WELCOME_MAIL_SCREENSHOT
   OTHER
 }
 
@@ -682,6 +684,9 @@ model PDOBChecklist {
   leadId               String    @unique
   paymentValue         Float?
   projectValue         Float?
+  /// Furniture value (pre-GST, post-discount) — kept separate from projectValue,
+  /// which excludes furniture.
+  furnitureValue       Float?
   obMeetingScheduledAt DateTime?
   obMeetingLocation    String?
   notes                String?
@@ -728,6 +733,10 @@ model OBOBMChecklist {
   cancellationConfirmed    Boolean   @default(false)
   npsTriggered             Boolean   @default(false)
   npsTriggeredAt           DateTime?
+  /// Client confirmed (verbally/in writing) that the welcome mail content is
+  /// approved — evidenced by a screenshot uploaded as a WELCOME_MAIL_SCREENSHOT
+  /// LeadFile.
+  welcomeMailApprovedByClient Boolean @default(false)
   obmMailSent              Boolean   @default(false)
   obmMailSentAt            DateTime?
   completedAt              DateTime?

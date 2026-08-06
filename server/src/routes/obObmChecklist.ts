@@ -97,11 +97,16 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
 
     const checklist = await prisma.oBOBMChecklist.findUnique({ where: { leadId } });
+    const welcomeMailScreenshot = await prisma.leadFile.findFirst({
+      where: { leadId, fileType: 'WELCOME_MAIL_SCREENSHOT' },
+      select: { id: true },
+    });
     res.json({
       checklist: checklist ?? null,
       docItems: DOC_ITEMS.map((key) => ({ key, label: DOC_ITEM_LABELS[key] })),
       timelineFields: TIMELINE_FIELDS,
       obmMailTemplate: obmMailTemplate(lead.name),
+      hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
     });
   } catch (err: any) {
     console.error('[ob-obm-checklist:get]', err.message);
@@ -141,6 +146,9 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
       if (body[doneKey] !== undefined) data[doneKey] = !!body[doneKey];
       if (body[confirmedKey] !== undefined) data[confirmedKey] = !!body[confirmedKey];
     }
+    if (body.welcomeMailApprovedByClient !== undefined) {
+      data.welcomeMailApprovedByClient = !!body.welcomeMailApprovedByClient;
+    }
 
     const checklist = await prisma.oBOBMChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'OB_OBM_CHECKLIST_UPDATED', leadId, data);
@@ -170,13 +178,21 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     if (!checklist) { res.status(404).json({ error: 'OB→OBM checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'OBM mail already sent.' }); return; }
 
-    const generatedQuote = await prisma.leadFile.findFirst({
-      where: { leadId, fileType: 'GENERATED_QUOTE', stage: 'ONBOARDING' },
-      select: { id: true },
-    });
+    const [generatedQuote, welcomeMailScreenshot] = await Promise.all([
+      prisma.leadFile.findFirst({
+        where: { leadId, fileType: 'GENERATED_QUOTE', stage: 'ONBOARDING' },
+        select: { id: true },
+      }),
+      prisma.leadFile.findFirst({
+        where: { leadId, fileType: 'WELCOME_MAIL_SCREENSHOT' },
+        select: { id: true },
+      }),
+    ]);
 
     const missing: string[] = [];
     if (!generatedQuote) missing.push('Generated quote document (Files → OB)');
+    if (!checklist.welcomeMailApprovedByClient) missing.push('Welcome mail approved by client');
+    if (!welcomeMailScreenshot) missing.push('Welcome mail approval screenshot (Files tab)');
     if (!allDocsDone(checklist)) {
       for (const item of DOC_ITEMS) {
         if (!(checklist as any)[`${item}Done`]) missing.push(DOC_ITEM_LABELS[item]);

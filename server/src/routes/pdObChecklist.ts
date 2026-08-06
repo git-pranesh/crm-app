@@ -93,12 +93,13 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
     }
 
     const {
-      paymentValue, projectValue, obMeetingScheduledAt, obMeetingLocation, notes,
+      paymentValue, projectValue, furnitureValue, obMeetingScheduledAt, obMeetingLocation, notes,
     } = req.body as Record<string, any>;
 
     const data: Record<string, any> = {};
     if (paymentValue !== undefined) data.paymentValue = paymentValue === '' || paymentValue === null ? null : parseFloat(paymentValue);
     if (projectValue !== undefined) data.projectValue = projectValue === '' || projectValue === null ? null : parseFloat(projectValue);
+    if (furnitureValue !== undefined) data.furnitureValue = furnitureValue === '' || furnitureValue === null ? null : parseFloat(furnitureValue);
     if (obMeetingScheduledAt !== undefined) data.obMeetingScheduledAt = obMeetingScheduledAt ? new Date(obMeetingScheduledAt) : null;
     if (obMeetingLocation !== undefined) data.obMeetingLocation = obMeetingLocation?.trim() || null;
     if (notes !== undefined) data.notes = notes?.trim() || null;
@@ -140,7 +141,8 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!paymentScreenshot) missing.push('Payment screenshot (Files tab)');
     if (!obQuote) missing.push('OB Quote (Files tab)');
     if (checklist.paymentValue == null) missing.push('Payment value');
-    if (checklist.projectValue == null) missing.push('Project value');
+    if (checklist.projectValue == null) missing.push('Project value (excl. furniture)');
+    if (checklist.furnitureValue == null) missing.push('Furniture value');
     if (!checklist.obMeetingScheduledAt) missing.push('OB meeting date/time');
     if (!checklist.obMeetingLocation) missing.push('OB meeting location');
     if (!checklist.notes || !checklist.notes.trim()) missing.push('Notes');

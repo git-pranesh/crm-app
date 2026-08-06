@@ -9,6 +9,7 @@ interface PDOBChecklist {
   leadId: string;
   paymentValue: number | null;
   projectValue: number | null;
+  furnitureValue: number | null;
   obMeetingScheduledAt: string | null;
   obMeetingLocation: string | null;
   notes: string | null;
@@ -43,7 +44,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [sending, setSending] = useState(false);
   const [showMailModal, setShowMailModal] = useState(false);
 
-  const [form, setForm] = useState({ paymentValue: '', projectValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '' });
+  const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '' });
 
   const isEditable = stage === 'PROPOSAL_DISCUSSION';
 
@@ -63,6 +64,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         setForm({
           paymentValue: data.checklist.paymentValue?.toString() ?? '',
           projectValue: data.checklist.projectValue?.toString() ?? '',
+          furnitureValue: data.checklist.furnitureValue?.toString() ?? '',
           obMeetingScheduledAt: toLocalInputValue(data.checklist.obMeetingScheduledAt),
           obMeetingLocation: data.checklist.obMeetingLocation ?? '',
           notes: data.checklist.notes ?? '',
@@ -86,6 +88,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
       const data = await api.patch<{ checklist: PDOBChecklist }>(`/leads/${leadId}/pd-ob-checklist`, {
         paymentValue: form.paymentValue === '' ? null : parseFloat(form.paymentValue),
         projectValue: form.projectValue === '' ? null : parseFloat(form.projectValue),
+        furnitureValue: form.furnitureValue === '' ? null : parseFloat(form.furnitureValue),
         obMeetingScheduledAt: form.obMeetingScheduledAt || null,
         obMeetingLocation: form.obMeetingLocation || null,
         notes: form.notes || null,
@@ -141,6 +144,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
     !hasObQuote && 'OB Quote',
     checklist.paymentValue == null && 'Payment value',
     checklist.projectValue == null && 'Project value',
+    checklist.furnitureValue == null && 'Furniture value',
     !checklist.obMeetingScheduledAt && 'OB meeting date/time',
     !checklist.obMeetingLocation && 'OB meeting location',
     !checklist.notes?.trim() && 'Notes',
@@ -190,6 +194,16 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
             disabled={!isEditable || saving}
             value={form.projectValue}
             onChange={(e) => setForm((f) => ({ ...f, projectValue: e.target.value }))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Furniture value (₹)</label>
+          <input
+            type="number"
+            disabled={!isEditable || saving}
+            value={form.furnitureValue}
+            onChange={(e) => setForm((f) => ({ ...f, furnitureValue: e.target.value }))}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
           />
         </div>

@@ -16,6 +16,7 @@ interface OBOBMChecklist {
   signOffAt: string | null;
   npsTriggered: boolean;
   npsTriggeredAt: string | null;
+  welcomeMailApprovedByClient: boolean;
   obmMailSent: boolean;
   obmMailSentAt: string | null;
   completedAt: string | null;
@@ -49,6 +50,7 @@ function toDateInputValue(iso: string | null): string {
 export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComplete }: Props) {
   const [checklist, setChecklist] = useState<OBOBMChecklist | null>(null);
   const [docItems, setDocItems] = useState<{ key: string; label: string }[]>([]);
+  const [hasWelcomeMailScreenshot, setHasWelcomeMailScreenshot] = useState(false);
   const [template, setTemplate] = useState({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,10 +67,12 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         checklist: OBOBMChecklist | null;
         docItems: { key: string; label: string }[];
         obmMailTemplate: { subject: string; html: string };
+        hasWelcomeMailScreenshot: boolean;
       }>(`/leads/${leadId}/ob-obm-checklist`);
       setChecklist(data.checklist);
       setDocItems(data.docItems);
       setTemplate(data.obmMailTemplate);
+      setHasWelcomeMailScreenshot(data.hasWelcomeMailScreenshot);
       if (data.checklist) {
         const d: Record<string, string> = {};
         for (const f of TIMELINE_FIELDS) d[f.key] = toDateInputValue(data.checklist[f.key]);
@@ -171,6 +175,8 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
     !allDatesFilled && 'All timeline dates',
     !allDocsDone && 'All welcome-document items',
     !checklist.npsTriggered && 'NPS survey triggered',
+    !checklist.welcomeMailApprovedByClient && 'Welcome mail approved by client',
+    !hasWelcomeMailScreenshot && 'Welcome mail approval screenshot',
     !clientEmail && "Client's email",
   ].filter(Boolean) as string[];
 
@@ -241,6 +247,25 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Welcome mail client approval */}
+      <div className="mb-4 space-y-1.5">
+        <label className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer ${checklist.welcomeMailApprovedByClient ? 'bg-green-50' : 'bg-gray-50'}`}>
+          <input
+            type="checkbox"
+            checked={checklist.welcomeMailApprovedByClient}
+            disabled={!isEditable || saving}
+            onChange={(e) => toggleDoc('welcomeMailApprovedByClient', e.target.checked)}
+            className="w-4 h-4 accent-brand-500 shrink-0"
+          />
+          <span className={`text-xs ${checklist.welcomeMailApprovedByClient ? 'text-green-700' : 'text-gray-700'}`}>
+            Welcome mail wording approved by client
+          </span>
+        </label>
+        <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}
         </div>
       </div>
 
