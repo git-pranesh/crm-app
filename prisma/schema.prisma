@@ -45,8 +45,22 @@ enum LeadStage {
   /// Legacy terminal stage — replaced by DESIGN_IN_PROGRESS as the funnel's
   /// terminal/incentive-trigger stage. Kept so existing leads are not broken.
   HANDED_OVER
+  /// Legacy stage values — no longer written going forward. ON_HOLD/INACTIVE
+  /// are now tracked on the separate `Lead.status` field (task #88) so the
+  /// funnel stage a lead is "parked at" is preserved while on hold/inactive.
+  /// Kept in the enum only so pre-migration historical rows still decode.
   INACTIVE
   ON_HOLD
+}
+
+/// Lead lifecycle status — decoupled from `LeadStage` (task #88). A lead's
+/// `stage` always reflects its real funnel position; `status` separately
+/// tracks whether it's actively being worked, parked (ON_HOLD), or dropped
+/// (INACTIVE). This lets the UI show both together, e.g. "DQL — On Hold".
+enum LeadStatus {
+  ACTIVE
+  ON_HOLD
+  INACTIVE
 }
 
 enum CallOutcome {
@@ -271,6 +285,9 @@ model Lead {
   /// Floor plan reference/URL — required before moving to PROPOSAL_READY
   floorPlanUrl         String?
   stage                LeadStage      @default(MQL)
+  /// Lifecycle status, decoupled from `stage` (task #88). `stage` keeps
+  /// reflecting the lead's real funnel position even while ON_HOLD/INACTIVE.
+  status               LeadStatus     @default(ACTIVE)
   /// True when this lead took an explicit skip path that bypassed Proposal
   /// Ready (DQL → Proposal Presented or MQL → Proposal Presented). Set
   /// automatically by the stage-change handler.
@@ -286,10 +303,15 @@ model Lead {
   onHoldRevivalDate    DateTime?
   /// Reason for placing on hold — required when stage moves to ON_HOLD
   onHoldReason         String?
-  /// Reason for marking inactive — required when stage moves to INACTIVE
+  /// Reason category for marking inactive — required when status moves to INACTIVE
   inactiveReason       String?
-  /// Stage the lead was in immediately before moving to ON_HOLD/INACTIVE —
-  /// used to restore it on reactivation. Set automatically, never user-edited.
+  /// Free-text notes accompanying inactivation, separate from the reason
+  /// category above. Optionally emailed to the client (task #88).
+  inactiveNotes        String?
+  /// Legacy — was used to restore `stage` on reactivation back when ON_HOLD/
+  /// INACTIVE were themselves stage values. Now that status is separate from
+  /// stage (task #88), `stage` never changes on hold/inactivate, so this is
+  /// no longer written by new code. Kept only for historical rows.
   preHoldStage         LeadStage?
   /// Timestamp when the assigned designer first opened this lead's detail page
   firstOpenedAt        DateTime?

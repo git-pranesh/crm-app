@@ -118,7 +118,8 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
     const remainingLeads = await prisma.lead.count({
       where: {
         OR: [{ assignedDesignerId: id }, { assignedBLId: id }],
-        stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
+        status: 'ACTIVE',
+        stage: { notIn: ['HANDED_OVER'] },
       },
     });
 
@@ -301,7 +302,8 @@ adminRouter.get('/users/:id/deactivation-preview', async (req, res) => {
     const leads = await prisma.lead.findMany({
       where: {
         OR: [{ assignedDesignerId: id }, { assignedBLId: id }],
-        stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER'] },
+        status: 'ACTIVE',
+        stage: { notIn: ['HANDED_OVER'] },
       },
       select: { id: true, leadId: true, name: true, stage: true },
       take: 100,

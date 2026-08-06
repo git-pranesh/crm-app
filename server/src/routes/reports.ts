@@ -225,7 +225,7 @@ async function campaignPerformance(q: Record<string, string>) {
 }
 
 async function inactiveLeads(q: Record<string, string>) {
-  const where = { ...buildLeadWhere(q), stage: 'INACTIVE' as const };
+  const where = { ...buildLeadWhere(q), status: 'INACTIVE' as const };
   const leads = await prisma.lead.findMany({
     where,
     include: {
@@ -334,7 +334,7 @@ async function leadAging(q: Record<string, string>) {
   };
   const where = buildLeadWhere(q);
   const leads = await prisma.lead.findMany({
-    where: { ...where, stage: { notIn: ['INACTIVE', 'ON_HOLD', ...WON_STAGES] } },
+    where: { ...where, status: 'ACTIVE', stage: { notIn: WON_STAGES } },
     select: {
       leadId: true, name: true, stage: true, updatedAt: true, isSLABreached: true,
       assignedDesigner: { select: { name: true } },

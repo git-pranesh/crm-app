@@ -85,7 +85,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       // ONBOARDING excluded (task #14): legacy breach rules never covered
       // OB→OBM, so any flag here would be stale/carried over from an earlier
       // stage — that stage is judged solely by the new stage-SLA system.
-      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] } }, resolvedAt: null },
+      where: { lead: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] } }, resolvedAt: null },
       include: { lead: { select: { id: true, leadId: true, name: true, stage: true } } },
       orderBy: { breachedAt: 'desc' },
       take: 5,
@@ -100,7 +100,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       where: { completedAt: { gte: today }, assignedToId: { in: teamUserIds } },
     }),
     prisma.lead.count({
-      where: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
+      where: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] } },
     }),
     // "Won" leads: DESIGN_IN_PROGRESS is the funnel's terminal/incentive stage,
     // HANDED_OVER kept for legacy leads — mirrors performanceRecalc.ts.
@@ -112,7 +112,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.aggregate({
       where: {
         ...leadWhere,
-        stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
+        status: 'ACTIVE',
+        stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
         estimatedValue: { not: null },
       },
       _sum: { estimatedValue: true },
@@ -497,7 +498,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       // Stage funnel value sums (current active leads, not date-filtered)
       prisma.lead.groupBy({
         by: ['stage'],
-        where: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD'] }, estimatedValue: { not: null } },
+        where: { ...leadWhere, status: 'ACTIVE', estimatedValue: { not: null } },
         _sum: { estimatedValue: true },
       }),
     ]);

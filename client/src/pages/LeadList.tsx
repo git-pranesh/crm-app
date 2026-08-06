@@ -7,7 +7,7 @@ import EmptyState from '../components/ui/EmptyState';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
-  source?: string; stage: string; isSLABreached: boolean;
+  source?: string; stage: string; status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE'; isSLABreached: boolean;
   estimatedValue?: string | null; intentRating?: number | null;
   onHoldRevivalDate?: string | null;
   firstOpenedAt?: string | null;
@@ -36,6 +36,7 @@ const STAGE_COLORS: Record<string, string> = {
   ONBOARDING_MEETING: 'bg-teal-100 text-teal-700',
   DESIGN_IN_PROGRESS: 'bg-emerald-100 text-emerald-700',
   HANDED_OVER: 'bg-emerald-100 text-emerald-700',
+  // Legacy stage values, kept only for historical rows — no longer assignable.
   INACTIVE: 'bg-stone-100 text-stone-500',
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
@@ -53,15 +54,17 @@ const STAGE_LABELS: Record<string, string> = {
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 
+// Task #88: ON_HOLD/INACTIVE are status values, not stages — dropped from
+// the stage filter options (the separate Status filter covers them).
 const STAGE_OPTIONS_ALL = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
-  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'HANDED_OVER',
 ];
 const STAGE_OPTIONS_DESIGNER = [
   'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
-  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'HANDED_OVER',
 ];
 
 function getCurrentUserRole(): string {
@@ -74,16 +77,11 @@ function getCurrentUserRole(): string {
 
 const SOURCE_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
 
-function deriveStatus(stage: string): 'Active' | 'On Hold' | 'Inactive' {
-  if (stage === 'INACTIVE') return 'Inactive';
-  if (stage === 'ON_HOLD') return 'On Hold';
-  return 'Active';
-}
-
-const STATUS_COLORS = {
-  Active: 'bg-green-100 text-green-700',
-  'On Hold': 'bg-slate-100 text-slate-600',
-  Inactive: 'bg-gray-100 text-gray-500',
+const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', ON_HOLD: 'On Hold', INACTIVE: 'Inactive' };
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: 'bg-green-100 text-green-700',
+  ON_HOLD: 'bg-amber-100 text-amber-700',
+  INACTIVE: 'bg-gray-100 text-gray-500',
 };
 
 function intentLabel(r?: number | null) {
@@ -150,6 +148,7 @@ export default function LeadList() {
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '', designerId: '' });
   const [designers, setDesigners] = useState<{ id: string; name: string }[]>([]);
+  const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
   const userRole = getCurrentUserRole();
   const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
@@ -160,6 +159,13 @@ export default function LeadList() {
       .then((data) => setDesigners(data.designers))
       .catch(() => {});
   }, [userRole]);
+
+  // Task #88 — overall Active / On Hold / Inactive counts + value, independent of the current filters.
+  useEffect(() => {
+    api.get<{ overall: Record<string, { count: number; value: number }> }>('/leads/meta/status-summary')
+      .then((d) => setStatusSummary(d.overall ?? null))
+      .catch(() => {});
+  }, [leads]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -254,6 +260,22 @@ export default function LeadList() {
       </div>
 
       <div className="px-6 py-4 space-y-4">
+        {/* Task #88 — status split summary */}
+        {statusSummary && (
+          <div className="grid grid-cols-3 gap-3">
+            {(['ACTIVE', 'ON_HOLD', 'INACTIVE'] as const).map((s) => (
+              <div key={s} className="bg-white rounded-2xl px-4 py-3 shadow-warm-sm flex items-center justify-between" style={{ border: '1px solid #EDE8E3' }}>
+                <div>
+                  <p className="text-xs font-semibold text-stone-500">{STATUS_LABELS[s]}</p>
+                  <p className="text-lg font-extrabold text-stone-900">{statusSummary[s]?.count ?? 0}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[s]}`}>
+                  {fmtVal(statusSummary[s]?.value ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Filter bar */}
         <div className="bg-white rounded-2xl px-4 py-3 flex flex-wrap items-center gap-3 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
           <input
@@ -273,9 +295,9 @@ export default function LeadList() {
             className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
             style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
             <option value="">All statuses</option>
-            <option value="Active">Active</option>
-            <option value="On Hold">On Hold</option>
-            <option value="Inactive">Inactive</option>
+            <option value="ACTIVE">Active</option>
+            <option value="ON_HOLD">On Hold</option>
+            <option value="INACTIVE">Inactive</option>
           </select>
           <select value={filters.source} onChange={(e) => setFilter('source', e.target.value)}
             className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
@@ -324,7 +346,7 @@ export default function LeadList() {
                   </thead>
                   <tbody>
                     {leads.map((lead) => {
-                      const status = deriveStatus(lead.stage);
+                      const status = lead.status;
                       const isUnread = lead.isUnread && lead.assignedDesigner;
                       return (
                         <tr
@@ -355,11 +377,11 @@ export default function LeadList() {
                           <td className="py-3 px-4">
                             <span
                               className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[status]}`}
-                              title={status === 'On Hold' && lead.onHoldRevivalDate ? `Reopens ${new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN')}` : undefined}
+                              title={status === 'ON_HOLD' && lead.onHoldRevivalDate ? `Reopens ${new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN')}` : undefined}
                             >
-                              {status}
+                              {STATUS_LABELS[status] ?? status}
                             </span>
-                            {status === 'On Hold' && lead.onHoldRevivalDate && (
+                            {status === 'ON_HOLD' && lead.onHoldRevivalDate && (
                               <span className="ml-1.5 text-[10px] text-stone-400 whitespace-nowrap">
                                 ↺ {new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                               </span>

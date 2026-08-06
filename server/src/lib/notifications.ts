@@ -17,6 +17,8 @@ export type NotificationType =
   | 'ON_HOLD_REOPEN'
   | 'NPS_SUBMITTED'
   | 'LEAD_REACTIVATED'
+  | 'LEAD_ON_HOLD'
+  | 'LEAD_INACTIVATED'
   | 'MEETING_SCHEDULED'
   | 'CALL_LOGGED'
   | 'TASK_SCHEDULED'

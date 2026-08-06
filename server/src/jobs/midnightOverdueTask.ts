@@ -2,6 +2,32 @@ import { Worker, Queue } from 'bullmq';
 import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
+import { reactivateLead } from '../lib/leadStatusActions.js';
+
+// SYSTEM_USER_ID isn't a real user row (see .agents/memory/system-user-id-fk.md)
+// — logActivity/createNotification need an actual user id. Auto-reactivation
+// must never get stuck just because no Branch Head happens to be active, so
+// fall through a chain of real, currently-active users: the lead's own
+// assigned BL/designer first (best attribution), then any Branch Head, then
+// any BL, then — as a last resort — any active user at all. Only if the
+// whole users table is empty (never happens in practice) do we skip.
+async function resolveSystemActor(lead: { assignedBLId: string | null; assignedDesignerId: string | null }): Promise<{ id: string; name: string } | null> {
+  const candidateIds = [lead.assignedBLId, lead.assignedDesignerId].filter((id): id is string => !!id);
+  if (candidateIds.length > 0) {
+    const assigned = await prisma.user.findFirst({
+      where: { id: { in: candidateIds }, isActive: true },
+      select: { id: true, name: true },
+    });
+    if (assigned) return assigned;
+  }
+  const byRole = await prisma.user.findFirst({
+    where: { role: { in: ['BRANCH_HEAD', 'BL'] }, isActive: true },
+    orderBy: { role: 'asc' }, // BL < BRANCH_HEAD alphabetically is fine — either works, just needs to be deterministic
+    select: { id: true, name: true },
+  });
+  if (byRole) return byRole;
+  return prisma.user.findFirst({ where: { isActive: true }, select: { id: true, name: true } });
+}
 
 const QUEUE_NAME = 'midnight-overdue-check';
 
@@ -62,43 +88,58 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
     details.push(`task:${task.id} lead:${task.lead.leadId} assignee:${task.assignedTo.name}`);
   }
 
-  // ── 2. ON_HOLD reopen alerts — notify designer when reopen date arrives ────
+  // ── 2. Auto-reactivate ON_HOLD leads whose reopen date has arrived (task #88) ──
+  // Trigger is "date has arrived" (<= today), not "arriving tomorrow" — this
+  // used to just notify the designer; now it calls the same reactivateLead()
+  // used by the manual flow, and always notifies the client (the manual flow
+  // makes that optional, but an automatic reactivation the client wasn't
+  // asked about must always be communicated to them).
   const onHoldLeads = await prisma.lead.findMany({
     where: {
-      stage: 'ON_HOLD',
-      onHoldRevivalDate: { lte: tomorrow },
-      assignedDesignerId: { not: null },
+      status: 'ON_HOLD',
+      onHoldRevivalDate: { lte: today },
     },
-    select: { id: true, leadId: true, name: true, assignedDesignerId: true, onHoldRevivalDate: true },
+    select: { id: true, leadId: true, name: true, assignedBLId: true, assignedDesignerId: true, onHoldRevivalDate: true },
   });
 
   let reopenNotified = 0;
-  for (const lead of onHoldLeads) {
-    if (!lead.assignedDesignerId) continue;
+  if (onHoldLeads.length > 0) {
+    for (const lead of onHoldLeads) {
+      // Idempotency: skip if we already auto-reactivated this lead today
+      // (prevents double-firing on repeated midnight runs).
+      const alreadyNotifiedToday = await prisma.notificationLog.findFirst({
+        where: { leadId: lead.id, type: 'LEAD_REACTIVATED', createdAt: { gte: today } },
+        select: { id: true },
+      });
+      if (alreadyNotifiedToday) continue;
 
-    // Idempotency: skip if we already sent an ON_HOLD_REOPEN notification
-    // for this lead today (prevents duplicate alerts on repeated midnight runs).
-    const alreadyNotifiedToday = await prisma.notificationLog.findFirst({
-      where: {
-        leadId: lead.id,
-        type: 'ON_HOLD_REOPEN',
-        createdAt: { gte: today },
-      },
-      select: { id: true },
-    });
-    if (alreadyNotifiedToday) continue;
+      // Resolved per-lead (not once for the whole batch) so each reactivation
+      // is attributed to that lead's own BL/designer when possible, and a
+      // missing/deactivated Branch Head never blocks the job — see
+      // resolveSystemActor's fallback chain above.
+      const systemActor = await resolveSystemActor(lead);
+      if (!systemActor) {
+        console.error('[jobs] No active user found at all — cannot attribute auto-reactivation, skipping', lead.leadId);
+        continue;
+      }
 
-    const message = `Lead ${lead.leadId} (${lead.name}) is due for reactivation — the on-hold reopen date has arrived. Please review and reactivate if appropriate.`;
-    try {
-      await createNotification(lead.assignedDesignerId, 'ON_HOLD_REOPEN', message, lead.id);
-      details.push(`reopen:${lead.leadId}`);
-      reopenNotified++;
-    } catch (e) {
-      console.warn(`[jobs] Failed to send ON_HOLD_REOPEN for lead ${lead.leadId}:`, e);
+      try {
+        await reactivateLead({
+          leadId: lead.id,
+          actorId: systemActor.id,
+          actorName: 'System (auto-reactivation)',
+          reason: 'On-hold reopen date arrived — automatically reactivated',
+          notifyClient: true,
+        });
+        details.push(`reopen:${lead.leadId}`);
+        reopenNotified++;
+      } catch (e) {
+        console.warn(`[jobs] Failed to auto-reactivate lead ${lead.leadId}:`, e);
+      }
     }
   }
 
-  console.log(`[jobs] Marked ${overdueTasks.length} task(s) as overdue; sent ${reopenNotified} on-hold reopen alert(s).`);
+  console.log(`[jobs] Marked ${overdueTasks.length} task(s) as overdue; auto-reactivated ${reopenNotified} on-hold lead(s).`);
   return { markedOverdue: overdueTasks.length, reopenNotified, details };
 }
 

@@ -65,7 +65,8 @@ export async function runSLACheck(): Promise<{ totalBreaches: number; details: s
             calls: { none: {} },
             // DESIGN_IN_PROGRESS is the funnel's terminal stage (task #53) —
             // a lead that has already reached it is done, not overdue.
-            stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
+            status: 'ACTIVE',
+            stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
             isSLABreached: false,
           },
           select: { id: true, leadId: true, assignedBLId: true, assignedDesignerId: true },

@@ -25,7 +25,7 @@ type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whats
 interface Lead {
   id: string; leadId: string; name: string; phone: string; phone2?: string;
   email?: string; email2?: string; pan?: string; gst?: string;
-  stage: string; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string;
+  stage: string; status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE'; source?: string; adName?: string; utmCampaign?: string; utmAdSet?: string; utmSource?: string;
   projectType?: string; scope?: string; location?: string; possessionTimeline?: string;
   builder?: string; expectedMoveIn?: string | null; expectedObDate?: string | null;
   offer1?: string; offer2?: string; offer3?: string;
@@ -33,7 +33,7 @@ interface Lead {
   estimatedValue?: string | number | null; intentRating?: number | null; intentRatingSource?: string | null;
   nextMeetingDate?: string | null; floorPlanUrl?: string | null;
   onHoldRevivalDate?: string | null; isDuplicate?: boolean;
-  onHoldReason?: string | null; inactiveReason?: string | null; preHoldStage?: string | null;
+  onHoldReason?: string | null; inactiveReason?: string | null; inactiveNotes?: string | null; preHoldStage?: string | null;
   isSLABreached: boolean; createdAt: string; updatedAt: string;
   daysInCurrentStage?: number; slaStatus?: 'ok' | 'warning' | 'breach';
   assignedDesigner?: { id: string; name: string } | null;
@@ -90,14 +90,26 @@ const STAGE_LABELS: Record<string, string> = {
   PROPOSAL_DISCUSSION: 'Proposal Discussion',
   ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
   DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',
+  // Legacy stage values — no longer assignable, kept only so historical
+  // rows/activity-log entries still render a label.
   INACTIVE: 'Inactive', ON_HOLD: 'On Hold',
 };
 
+// Task #88: ON_HOLD/INACTIVE are status values now, not stages — removed
+// from the assignable stage list. Status is changed via the dedicated
+// On Hold / Mark Inactive actions instead.
 const ALL_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
   'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING',
-  'DESIGN_IN_PROGRESS', 'HANDED_OVER', 'ON_HOLD', 'INACTIVE',
+  'DESIGN_IN_PROGRESS', 'HANDED_OVER',
 ];
+
+const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', ON_HOLD: 'On Hold', INACTIVE: 'Inactive' };
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: 'bg-green-100 text-green-700',
+  ON_HOLD: 'bg-amber-100 text-amber-800',
+  INACTIVE: 'bg-red-100 text-red-700',
+};
 
 const ACTION_ICONS: Record<string, string> = {
   STAGE_CHANGED: '↗', INTENT_RATING_UPDATED: '★', NOTE_ADDED: '·',
@@ -262,14 +274,19 @@ export default function LeadDetail() {
 
   const [stageModal, setStageModal] = useState(false);
   const [newStage, setNewStage] = useState('');
+  const [changingStage, setChangingStage] = useState(false);
+
+  // Task #88 — status change flow (On Hold / Inactive), separate from stage
+  const [statusModal, setStatusModal] = useState<'ON_HOLD' | 'INACTIVE' | null>(null);
   const [inactivationReason, setInactivationReason] = useState('');
   const [inactiveReasonChoice, setInactiveReasonChoice] = useState('');
   const [inactiveNotes, setInactiveNotes] = useState('');
+  const [inactiveNotifyClient, setInactiveNotifyClient] = useState(false);
   const [onHoldReason, setOnHoldReason] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
-  const [changingStage, setChangingStage] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
 
-  // Task #40 — reactivation flow for ON_HOLD / INACTIVE leads
+  // Task #40/#88 — reactivation flow for ON_HOLD / INACTIVE leads
   const [reactivateModal, setReactivateModal] = useState(false);
   const [reactivateReason, setReactivateReason] = useState('');
   const [reactivateReasonOther, setReactivateReasonOther] = useState('');
@@ -409,10 +426,15 @@ export default function LeadDetail() {
     setSearchParams({ tab });
   };
 
-  const resetStageModalFields = () => { setInactivationReason(''); setInactiveReasonChoice(''); setInactiveNotes(''); setOnHoldReason(''); setOnHoldReopenDate(''); };
-  const openStageModal = () => { setNewStage(lead?.stage ?? ''); resetStageModalFields(); setStageModal(true); };
+  const openStageModal = () => { setNewStage(lead?.stage ?? ''); setStageModal(true); };
   /** Opens the stage modal pre-selected to a specific target stage */
-  const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); resetStageModalFields(); setStageModal(true); };
+  const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); setStageModal(true); };
+
+  const openStatusModal = (status: 'ON_HOLD' | 'INACTIVE') => {
+    setInactivationReason(''); setInactiveReasonChoice(''); setInactiveNotes(''); setInactiveNotifyClient(false);
+    setOnHoldReason(''); setOnHoldReopenDate('');
+    setStatusModal(status);
+  };
 
   const toLocalDatetimeInput = (iso: string) => {
     const d = new Date(iso);
@@ -524,27 +546,9 @@ export default function LeadDetail() {
   const handleStageChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStage || newStage === lead?.stage) { setStageModal(false); return; }
-    const resolvedInactiveReason = inactiveReasonChoice === 'Other' ? inactivationReason.trim() : inactiveReasonChoice;
-    if (newStage === 'INACTIVE' && !resolvedInactiveReason) {
-      toast.error('Please select or describe a reason for inactivation'); return;
-    }
-    if (newStage === 'ON_HOLD') {
-      if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
-      if (!onHoldReopenDate) { toast.error('Please select a reopen date'); return; }
-      if (new Date(onHoldReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
-    }
     setChangingStage(true);
     try {
-      await api.patch(`/leads/${leadId}`, {
-        stage: newStage,
-        ...(newStage === 'INACTIVE' && {
-          inactivationReason: resolvedInactiveReason + (inactiveNotes.trim() ? ` — ${inactiveNotes.trim()}` : ''),
-        }),
-        ...(newStage === 'ON_HOLD' && {
-          reason: onHoldReason,
-          onHoldRevivalDate: onHoldReopenDate,
-        }),
-      });
+      await api.patch(`/leads/${leadId}`, { stage: newStage });
       toast.success(`Stage → ${STAGE_LABELS[newStage] ?? newStage}`);
       setStageModal(false);
       loadLead(); loadActivities();
@@ -552,6 +556,52 @@ export default function LeadDetail() {
       toast.error(e.message ?? 'Could not change stage');
     } finally {
       setChangingStage(false);
+    }
+  };
+
+  // Task #88 — On Hold / Inactive are status changes, decoupled from stage.
+  const handleSetStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModal) return;
+    if (statusModal === 'INACTIVE') {
+      const resolvedInactiveReason = inactiveReasonChoice === 'Other' ? inactivationReason.trim() : inactiveReasonChoice;
+      if (!resolvedInactiveReason) { toast.error('Please select or describe a reason for inactivation'); return; }
+      setChangingStatus(true);
+      try {
+        await api.patch(`/leads/${leadId}/status`, {
+          status: 'INACTIVE',
+          reason: resolvedInactiveReason,
+          notes: inactiveNotes.trim() || undefined,
+          notifyClient: inactiveNotifyClient,
+        });
+        toast.success('Lead marked Inactive');
+        setStatusModal(null);
+        loadLead(); loadActivities();
+      } catch (e: any) {
+        toast.error(e.message ?? 'Could not mark lead inactive');
+      } finally {
+        setChangingStatus(false);
+      }
+      return;
+    }
+    // ON_HOLD
+    if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
+    if (!onHoldReopenDate) { toast.error('Please select a reopen date'); return; }
+    if (new Date(onHoldReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
+    setChangingStatus(true);
+    try {
+      await api.patch(`/leads/${leadId}/status`, {
+        status: 'ON_HOLD',
+        reason: onHoldReason.trim(),
+        onHoldRevivalDate: onHoldReopenDate,
+      });
+      toast.success('Lead placed On Hold');
+      setStatusModal(null);
+      loadLead(); loadActivities();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not place lead on hold');
+    } finally {
+      setChangingStatus(false);
     }
   };
 
@@ -712,8 +762,33 @@ export default function LeadDetail() {
                   <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>
                 ))}
               </select>
-              {newStage === 'INACTIVE' && (
-                <div className="space-y-3">
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setStageModal(false)}
+                  className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
+                <button type="submit" disabled={changingStage || !newStage || newStage === lead?.stage}
+                  className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                  {changingStage ? 'Saving…' : 'Update Stage'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── On Hold / Inactive status modal (task #88) — separate from stage ──── */}
+      {statusModal && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">
+              {statusModal === 'ON_HOLD' ? 'Place On Hold' : 'Mark Inactive'}
+            </h3>
+            <p className="text-xs text-stone-400 mb-4">
+              The lead stays at <strong>{STAGE_LABELS[lead?.stage ?? ''] ?? lead?.stage}</strong> — only its status changes.
+            </p>
+            <form onSubmit={handleSetStatus} className="space-y-3">
+              {statusModal === 'INACTIVE' && (
+                <>
                   <div>
                     <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                       Reason <span className="text-brand-500">*</span>
@@ -738,11 +813,15 @@ export default function LeadDetail() {
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   </div>
-                  <p className="text-xs text-stone-400 mt-1">Feedback email + SMS sent automatically to client and internal team.</p>
-                </div>
+                  <label className="flex items-center gap-2 text-sm text-stone-600">
+                    <input type="checkbox" checked={inactiveNotifyClient} onChange={(e) => setInactiveNotifyClient(e.target.checked)} />
+                    Notify client (sends a feedback-request email + SMS)
+                  </label>
+                  <p className="text-xs text-stone-400 mt-1">Internal team is always notified.</p>
+                </>
               )}
-              {newStage === 'ON_HOLD' && (
-                <div className="space-y-3">
+              {statusModal === 'ON_HOLD' && (
+                <>
                   <div>
                     <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                       Reason <span className="text-brand-500">*</span>
@@ -760,17 +839,17 @@ export default function LeadDetail() {
                       required min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-                    <p className="text-xs text-stone-400 mt-1">Client + internal team notified. Designer alerted on this date.</p>
+                    <p className="text-xs text-stone-400 mt-1">Client + internal team notified now. Lead auto-reactivates (and client is notified again) when this date arrives.</p>
                   </div>
-                </div>
+                </>
               )}
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setStageModal(false)}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setStatusModal(null)}
                   className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
                   style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
-                <button type="submit" disabled={changingStage || !newStage || newStage === lead?.stage}
+                <button type="submit" disabled={changingStatus}
                   className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
-                  {changingStage ? 'Saving…' : 'Update Stage'}
+                  {changingStatus ? 'Saving…' : (statusModal === 'ON_HOLD' ? 'Place On Hold' : 'Mark Inactive')}
                 </button>
               </div>
             </form>
@@ -981,7 +1060,7 @@ export default function LeadDetail() {
           <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
             <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Reactivate Lead</h3>
             <p className="text-xs text-stone-400 mb-4">
-              Restores this lead to {STAGE_LABELS[lead.preHoldStage ?? 'MQL'] ?? lead.preHoldStage ?? 'its previous stage'}.
+              Status returns to Active — the lead stays at <strong>{STAGE_LABELS[lead.stage] ?? lead.stage}</strong>, its stage never moved.
             </p>
             <form onSubmit={handleReactivate} className="space-y-4">
               <div>
@@ -1123,6 +1202,12 @@ export default function LeadDetail() {
                 >
                   <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} <ChevronDown size={10} strokeWidth={2.5} /></span>
                 </button>
+                {/* Task #88: status badge, decoupled from stage */}
+                {lead.status !== 'ACTIVE' && (
+                  <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${STATUS_COLORS[lead.status] ?? 'bg-stone-100 text-stone-600'}`}>
+                    {STATUS_LABELS[lead.status] ?? lead.status}
+                  </span>
+                )}
                 {/* Intent stars + auto badge */}
                 <button
                   onClick={() => openIntentModal(lead.intentRating ?? 0)}
@@ -1170,7 +1255,21 @@ export default function LeadDetail() {
                 onClick={() => handleTabChange('whatsapp')}
                 className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors"
               ><MessageCircle size={13} strokeWidth={2} /> WhatsApp</button>
-              {(lead.stage === 'ON_HOLD' || lead.stage === 'INACTIVE') && (
+              {lead.status === 'ACTIVE' && (
+                <>
+                  <button
+                    onClick={() => openStatusModal('ON_HOLD')}
+                    className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                    style={{ border: '1px solid #EDE8E3' }}
+                  >On Hold</button>
+                  <button
+                    onClick={() => openStatusModal('INACTIVE')}
+                    className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                    style={{ border: '1px solid #EDE8E3' }}
+                  >Mark Inactive</button>
+                </>
+              )}
+              {(lead.status === 'ON_HOLD' || lead.status === 'INACTIVE') && (
                 <button
                   onClick={openReactivateModal}
                   className="flex items-center gap-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-brand-600 transition-colors"
@@ -1181,18 +1280,19 @@ export default function LeadDetail() {
         ) : (
           <p className="text-sm text-stone-500">Lead not found</p>
         )}
-        {/* Task #40 — On Hold / Inactive reason + reopen date banner */}
-        {lead && lead.stage === 'ON_HOLD' && (
+        {/* Task #88 — On Hold / Inactive reason + reopen date banner, keyed off status */}
+        {lead && lead.status === 'ON_HOLD' && (
           <div className="mt-2 flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-1.5 flex-wrap">
             <span className="font-semibold">On Hold</span>
             {lead.onHoldReason && <span>· Reason: {lead.onHoldReason}</span>}
             {lead.onHoldRevivalDate && <span>· Reopens: {fmtDate(lead.onHoldRevivalDate)}</span>}
           </div>
         )}
-        {lead && lead.stage === 'INACTIVE' && lead.inactiveReason && (
+        {lead && lead.status === 'INACTIVE' && lead.inactiveReason && (
           <div className="mt-2 flex items-center gap-2 text-xs bg-stone-100 border border-stone-200 text-stone-600 rounded-lg px-3 py-1.5 flex-wrap">
             <span className="font-semibold">Inactive</span>
             <span>· Reason: {lead.inactiveReason}</span>
+            {lead.inactiveNotes && <span>· Notes: {lead.inactiveNotes}</span>}
           </div>
         )}
       </div>

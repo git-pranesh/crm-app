@@ -12,6 +12,7 @@ interface Lead {
   name: string;
   phone: string;
   stage: string;
+  status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE';
   source?: string;
   estimatedValue?: string | number | null;
   intentRating?: number | null;
@@ -258,6 +259,15 @@ function LeadCard({
           {lead.leadId}
         </span>
       </div>
+
+      {/* Task #88 — status badge, since status no longer maps to stage */}
+      {lead.status !== 'ACTIVE' && (
+        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full mb-1.5 ${
+          lead.status === 'ON_HOLD' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+        }`}>
+          {lead.status === 'ON_HOLD' ? 'On Hold' : 'Inactive'}
+        </span>
+      )}
 
       {scope && <p className="text-xs text-stone-500 mb-1.5 truncate">{scope}</p>}
 
@@ -573,15 +583,17 @@ const EMPTY_SALES_FILTERS: SalesFilters = {
 
 const SOURCE_FILTER_OPTIONS = ['META_ADS', 'GOOGLE_ADS', 'REFERRAL', 'WALK_IN', 'ORGANIC', 'OTHER'];
 
+// Task #88: ON_HOLD/INACTIVE are status values, not stages — the Status tabs
+// above already cover them, so they're dropped from the Stage filter.
 const STAGE_FILTER_OPTIONS_ALL = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
-  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'HANDED_OVER',
 ];
 const STAGE_FILTER_OPTIONS_DESIGNER = [
   'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
-  'HANDED_OVER', 'INACTIVE', 'ON_HOLD',
+  'HANDED_OVER',
 ];
 
 function SalesPipelineView({ userRole }: { userRole: string }) {
@@ -596,12 +608,6 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
   const [draggedLead, setDraggedLead] = useState<Lead | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const dragCounters = useRef<Record<string, number>>({});
-
-  // Pending-drop modal
-  const [pendingDrop, setPendingDrop] = useState<{ lead: Lead; targetStage: string } | null>(null);
-  const [dropReason, setDropReason] = useState('');
-  const [dropReopenDate, setDropReopenDate] = useState('');
-  const [submittingDrop, setSubmittingDrop] = useState(false);
 
   const isDesigner = userRole === 'DESIGNER' || userRole === 'CRE';
   const KANBAN_STAGES = isDesigner ? KANBAN_STAGES_DESIGNER : KANBAN_STAGES_ALL;
@@ -640,13 +646,12 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const activeStages = new Set(KANBAN_STAGES as unknown as string[]);
-
+  // Task #88: Active/On Hold/Inactive are the lead's real `status`, independent of stage.
   const counts = {
     all: leads.length,
-    active: leads.filter((l) => activeStages.has(l.stage)).length,
-    onhold: leads.filter((l) => l.stage === 'ON_HOLD').length,
-    inactive: leads.filter((l) => l.stage === 'INACTIVE').length,
+    active: leads.filter((l) => l.status === 'ACTIVE').length,
+    onhold: leads.filter((l) => l.status === 'ON_HOLD').length,
+    inactive: leads.filter((l) => l.status === 'INACTIVE').length,
   };
 
   const filtered = leads.filter((l) => {
@@ -655,9 +660,9 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       || (l.phone ?? '').includes(q);
     const matchTab =
       activeTab === 'all'      ? true :
-      activeTab === 'active'   ? activeStages.has(l.stage) :
-      activeTab === 'onhold'   ? l.stage === 'ON_HOLD' :
-      activeTab === 'inactive' ? l.stage === 'INACTIVE' :
+      activeTab === 'active'   ? l.status === 'ACTIVE' :
+      activeTab === 'onhold'   ? l.status === 'ON_HOLD' :
+      activeTab === 'inactive' ? l.status === 'INACTIVE' :
       true;
     return matchSearch && matchTab;
   });
@@ -665,7 +670,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
   const byStage = (stage: string) => filtered.filter((l) => l.stage === stage);
 
   const totalValue = leads.reduce((s, l) => s + parseFloat(String(l.estimatedValue ?? 0)), 0);
-  const activeValue = leads.filter((l) => activeStages.has(l.stage))
+  const activeValue = leads.filter((l) => l.status === 'ACTIVE')
     .reduce((s, l) => s + parseFloat(String(l.estimatedValue ?? 0)), 0);
 
   const fmtPipeline = (n: number) => {
@@ -723,6 +728,8 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     }
   };
 
+  // Task #88: ON_HOLD/INACTIVE are no longer stages, so the kanban board only
+  // ever has real-stage columns — dropping onto one is a plain stage move.
   const handleDrop = (e: React.DragEvent, targetStage: string) => {
     e.preventDefault();
     dragCounters.current[targetStage] = 0;
@@ -730,28 +737,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     if (!draggedLead || draggedLead.stage === targetStage) { setDraggedLead(null); return; }
     const lead = draggedLead;
     setDraggedLead(null);
-    if (targetStage === 'ON_HOLD' || targetStage === 'INACTIVE') {
-      setDropReason(''); setDropReopenDate(''); setPendingDrop({ lead, targetStage }); return;
-    }
     commitDrop(lead, targetStage, {});
-  };
-
-  const handleDropModalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingDrop) return;
-    const { lead, targetStage } = pendingDrop;
-    if (!dropReason.trim()) { toast.error('A reason is required'); return; }
-    if (targetStage === 'ON_HOLD') {
-      if (!dropReopenDate) { toast.error('A reopen date is required'); return; }
-      if (new Date(dropReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
-    }
-    setSubmittingDrop(true);
-    const extra: Record<string, string> = { reason: dropReason.trim() };
-    if (targetStage === 'ON_HOLD') extra.onHoldRevivalDate = dropReopenDate;
-    if (targetStage === 'INACTIVE') extra.inactivationReason = dropReason.trim();
-    setPendingDrop(null);
-    await commitDrop(lead, targetStage, extra);
-    setSubmittingDrop(false);
   };
 
   const showKanban = activeTab === 'all' || activeTab === 'active';
@@ -1124,65 +1110,6 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         </div>
       )}
 
-      {/* ON_HOLD / INACTIVE drop modal */}
-      {pendingDrop && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <form
-            onSubmit={handleDropModalSubmit}
-            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
-            style={{ border: '1px solid #EDE8E3' }}
-          >
-            <h2 className="text-base font-bold text-stone-900 mb-1">
-              Move to {STAGE_LABELS[pendingDrop.targetStage]}
-            </h2>
-            <p className="text-xs text-stone-500 mb-4">
-              {pendingDrop.targetStage === 'ON_HOLD'
-                ? 'A reason and a reopen date are required.'
-                : 'Please provide a reason for marking this lead inactive.'}
-            </p>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Reason *</label>
-            <textarea
-              value={dropReason}
-              onChange={(e) => setDropReason(e.target.value)}
-              required
-              rows={3}
-              className="w-full rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-300"
-              style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-              placeholder="e.g. Client travelling, revisit in 2 months"
-            />
-            {pendingDrop.targetStage === 'ON_HOLD' && (
-              <>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Reopen date *</label>
-                <input
-                  type="date"
-                  value={dropReopenDate}
-                  onChange={(e) => setDropReopenDate(e.target.value)}
-                  required
-                  className="w-full rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-brand-300"
-                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-                />
-              </>
-            )}
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setPendingDrop(null)}
-                className="text-sm px-4 py-2 rounded-xl text-stone-600 hover:bg-stone-50"
-                style={{ border: '1px solid #EDE8E3' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submittingDrop}
-                className="text-sm px-4 py-2 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-600 disabled:opacity-50"
-              >
-                {submittingDrop ? 'Saving…' : 'Confirm'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

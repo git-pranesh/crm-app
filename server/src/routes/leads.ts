@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import { Router } from 'express';
 import multer from 'multer';
 import { prisma } from '../lib/prisma.js';
@@ -6,16 +5,15 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
-import { sendSms } from '../services/smsService.js';
-import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail, stageMoveBackwardEmail, intentRatingChangedEmail, leadReactivatedInternalEmail, leadReactivatedClientEmail } from '../lib/email.js';
+import { sendEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
-import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
 import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
+import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -90,20 +88,10 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       ];
     }
 
-    // BUG-005: status → stage-set mapping (stage= takes precedence if both supplied)
-    // NOTE: EFFECTIVE_LEAD and HANDED_OVER are legacy/off-funnel stages (excluded
-    // from funnel-specific views like kanban/dashboards) but are kept in the
-    // coarse ACTIVE bucket so legacy leads don't disappear from list views.
-    const statusToStages: Record<string, string[]> = {
-      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'],
-      ON_HOLD: ['ON_HOLD'],
-      INACTIVE: ['INACTIVE'],
-    };
-    if (stage) {
-      where.stage = stage;
-    } else if (status && statusToStages[status]) {
-      where.stage = { in: statusToStages[status] };
-    }
+    // Task #88: status (ACTIVE/ON_HOLD/INACTIVE) is a real field, independent
+    // of stage — both filters can be applied together.
+    if (stage) where.stage = stage;
+    if (status) where.status = status;
     if (source) where.source = source;
     if (designerId) where.assignedDesignerId = designerId;
     if (blId) where.assignedBLId = blId;
@@ -253,6 +241,52 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     res.json({ leads: leadsWithMeta, total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) });
   } catch (err: any) {
     console.error('[leads:list]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/leads/meta/status-summary — counts + value by status (task #88) ──
+// Overall and per-stage breakdown, scoped by the same role rules as the list
+// endpoint, so dashboards/lists can show "12 Active / 3 On Hold / 1 Inactive"
+// (and per-stage) without pulling every lead down to the client to tally.
+leadsRouter.get('/meta/status-summary', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const where: any = {};
+    if (user.role === 'DESIGNER') {
+      where.assignedDesignerId = user.id;
+    } else if (user.role === 'CRE') {
+      where.OR = [{ assignedDesignerId: user.id }, { createdById: user.id }];
+    } else if (user.role === 'BL') {
+      const members = await prisma.user.findMany({ where: { blId: user.id, isActive: true }, select: { id: true } });
+      where.AND = [{ OR: [{ assignedDesignerId: { in: [user.id, ...members.map((m) => m.id)] } }, { assignedBLId: user.id }] }];
+    }
+
+    const groups = await prisma.lead.groupBy({
+      by: ['status', 'stage'],
+      where,
+      _count: { id: true },
+      _sum: { estimatedValue: true },
+    });
+
+    const overall: Record<string, { count: number; value: number }> = {
+      ACTIVE: { count: 0, value: 0 }, ON_HOLD: { count: 0, value: 0 }, INACTIVE: { count: 0, value: 0 },
+    };
+    const perStage: Record<string, Record<string, { count: number; value: number }>> = {};
+
+    for (const g of groups) {
+      const count = g._count.id;
+      const value = g._sum.estimatedValue ? Number(g._sum.estimatedValue) : 0;
+      overall[g.status].count += count;
+      overall[g.status].value += value;
+      if (!perStage[g.stage]) {
+        perStage[g.stage] = { ACTIVE: { count: 0, value: 0 }, ON_HOLD: { count: 0, value: 0 }, INACTIVE: { count: 0, value: 0 } };
+      }
+      perStage[g.stage][g.status] = { count, value };
+    }
+
+    res.json({ overall, perStage });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -540,16 +574,8 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       where.OR = [{ assignedBLId: user.id }, { assignedDesignerId: { in: teamIds } }];
     }
 
-    const statusToStages: Record<string, string[]> = {
-      ACTIVE: ['EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'],
-      ON_HOLD: ['ON_HOLD'],
-      INACTIVE: ['INACTIVE'],
-    };
-    if (stage) {
-      where.stage = stage;
-    } else if (status && statusToStages[status]) {
-      where.stage = { in: statusToStages[status] };
-    }
+    if (stage) where.stage = stage;
+    if (status) where.status = status;
     if (source) where.source = source;
     if (designerId) where.assignedDesignerId = designerId;
     if (blId) where.assignedBLId = blId;
@@ -682,10 +708,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       estimatedValue, intentRating, possessionTimeline,
       nextMeetingDate, floorPlanUrl,
       assignedDesignerId, assignedBLId,
-      onHoldRevivalDate, onHoldReason,
       customFields,
-      inactivationReason, inactiveReason,
-      reason,
       // Task #20 — new key-facts fields
       builder, offer1, offer2, offer3, expectedMoveIn,
       email2, pan, gst, notes,
@@ -739,29 +762,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
 
     const prevStage = existing.stage;
 
-    // ── ON_HOLD / INACTIVE mandatory fields ───────────────────────────────────
-    if (stage === 'ON_HOLD' && stage !== prevStage) {
-      if (!onHoldRevivalDate) {
-        res.status(400).json({ error: 'A reopen date is required when placing a lead on hold.' });
-        return;
-      }
-      const reopenDate = new Date(onHoldRevivalDate);
-      if (isNaN(reopenDate.getTime()) || reopenDate <= new Date()) {
-        res.status(400).json({ error: 'The reopen date must be a future date.' });
-        return;
-      }
-      const resolvedOnHoldReason = onHoldReason?.trim() || reason?.trim() || '';
-      if (!resolvedOnHoldReason) {
-        res.status(400).json({ error: 'A reason is required when placing a lead on hold.' });
-        return;
-      }
-    }
-    if (stage === 'INACTIVE' && stage !== prevStage) {
-      const resolvedInactiveReason = inactiveReason?.trim() || inactivationReason?.trim() || '';
-      if (!resolvedInactiveReason) {
-        res.status(400).json({ error: 'A reason is required when marking a lead as inactive.' });
-        return;
-      }
+    // Task #88: ON_HOLD/INACTIVE are no longer valid `stage` values — they're
+    // tracked on the separate `status` field so the real funnel stage is
+    // preserved while a lead is parked. Redirect stale callers.
+    if (stage === 'ON_HOLD' || stage === 'INACTIVE') {
+      res.status(400).json({ error: `Use PATCH /api/leads/:id/status to place a lead on hold or mark it inactive — ${stage} is not a valid stage.` });
+      return;
     }
 
     // ── Stage-gate: every configured transition must satisfy its required
@@ -856,17 +862,6 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
           ...(assignedDesignerId !== existing.assignedDesignerId && { firstOpenedAt: null }),
         }),
         ...(assignedBLId !== undefined && { assignedBLId: assignedBLId || null }),
-        ...(onHoldRevivalDate && { onHoldRevivalDate: new Date(onHoldRevivalDate) }),
-        ...(stage === 'ON_HOLD' && stage !== prevStage && {
-          onHoldReason: (onHoldReason?.trim() || reason?.trim() || ''),
-          // Task #40: remember what stage this lead was in so reactivation
-          // can restore it instead of guessing.
-          preHoldStage: prevStage,
-        }),
-        ...(stage === 'INACTIVE' && stage !== prevStage && {
-          inactiveReason: (inactiveReason?.trim() || inactivationReason?.trim() || ''),
-          preHoldStage: prevStage === 'ON_HOLD' ? existing.preHoldStage : prevStage,
-        }),
         ...(customFields && {
           customFields: { ...(existing.customFields as Record<string, unknown> ?? {}), ...customFields },
         }),
@@ -941,7 +936,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // (e.g. MQL/PROPOSAL_READY) into OB, where only the new stage-SLA
       // system (computeStageSlaStatus, now covering ONBOARDING) should decide
       // breach status.
-      if (stage === 'ONBOARDING' || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || stage === 'INACTIVE') {
+      if (stage === 'ONBOARDING' || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') {
         await prisma.sLABreach.updateMany({
           where: { leadId: id, resolvedAt: null },
           data: { resolvedAt: new Date() },
@@ -1101,167 +1096,6 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
-      // ── Canonical reasons — resolved once, used by every outbound path ────────
-      const canonicalHoldReason   = onHoldReason?.trim()     || reason?.trim()             || 'To be confirmed';
-      const canonicalInactiveReason = inactiveReason?.trim() || inactivationReason?.trim() || 'Not specified';
-
-      // ON_HOLD notifications — SMS, Email, WhatsApp (all independent)
-      if (stage === 'ON_HOLD' && existing.phone) {
-        const revivalStr = onHoldRevivalDate
-          ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
-          : 'a future date';
-
-        sendSms(
-          existing.phone,
-          `Hi ${existing.name}, your Interiors by DeX project has been put on hold until ${revivalStr}. We'll be in touch. - Interiors by DeX`,
-          id,
-        ).catch((e) => console.warn('[leads:sms:on_hold]', e.message));
-
-        // G1: Email
-        if (existing.email) {
-          try {
-            const emailPayload = onHoldEmail({
-              clientName: existing.name,
-              revivalDate: revivalStr,
-              reason: canonicalHoldReason,
-            });
-            emailPayload.to = existing.email;
-            await sendEmail(emailPayload);
-            await prisma.emailLog.create({
-              data: {
-                leadId: id,
-                type: 'ON_HOLD',
-                sentTo: existing.email,
-                subject: emailPayload.subject,
-              },
-            });
-          } catch (e) {
-            console.error('[ON_HOLD email failed]', e);
-          }
-        }
-
-        // G1: WhatsApp — only persist the message if it was actually delivered.
-        // sendWhatsAppMessage returns null when Twilio is unconfigured (dev) and
-        // throws on real failures; in neither case do we store a phantom "sent" bubble.
-        try {
-          const waBody = fillTemplate('on_hold_notification', {
-            clientName: existing.name,
-            revivalDate: revivalStr,
-            reason: canonicalHoldReason,
-          });
-          const twilioSid = await sendWhatsAppMessage(existing.phone, waBody);
-          if (twilioSid) {
-            await prisma.whatsAppMessage.create({
-              data: {
-                leadId: id,
-                direction: 'OUTBOUND',
-                body: waBody,
-                templateId: 'on_hold_notification',
-                twilioSid,
-              },
-            });
-          }
-        } catch (e) {
-          console.error('[ON_HOLD whatsapp failed]', e);
-        }
-      }
-
-      // ON_HOLD — internal team notification
-      if (stage === 'ON_HOLD') {
-        const revivalStr2 = onHoldRevivalDate
-          ? new Date(onHoldRevivalDate).toLocaleDateString('en-IN')
-          : 'a future date';
-        const internalTargetIds = [existing.assignedBLId, existing.assignedDesignerId].filter(Boolean) as string[];
-        if (internalTargetIds.length) {
-          const internalTargets = await prisma.user.findMany({
-            where: { id: { in: internalTargetIds } },
-            select: { id: true, name: true, email: true },
-          });
-          for (const t of internalTargets) {
-            const payload = onHoldInternalEmail({
-              recipientName: t.name,
-              leadId: existing.leadId,
-              leadName: existing.name,
-              revivalDate: revivalStr2,
-              reason: canonicalHoldReason,
-              movedByName: user.name,
-            });
-            payload.to = t.email;
-            sendEmail(payload).catch(() => {});
-          }
-        }
-      }
-
-      // INACTIVE — create feedback record, send email + SMS
-      if (stage === 'INACTIVE') {
-        const formToken = randomUUID();
-        const baseUrl = process.env.BASE_URL ?? '';
-        const feedbackUrl = `${baseUrl}/feedback/${formToken}`;
-
-        await prisma.inactivationFeedback.upsert({
-          where: { leadId: id },
-          create: {
-            leadId: id,
-            reason: canonicalInactiveReason,
-            formToken,
-            feedbackFormSentAt: new Date(),
-          },
-          update: {
-            reason: canonicalInactiveReason,
-            formToken,
-            feedbackFormSentAt: new Date(),
-            respondedAt: null,
-            clientResponse: null,
-          },
-        });
-
-        if (existing.email) {
-          const emailPayload = inactivationEmail({
-            clientName: existing.name,
-            feedbackUrl,
-            reason: canonicalInactiveReason,
-          });
-          emailPayload.to = existing.email;
-          sendEmail(emailPayload).catch((e) => console.warn('[leads:email:inactive]', e.message));
-
-          await prisma.emailLog.create({
-            data: {
-              leadId: id,
-              type: 'INACTIVATION_FEEDBACK',
-              sentTo: existing.email,
-              subject: emailPayload.subject,
-            },
-          });
-        }
-
-        if (existing.phone) {
-          sendSms(
-            existing.phone,
-            `Hi ${existing.name}, thank you for your interest in Interiors by DeX. We'd love your feedback: ${feedbackUrl} - Interiors by DeX`,
-            id,
-          ).catch((e) => console.warn('[leads:sms:inactive]', e.message));
-        }
-
-        // INACTIVE — internal team notification
-        const inactiveTargetIds = [existing.assignedBLId, existing.assignedDesignerId].filter(Boolean) as string[];
-        if (inactiveTargetIds.length) {
-          const inactiveTargets = await prisma.user.findMany({
-            where: { id: { in: inactiveTargetIds } },
-            select: { id: true, name: true, email: true },
-          });
-          for (const t of inactiveTargets) {
-            const payload = inactiveInternalEmail({
-              recipientName: t.name,
-              leadId: existing.leadId,
-              leadName: existing.name,
-              reason: canonicalInactiveReason,
-              movedByName: user.name,
-            });
-            payload.to = t.email;
-            sendEmail(payload).catch(() => {});
-          }
-        }
-      }
     }
 
     res.json({ lead });
@@ -1348,70 +1182,88 @@ leadsRouter.post('/:id/reactivate', verifyToken, async (req, res) => {
       return;
     }
 
-    const lead = await prisma.lead.findUnique({ where: { id } });
-    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
-    if (lead.stage !== 'ON_HOLD' && lead.stage !== 'INACTIVE') {
-      res.status(400).json({ error: 'Only leads that are On Hold or Inactive can be reactivated.' });
+    try {
+      const updated = await reactivateLead({
+        leadId: id,
+        actorId: user.id,
+        actorName: user.name,
+        reason: reason.trim(),
+        notes: notes?.trim(),
+        notifyClient: !!notifyClient,
+      });
+      res.json({ lead: updated });
+    } catch (e: any) {
+      if (e.message === 'Lead not found') { res.status(404).json({ error: e.message }); return; }
+      res.status(400).json({ error: e.message });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/leads/:id/status — place On Hold / mark Inactive (task #88) ────
+// Status is decoupled from stage: this never touches `stage`, so the lead's
+// real funnel position is preserved and both show together (e.g. "DQL — On
+// Hold"). Reactivation back to ACTIVE goes through POST /:id/reactivate above.
+leadsRouter.patch('/:id/status', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { status, reason, notes, onHoldRevivalDate, notifyClient } = req.body as {
+      status?: 'ON_HOLD' | 'INACTIVE'; reason?: string; notes?: string;
+      onHoldRevivalDate?: string; notifyClient?: boolean;
+    };
+
+    if (status !== 'ON_HOLD' && status !== 'INACTIVE') {
+      res.status(400).json({ error: "status must be 'ON_HOLD' or 'INACTIVE'" });
       return;
     }
 
-    const fromStatus = lead.stage === 'ON_HOLD' ? 'On Hold' : 'Inactive';
-    // Restore the stage the lead was in before it was put on hold/inactive;
-    // fall back to MQL for older leads that predate preHoldStage tracking.
-    const restoredStage = lead.preHoldStage ?? 'MQL';
+    const existing = await prisma.lead.findUnique({ where: { id } });
+    if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (existing.status === status) {
+      res.status(400).json({ error: `Lead is already ${status === 'ON_HOLD' ? 'On Hold' : 'Inactive'}.` });
+      return;
+    }
+    // Simplification: to move a fully-inactive lead back to On Hold, reactivate
+    // it first — avoids ambiguous "was it ever active again" history.
+    if (existing.status === 'INACTIVE' && status === 'ON_HOLD') {
+      res.status(400).json({ error: 'Reactivate this lead before placing it on hold again.' });
+      return;
+    }
 
-    const updated = await prisma.lead.update({
-      where: { id },
-      data: {
-        stage: restoredStage,
-        preHoldStage: null,
-        onHoldRevivalDate: null,
-        onHoldReason: null,
-        inactiveReason: null,
-      },
-      include: LEAD_INCLUDE,
-    });
-
-    await logActivity(user.id, 'LEAD_REACTIVATED', id, {
-      from: fromStatus,
-      to: restoredStage,
-      reason: reason.trim(),
-      notes: notes?.trim() || undefined,
-      notifiedClient: !!notifyClient,
-    });
-
-    // Mandatory internal notification — BL, assigned designer, and managers.
-    const internalIds = new Set<string>();
-    if (lead.assignedBLId) internalIds.add(lead.assignedBLId);
-    if (lead.assignedDesignerId) internalIds.add(lead.assignedDesignerId);
-    const managers = await prisma.user.findMany({ where: { role: { in: ['BL', 'BRANCH_HEAD'] }, isActive: true }, select: { id: true } });
-    for (const m of managers) internalIds.add(m.id);
-
-    const msg = `Lead ${lead.leadId} (${lead.name}) reactivated from ${fromStatus} by ${user.name}. Reason: ${reason.trim()}`;
-    const internalUsers = await prisma.user.findMany({ where: { id: { in: [...internalIds] } }, select: { id: true, name: true, email: true } });
-    for (const t of internalUsers) {
-      await createNotification(t.id, 'LEAD_REACTIVATED', msg, id).catch(() => {});
-      const payload = leadReactivatedInternalEmail({
-        recipientName: t.name,
-        leadId: lead.leadId,
-        leadName: lead.name,
-        fromStatus,
-        reason: reason.trim(),
-        notes: notes?.trim(),
-        reactivatedByName: user.name,
+    if (status === 'ON_HOLD') {
+      if (!reason?.trim()) {
+        res.status(400).json({ error: 'A reason is required when placing a lead on hold.' });
+        return;
+      }
+      if (!onHoldRevivalDate) {
+        res.status(400).json({ error: 'A reopen date is required when placing a lead on hold.' });
+        return;
+      }
+      const reopenDate = new Date(onHoldRevivalDate);
+      if (isNaN(reopenDate.getTime()) || reopenDate <= new Date()) {
+        res.status(400).json({ error: 'The reopen date must be a future date.' });
+        return;
+      }
+      const lead = await putLeadOnHold({
+        leadId: id, actorId: user.id, actorName: user.name, reason: reason.trim(), revivalDate: reopenDate,
       });
-      payload.to = t.email;
-      sendEmail(payload).catch(() => {});
+      res.json({ lead });
+      return;
     }
 
-    // Optional client email, only when explicitly opted in.
-    if (notifyClient && lead.email) {
-      const payload = leadReactivatedClientEmail({ clientName: lead.name, notes: notes?.trim() });
-      payload.to = lead.email;
-      sendEmail(payload).catch(() => {});
+    // status === 'INACTIVE'
+    const resolvedReason = reason?.trim();
+    if (!resolvedReason) {
+      res.status(400).json({ error: 'A reason is required when marking a lead as inactive.' });
+      return;
     }
-
-    res.json({ lead: updated });
+    const lead = await markLeadInactive({
+      leadId: id, actorId: user.id, actorName: user.name,
+      reason: resolvedReason, notes: notes?.trim(), notifyClient: !!notifyClient,
+    });
+    res.json({ lead });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

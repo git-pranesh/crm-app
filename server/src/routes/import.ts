@@ -35,10 +35,12 @@ const COLUMN_MAP: Record<string, string> = {
   location: 'location', createdat: 'createdAt',
 };
 
+// Task #88: ON_HOLD/INACTIVE are no longer stage values — status is tracked
+// separately and always starts ACTIVE for imported leads.
 const VALID_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
   'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING',
-  'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'INACTIVE', 'ON_HOLD',
+  'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ];
 
 async function parseRows(file: Express.Multer.File): Promise<Record<string, string>[]> {
