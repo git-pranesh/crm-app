@@ -26,6 +26,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { renderMailTemplate } from '../lib/mailTemplates.js';
 
 export const obObmChecklistRouter = Router({ mergeParams: true });
 
@@ -61,14 +62,9 @@ const TIMELINE_LABELS: Record<TimelineField, string> = {
   signOffAt: 'Sign off date',
 };
 
-export function obmMailTemplate(clientName: string): { subject: string; html: string } {
-  return {
-    subject: `Your Onboarding is Complete — Interiors by DeX`,
-    html: `<p>Dear ${clientName},</p>
-<p>Great news — your onboarding with <strong>Interiors by DeX</strong> is now complete!</p>
-<p>Your dedicated design team will reach out shortly to schedule your onboarding meeting and kick off the design process.</p>
-<p>Thank you for your trust — we're excited to get started!<br/><em>Team Interiors by DeX</em></p>`,
-  };
+/** Admin-configurable default (see lib/mailTemplates.ts, code OB_OBM_WELCOME). */
+export async function obmMailTemplate(clientName: string): Promise<{ subject: string; html: string }> {
+  return renderMailTemplate('OB_OBM_WELCOME', { clientName });
 }
 
 async function loadLeadForChecklist(leadId: string, user: { id: string; role: string }) {
@@ -105,7 +101,7 @@ obObmChecklistRouter.get('/', verifyToken, async (req, res) => {
       checklist: checklist ?? null,
       docItems: DOC_ITEMS.map((key) => ({ key, label: DOC_ITEM_LABELS[key] })),
       timelineFields: TIMELINE_FIELDS,
-      obmMailTemplate: obmMailTemplate(lead.name),
+      obmMailTemplate: await obmMailTemplate(lead.name),
       hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
     });
   } catch (err: any) {
@@ -209,7 +205,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     }
 
     const { subject, html } = req.body as { subject?: string; html?: string };
-    const template = obmMailTemplate(lead.name);
+    const template = await obmMailTemplate(lead.name);
     const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
 
     await sendEmail(emailPayload);

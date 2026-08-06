@@ -26,3 +26,7 @@
 - [SYSTEM_USER_ID FK gotcha](system-user-id-fk.md) — default 'system' placeholder isn't a real user row; logActivity(SYSTEM_USER_ID,...) silently fails FK unless resolved to a real user first
 - [Round-robin assignment layer](round-robin-assignment.md) — assignmentService.ts already has BL/designer round-robin; CRE round-robin for ad leads added task #77; G5 BL auto-assign only fires on stage *transitions*, not leads born already at a stage
 - [Designation vs Role](designation-vs-role.md) — "add a title, no new permissions" → separate Designation enum/column layered on role, never extend the Role enum itself
+- [Pre-existing tsc noise](pre-existing-tsc-noise.md) — known ioredis/@types-express version-conflict errors exist independent of your change; diff via git-stash before blaming yourself
+- [Admin mail templates](admin-mail-templates.md) — mail template registry is admin-editable via AssignmentConfig blob; WhatsApp templates stay read-only (Meta pre-approval)
+- [pnpm devDependency per package](pnpm-devdep-single-package.md) — `pnpm add -D` must run from the target package dir, not workspace root (ERR_PNPM_ADDING_TO_ROOT)
+- [Design pipeline EIP phase](design-pipeline-eip-phase.md) — phases with `dateField: null` need a fallback start date or they stay "upcoming" forever

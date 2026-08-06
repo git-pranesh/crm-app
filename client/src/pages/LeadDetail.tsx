@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
-  ChevronDown, Upload, ExternalLink, Pencil, Info, Check, X,
+  ChevronDown, Upload, ExternalLink, Pencil, Info, Check, X, RefreshCw,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
@@ -32,6 +32,7 @@ interface Lead {
   estimatedValue?: string | number | null; intentRating?: number | null; intentRatingSource?: string | null;
   nextMeetingDate?: string | null; floorPlanUrl?: string | null;
   onHoldRevivalDate?: string | null; isDuplicate?: boolean;
+  onHoldReason?: string | null; inactiveReason?: string | null; preHoldStage?: string | null;
   isSLABreached: boolean; createdAt: string; updatedAt: string;
   daysInCurrentStage?: number; slaStatus?: 'ok' | 'warning' | 'breach';
   assignedDesigner?: { id: string; name: string } | null;
@@ -58,6 +59,7 @@ interface FollowUpTask {
 
 interface StageVisit {
   stage: string; enteredAt: string; exitedAt?: string; tatDays?: number;
+  benchmark?: { warningDays: number; breachDays: number } | null;
 }
 
 interface AppUser { id: string; name: string; role: string; }
@@ -76,6 +78,9 @@ const STAGE_COLORS: Record<string, string> = {
   INACTIVE: 'bg-stone-100 text-stone-500',
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
+
+const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Placed on hold in error', 'Other'];
+const INACTIVE_REASONS = ['Budget mismatch', 'Not interested', 'Went with another vendor', 'Unresponsive', 'Timeline mismatch', 'Other'];
 
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
@@ -256,9 +261,19 @@ export default function LeadDetail() {
   const [stageModal, setStageModal] = useState(false);
   const [newStage, setNewStage] = useState('');
   const [inactivationReason, setInactivationReason] = useState('');
+  const [inactiveReasonChoice, setInactiveReasonChoice] = useState('');
+  const [inactiveNotes, setInactiveNotes] = useState('');
   const [onHoldReason, setOnHoldReason] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
   const [changingStage, setChangingStage] = useState(false);
+
+  // Task #40 — reactivation flow for ON_HOLD / INACTIVE leads
+  const [reactivateModal, setReactivateModal] = useState(false);
+  const [reactivateReason, setReactivateReason] = useState('');
+  const [reactivateReasonOther, setReactivateReasonOther] = useState('');
+  const [reactivateNotes, setReactivateNotes] = useState('');
+  const [reactivateNotifyClient, setReactivateNotifyClient] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   const [intentModal, setIntentModal] = useState(false);
   const [pendingRating, setPendingRating] = useState(0);
@@ -392,7 +407,7 @@ export default function LeadDetail() {
     setSearchParams({ tab });
   };
 
-  const resetStageModalFields = () => { setInactivationReason(''); setOnHoldReason(''); setOnHoldReopenDate(''); };
+  const resetStageModalFields = () => { setInactivationReason(''); setInactiveReasonChoice(''); setInactiveNotes(''); setOnHoldReason(''); setOnHoldReopenDate(''); };
   const openStageModal = () => { setNewStage(lead?.stage ?? ''); resetStageModalFields(); setStageModal(true); };
   /** Opens the stage modal pre-selected to a specific target stage */
   const openStageModalTo = (targetStage: string) => { setNewStage(targetStage); resetStageModalFields(); setStageModal(true); };
@@ -505,8 +520,9 @@ export default function LeadDetail() {
   const handleStageChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStage || newStage === lead?.stage) { setStageModal(false); return; }
-    if (newStage === 'INACTIVE' && !inactivationReason.trim()) {
-      toast.error('Please provide a reason for inactivation'); return;
+    const resolvedInactiveReason = inactiveReasonChoice === 'Other' ? inactivationReason.trim() : inactiveReasonChoice;
+    if (newStage === 'INACTIVE' && !resolvedInactiveReason) {
+      toast.error('Please select or describe a reason for inactivation'); return;
     }
     if (newStage === 'ON_HOLD') {
       if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
@@ -517,7 +533,9 @@ export default function LeadDetail() {
     try {
       await api.patch(`/leads/${leadId}`, {
         stage: newStage,
-        ...(newStage === 'INACTIVE' && { inactivationReason }),
+        ...(newStage === 'INACTIVE' && {
+          inactivationReason: resolvedInactiveReason + (inactiveNotes.trim() ? ` — ${inactiveNotes.trim()}` : ''),
+        }),
         ...(newStage === 'ON_HOLD' && {
           reason: onHoldReason,
           onHoldRevivalDate: onHoldReopenDate,
@@ -530,6 +548,35 @@ export default function LeadDetail() {
       toast.error(e.message ?? 'Could not change stage');
     } finally {
       setChangingStage(false);
+    }
+  };
+
+  const openReactivateModal = () => {
+    setReactivateReason('');
+    setReactivateReasonOther('');
+    setReactivateNotes('');
+    setReactivateNotifyClient(false);
+    setReactivateModal(true);
+  };
+
+  const handleReactivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const resolvedReason = reactivateReason === 'Other' ? reactivateReasonOther.trim() : reactivateReason;
+    if (!resolvedReason) { toast.error('Please select or enter a reason'); return; }
+    setReactivating(true);
+    try {
+      await api.post(`/leads/${leadId}/reactivate`, {
+        reason: resolvedReason,
+        notes: reactivateNotes.trim() || undefined,
+        notifyClient: reactivateNotifyClient,
+      });
+      toast.success('Lead reactivated');
+      setReactivateModal(false);
+      loadLead(); loadActivities();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not reactivate lead');
+    } finally {
+      setReactivating(false);
     }
   };
 
@@ -661,14 +708,31 @@ export default function LeadDetail() {
                 ))}
               </select>
               {newStage === 'INACTIVE' && (
-                <div>
-                  <label className="block text-sm font-semibold text-stone-700 mb-1.5">
-                    Reason <span className="text-brand-500">*</span>
-                  </label>
-                  <textarea rows={3} value={inactivationReason} onChange={(e) => setInactivationReason(e.target.value)}
-                    required placeholder="e.g. Budget mismatch, not interested"
-                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                    style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                      Reason <span className="text-brand-500">*</span>
+                    </label>
+                    <select value={inactiveReasonChoice} onChange={(e) => setInactiveReasonChoice(e.target.value)}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+                      <option value="">Select a reason…</option>
+                      {INACTIVE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  {inactiveReasonChoice === 'Other' && (
+                    <input type="text" value={inactivationReason} onChange={(e) => setInactivationReason(e.target.value)}
+                      required placeholder="Describe the reason"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                  )}
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">Notes (optional)</label>
+                    <textarea rows={2} value={inactiveNotes} onChange={(e) => setInactiveNotes(e.target.value)}
+                      placeholder="Any additional context"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                  </div>
                   <p className="text-xs text-stone-400 mt-1">Feedback email + SMS sent automatically to client and internal team.</p>
                 </div>
               )}
@@ -904,6 +968,59 @@ export default function LeadDetail() {
         </div>
       )}
 
+      {/* ── Reactivation modal (task #40) ─────────────────────────────────────── */}
+      {reactivateModal && lead && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Reactivate Lead</h3>
+            <p className="text-xs text-stone-400 mb-4">
+              Restores this lead to {STAGE_LABELS[lead.preHoldStage ?? 'MQL'] ?? lead.preHoldStage ?? 'its previous stage'}.
+            </p>
+            <form onSubmit={handleReactivate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-stone-700 mb-1.5">
+                  Reason <span className="text-brand-500">*</span>
+                </label>
+                <select value={reactivateReason} onChange={(e) => setReactivateReason(e.target.value)}
+                  required
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+                  <option value="">Select a reason…</option>
+                  {REACTIVATION_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              {reactivateReason === 'Other' && (
+                <input type="text" value={reactivateReasonOther} onChange={(e) => setReactivateReasonOther(e.target.value)}
+                  required placeholder="Describe the reason"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+              )}
+              <div>
+                <label className="block text-sm font-semibold text-stone-700 mb-1.5">Notes (optional)</label>
+                <textarea rows={2} value={reactivateNotes} onChange={(e) => setReactivateNotes(e.target.value)}
+                  placeholder="Any additional context"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-stone-600">
+                <input type="checkbox" checked={reactivateNotifyClient} onChange={(e) => setReactivateNotifyClient(e.target.checked)} />
+                Also email the client
+              </label>
+              <p className="text-xs text-stone-400">The internal team is always notified automatically.</p>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setReactivateModal(false)}
+                  className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
+                <button type="submit" disabled={reactivating}
+                  className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors">
+                  {reactivating ? 'Reactivating…' : 'Reactivate'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ── Intent override modal ─────────────────────────────────────────────── */}
       {intentModal && (
         <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1046,10 +1163,30 @@ export default function LeadDetail() {
                 onClick={() => handleTabChange('whatsapp')}
                 className="flex items-center gap-1.5 bg-green-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-green-600 transition-colors"
               ><MessageCircle size={13} strokeWidth={2} /> WhatsApp</button>
+              {(lead.stage === 'ON_HOLD' || lead.stage === 'INACTIVE') && (
+                <button
+                  onClick={openReactivateModal}
+                  className="flex items-center gap-1.5 bg-brand-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold hover:bg-brand-600 transition-colors"
+                ><RefreshCw size={13} strokeWidth={2} /> Reactivate</button>
+              )}
             </div>
           </div>
         ) : (
           <p className="text-sm text-stone-500">Lead not found</p>
+        )}
+        {/* Task #40 — On Hold / Inactive reason + reopen date banner */}
+        {lead && lead.stage === 'ON_HOLD' && (
+          <div className="mt-2 flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-1.5 flex-wrap">
+            <span className="font-semibold">On Hold</span>
+            {lead.onHoldReason && <span>· Reason: {lead.onHoldReason}</span>}
+            {lead.onHoldRevivalDate && <span>· Reopens: {fmtDate(lead.onHoldRevivalDate)}</span>}
+          </div>
+        )}
+        {lead && lead.stage === 'INACTIVE' && lead.inactiveReason && (
+          <div className="mt-2 flex items-center gap-2 text-xs bg-stone-100 border border-stone-200 text-stone-600 rounded-lg px-3 py-1.5 flex-wrap">
+            <span className="font-semibold">Inactive</span>
+            <span>· Reason: {lead.inactiveReason}</span>
+          </div>
         )}
       </div>
 
@@ -1119,6 +1256,20 @@ export default function LeadDetail() {
                         const nextStage = FUNNEL_STAGES[idx + 1];
                         const hasGate = !!nextStage; // every stage but the last has an outgoing transition to check
 
+                        // Task #32: colour completed-stage TAT against the admin-configured
+                        // benchmark — purple if finished early, green/amber/red if it ran
+                        // within/near/over the benchmark. Only applies to stages the lead
+                        // has already exited (visit.exitedAt set); the current, still-open
+                        // stage keeps its existing brand styling + SLA dot above.
+                        let tatColorClasses: string | null = null;
+                        if (wasVisited && !isCurrent && visit?.exitedAt && visit.tatDays !== undefined && visit.benchmark) {
+                          const { warningDays, breachDays } = visit.benchmark;
+                          if (visit.tatDays < warningDays * 0.7) tatColorClasses = 'bg-purple-50 border-purple-300 text-purple-700'; // finished well ahead of benchmark
+                          else if (visit.tatDays < warningDays) tatColorClasses = 'bg-green-50 border-green-300 text-green-700'; // on track
+                          else if (visit.tatDays <= breachDays) tatColorClasses = 'bg-amber-50 border-amber-300 text-amber-700'; // near/at benchmark
+                          else tatColorClasses = 'bg-red-50 border-red-300 text-red-700'; // over benchmark
+                        }
+
                         return (
                           <div key={stage} className="flex items-center">
                             {idx > 0 && (
@@ -1136,6 +1287,8 @@ export default function LeadDetail() {
                                 className={`relative w-14 h-14 rounded-full flex flex-col items-center justify-center text-center transition-all border-2 ${
                                   isCurrent
                                     ? 'bg-brand-500 border-brand-600 text-white shadow-md'
+                                    : tatColorClasses
+                                    ? tatColorClasses
                                     : wasVisited
                                     ? 'bg-brand-50 border-brand-200 text-brand-700'
                                     : 'bg-gray-50 border-gray-100 text-gray-300'
@@ -1460,7 +1613,7 @@ export default function LeadDetail() {
             )}
             {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
             {activeTab === 'files' && lead && (
-              <FilesTab leadId={leadId!} currentStage={lead.stage} />
+              <FilesTab leadId={leadId!} currentStage={lead.stage} floorPlanUrl={lead.floorPlanUrl} />
             )}
           </div>
         </div>

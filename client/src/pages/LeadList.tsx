@@ -438,9 +438,17 @@ export default function LeadList() {
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[status]}`}>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-semibold ${STATUS_COLORS[status]}`}
+                              title={status === 'On Hold' && lead.onHoldRevivalDate ? `Reopens ${new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN')}` : undefined}
+                            >
                               {status}
                             </span>
+                            {status === 'On Hold' && lead.onHoldRevivalDate && (
+                              <span className="ml-1.5 text-[10px] text-stone-400 whitespace-nowrap">
+                                ↺ {new Date(lead.onHoldRevivalDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 text-stone-700 text-xs font-medium whitespace-nowrap">{fmtVal(lead.estimatedValue)}</td>
                           <td className="py-3 px-4">{avatar(lead.assignedDesigner?.name) ?? <span className="text-stone-300 text-xs">—</span>}</td>

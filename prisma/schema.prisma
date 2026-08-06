@@ -242,6 +242,9 @@ model Lead {
   onHoldReason         String?
   /// Reason for marking inactive — required when stage moves to INACTIVE
   inactiveReason       String?
+  /// Stage the lead was in immediately before moving to ON_HOLD/INACTIVE —
+  /// used to restore it on reactivation. Set automatically, never user-edited.
+  preHoldStage         LeadStage?
   /// Timestamp when the assigned designer first opened this lead's detail page
   firstOpenedAt        DateTime?
   isDuplicate          Boolean        @default(false)

@@ -52,41 +52,8 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
 // ── Pre-built templates ────────────────────────────────────────────────────────
 
-export function meetingConfirmationEmail(opts: {
-  clientName: string;
-  type: string;
-  mode: string;
-  scheduledAt: Date;
-  designerName: string;
-}): EmailPayload {
-  const dateStr = opts.scheduledAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  return {
-    to: '',
-    subject: `Meeting Confirmed — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Your <strong>${opts.type} meeting</strong> has been scheduled for <strong>${dateStr}</strong>.</p>
-<p>Mode: ${opts.mode}<br/>Designer: ${opts.designerName}</p>
-<p>Looking forward to meeting you!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
-
-export function momEmail(opts: {
-  clientName: string;
-  meetingType: string;
-  scheduledAt: Date;
-  mom: string;
-}): EmailPayload {
-  const dateStr = opts.scheduledAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  return {
-    to: '',
-    subject: `Minutes of Meeting — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Thank you for your time during our <strong>${opts.meetingType}</strong> on ${dateStr}.</p>
-<p><strong>Meeting Summary:</strong></p>
-<p>${opts.mom.replace(/\n/g, '<br/>')}</p>
-<p>We'll be in touch with next steps.<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
+// meetingConfirmationEmail / momEmail moved to lib/mailTemplates.ts (Task #66)
+// so their default subject/body are admin-editable from Settings.
 
 export function noShowEmail(opts: { clientName: string }): EmailPayload {
   return {
@@ -226,6 +193,40 @@ export function inactiveInternalEmail(opts: {
 <strong>Actioned by:</strong> ${opts.movedByName}</p>
 <p>A feedback email and SMS have been sent to the client automatically.</p>
 <p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
+export function leadReactivatedInternalEmail(opts: {
+  recipientName: string;
+  leadId: string;
+  leadName: string;
+  fromStatus: string;
+  reason: string;
+  notes?: string;
+  reactivatedByName: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Lead ${opts.leadId} reactivated — Interiors by DeX CRM`,
+    html: `<p>Hi ${opts.recipientName},</p>
+<p>Lead <strong>${opts.leadId} — ${opts.leadName}</strong> has been reactivated from <strong>${opts.fromStatus}</strong>.</p>
+<p><strong>Reason:</strong> ${opts.reason}${opts.notes ? `<br/><strong>Notes:</strong> ${opts.notes}` : ''}<br/>
+<strong>Actioned by:</strong> ${opts.reactivatedByName}</p>
+<p><em>Team Interiors by DeX CRM</em></p>`,
+  };
+}
+
+export function leadReactivatedClientEmail(opts: {
+  clientName: string;
+  notes?: string;
+}): EmailPayload {
+  return {
+    to: '',
+    subject: `Your Project is Back On Track — Interiors by DeX`,
+    html: `<p>Dear ${opts.clientName},</p>
+<p>Good news — your interior design project with <strong>Interiors by DeX</strong> is now active again and our team will be in touch shortly.</p>
+${opts.notes ? `<p>${opts.notes}</p>` : ''}
+<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
   };
 }
 

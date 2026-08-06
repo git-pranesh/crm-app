@@ -4,7 +4,8 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
-import { sendEmail, meetingConfirmationEmail, momEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { sendEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
 import { notifyManagers } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
@@ -122,14 +123,15 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
       where: { id: user.id },
       select: { name: true },
     });
-    const emailPayload = meetingConfirmationEmail({
+    const meetingDateStr = new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const rendered = await renderMailTemplate('MEETING_CONFIRMATION', {
       clientName: lead.name,
       type: ppNumber ? `PP${ppNumber}` : type,
       mode,
-      scheduledAt: new Date(scheduledAt),
+      scheduledAt: meetingDateStr,
       designerName: designer?.name ?? 'Your Designer',
     });
-    emailPayload.to = lead.email;
+    const emailPayload = { to: lead.email, subject: rendered.subject, html: rendered.html };
 
     queues.emails.add('meeting-confirmation', { emailPayload, leadId, meetingId: meeting.id }).catch(() => {});
 
@@ -455,12 +457,13 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     let emailPayload;
 
     if (status === 'COMPLETED') {
-      emailPayload = momEmail({
+      const rendered = await renderMailTemplate('MOM', {
         clientName: lead.name,
         meetingType: meeting.ppNumber ? `PP${meeting.ppNumber}` : meeting.type,
-        scheduledAt: meeting.scheduledAt,
-        mom: mom!,
+        scheduledAt: meeting.scheduledAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        mom: mom!.replace(/\n/g, '<br/>'),
       });
+      emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     } else if (status === 'RESCHEDULED') {
       emailPayload = rescheduleEmail({
         clientName: lead.name,

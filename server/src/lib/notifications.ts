@@ -15,7 +15,8 @@ export type NotificationType =
   | 'STAGE_MOVED_BACKWARD'
   | 'INTENT_RATING_CHANGED'
   | 'ON_HOLD_REOPEN'
-  | 'NPS_SUBMITTED';
+  | 'NPS_SUBMITTED'
+  | 'LEAD_REACTIVATED';
 
 export async function createNotification(
   userId: string,

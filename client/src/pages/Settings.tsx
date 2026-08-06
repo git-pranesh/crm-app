@@ -11,6 +11,14 @@ interface SLAConfig {
   updatedAt?: string;
 }
 
+interface StageSlaConfig {
+  stage: string;
+  label: string;
+  warningDays: number;
+  breachDays: number;
+  isDefault: boolean;
+}
+
 interface Offer {
   id: string;
   name: string;
@@ -25,6 +33,15 @@ interface WATemplate {
   label: string;
   body: string;
   note?: string;
+}
+
+interface MailTemplate {
+  code: string;
+  label: string;
+  description: string;
+  placeholders: string[];
+  subject: string;
+  html: string;
 }
 
 const SLA_ROWS: { rule: string; label: string }[] = [
@@ -51,6 +68,11 @@ export default function Settings() {
   const [savingSLA, setSavingSLA]     = useState<string | null>(null);
   const [savedSLA, setSavedSLA]       = useState<Record<string, boolean>>({});
 
+  const [stageSla, setStageSla]           = useState<StageSlaConfig[]>([]);
+  const [stageSlaEdit, setStageSlaEdit]   = useState<Record<string, { warningDays: string; breachDays: string }>>({});
+  const [savingStage, setSavingStage]     = useState<string | null>(null);
+  const [savedStage, setSavedStage]       = useState<Record<string, boolean>>({});
+
   const [offers, setOffers]           = useState<Offer[]>([]);
   const [toggling, setToggling]       = useState<string | null>(null);
   const [newOfferName, setNewOfferName] = useState('');
@@ -59,13 +81,20 @@ export default function Settings() {
   const [templates, setTemplates]     = useState<WATemplate[]>([]);
   const [loading, setLoading]         = useState(true);
 
+  const [mailTemplates, setMailTemplates] = useState<MailTemplate[]>([]);
+  const [mailEdit, setMailEdit]           = useState<Record<string, { subject: string; html: string }>>({});
+  const [savingMail, setSavingMail]       = useState<string | null>(null);
+  const [savedMail, setSavedMail]         = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (user?.role !== 'BRANCH_HEAD') return;
     Promise.all([
       api.get<{ configs: SLAConfig[] }>('/admin/sla-config'),
       api.get<{ offers: Offer[] }>('/offers'),
       api.get<{ templates: WATemplate[] }>('/admin/whatsapp-templates'),
-    ]).then(([sla, off, wa]) => {
+      api.get<{ configs: StageSlaConfig[] }>('/admin/stage-sla-config'),
+      api.get<{ templates: MailTemplate[] }>('/admin/mail-templates'),
+    ]).then(([sla, off, wa, stageSlaRes, mailRes]) => {
       const m: Record<string, number> = {};
       const e: Record<string, string> = {};
       for (const c of (sla.configs ?? [])) {
@@ -76,9 +105,58 @@ export default function Settings() {
       setEditHours(e);
       setOffers(off.offers ?? []);
       setTemplates(wa.templates ?? []);
+
+      const rows = stageSlaRes.configs ?? [];
+      setStageSla(rows);
+      const se: Record<string, { warningDays: string; breachDays: string }> = {};
+      for (const r of rows) se[r.stage] = { warningDays: String(r.warningDays), breachDays: String(r.breachDays) };
+      setStageSlaEdit(se);
+
+      const mt = mailRes.templates ?? [];
+      setMailTemplates(mt);
+      const me: Record<string, { subject: string; html: string }> = {};
+      for (const t of mt) me[t.code] = { subject: t.subject, html: t.html };
+      setMailEdit(me);
     }).catch((err) => toast.error(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const saveMailTemplate = async (code: string) => {
+    const edit = mailEdit[code];
+    if (!edit?.subject.trim() || !edit?.html.trim()) {
+      toast.error('Subject and body cannot be empty'); return;
+    }
+    setSavingMail(code);
+    try {
+      await api.put(`/admin/mail-templates/${code}`, { subject: edit.subject, html: edit.html });
+      setMailTemplates((rows) => rows.map((t) => t.code === code ? { ...t, subject: edit.subject, html: edit.html } : t));
+      setSavedMail((s) => ({ ...s, [code]: true }));
+      setTimeout(() => setSavedMail((s) => ({ ...s, [code]: false })), 2000);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Save failed');
+    } finally {
+      setSavingMail(null);
+    }
+  };
+
+  const resetMailTemplate = async (code: string) => {
+    setSavingMail(code);
+    try {
+      const data = await api.delete<{ ok: true }>(`/admin/mail-templates/${code}`).catch(() => ({ ok: true }));
+      void data;
+      // Re-fetch this template's default from the server-computed effective value
+      const res = await api.get<{ templates: MailTemplate[] }>('/admin/mail-templates');
+      const mt = res.templates ?? [];
+      setMailTemplates(mt);
+      const t = mt.find((x) => x.code === code);
+      if (t) setMailEdit((e) => ({ ...e, [code]: { subject: t.subject, html: t.html } }));
+      toast.success('Reset to default');
+    } catch (err: any) {
+      toast.error(err.message ?? 'Reset failed');
+    } finally {
+      setSavingMail(null);
+    }
+  };
 
   const saveSLA = async (rule: string) => {
     const val = parseInt(editHours[rule] ?? '', 10);
@@ -95,6 +173,30 @@ export default function Settings() {
       toast.error(err.message ?? 'Save failed');
     } finally {
       setSavingSLA(null);
+    }
+  };
+
+  const saveStageSla = async (stage: string) => {
+    const edit = stageSlaEdit[stage];
+    const warningDays = parseInt(edit?.warningDays ?? '', 10);
+    const breachDays = parseInt(edit?.breachDays ?? '', 10);
+    if (!warningDays || !breachDays || warningDays < 1 || breachDays < 1) {
+      toast.error('Enter valid day counts (≥ 1)'); return;
+    }
+    if (warningDays > breachDays) {
+      toast.error('Warning days cannot exceed breach days'); return;
+    }
+    setSavingStage(stage);
+    try {
+      const data = await api.patch<{ config: StageSlaConfig }>(`/admin/stage-sla-config/${stage}`, { warningDays, breachDays });
+      setStageSla((rows) => rows.map((r) => r.stage === stage ? { ...r, ...data.config, isDefault: false } : r));
+      setStageSlaEdit((e) => ({ ...e, [stage]: { warningDays: String(data.config.warningDays), breachDays: String(data.config.breachDays) } }));
+      setSavedStage((s) => ({ ...s, [stage]: true }));
+      setTimeout(() => setSavedStage((s) => ({ ...s, [stage]: false })), 2000);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Save failed');
+    } finally {
+      setSavingStage(null);
     }
   };
 
@@ -144,6 +246,78 @@ export default function Settings() {
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">SLA rules, offers &amp; message templates</p>
+      </div>
+
+      {/* Section — Stage SLA Configuration (new stage-transition system, task #14) */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📈</span>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">SLA Configuration — stage transitions</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Drives the SLA badges shown on the lead list, pipeline and lead detail roadmap.
+                <span className="inline-flex items-center gap-1 ml-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-500" /> on track
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400 ml-2" /> warning
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-500 ml-2" /> breached
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {stageSla.map((row) => {
+            const edit = stageSlaEdit[row.stage] ?? { warningDays: String(row.warningDays), breachDays: String(row.breachDays) };
+            const dirty = edit.warningDays !== String(row.warningDays) || edit.breachDays !== String(row.breachDays);
+            const saving = savingStage === row.stage;
+            const saved = savedStage[row.stage];
+            return (
+              <div key={row.stage} className="px-5 py-3.5 flex items-center gap-4 flex-wrap">
+                <div className="min-w-[220px] flex-1">
+                  <p className="text-sm text-gray-800 font-medium">{row.label}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 font-mono">{row.stage}{row.isDefault ? '' : ' · custom'}</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-400">Warning</label>
+                  <input
+                    type="number" min={1}
+                    value={edit.warningDays}
+                    onChange={(e) => setStageSlaEdit((s) => ({ ...s, [row.stage]: { ...edit, warningDays: e.target.value } }))}
+                    className="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-amber-300"
+                  />
+                  <span className="text-xs text-gray-400">d</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-gray-400">Breach</label>
+                  <input
+                    type="number" min={1}
+                    value={edit.breachDays}
+                    onChange={(e) => setStageSlaEdit((s) => ({ ...s, [row.stage]: { ...edit, breachDays: e.target.value } }))}
+                    className="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-300"
+                  />
+                  <span className="text-xs text-gray-400">d</span>
+                </div>
+                <div className="ml-auto">
+                  {saved ? (
+                    <span className="text-green-600 font-medium text-sm">✓ Saved</span>
+                  ) : (
+                    <button
+                      onClick={() => saveStageSla(row.stage)}
+                      disabled={saving || !dirty}
+                      className="text-xs font-medium px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      {saving ? (
+                        <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : '💾'}
+                      <span>{saving ? 'Saving…' : 'Save'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* A + B side by side */}
@@ -270,7 +444,7 @@ export default function Settings() {
             <MessageCircle size={16} strokeWidth={1.8} className="text-stone-500" />
             <div>
               <h2 className="text-sm font-semibold text-gray-900">WhatsApp templates</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Pre-approved message templates used across the automation flows. Read-only here.</p>
+              <p className="text-xs text-gray-400 mt-0.5">Pre-approved with Meta/Twilio for the WhatsApp Business API — wording can't be changed without re-approval, so this list is read-only.</p>
             </div>
           </div>
         </div>
@@ -291,6 +465,77 @@ export default function Settings() {
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Section D — Mail Templates (Task #66, full width, editable) */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <MessageCircle size={16} strokeWidth={1.8} className="text-brand-500" />
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">Mail templates</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Default subject &amp; body for every system-triggered email. Editable per-send in the modal too — this sets what shows up pre-filled.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {mailTemplates.map((t) => {
+            const edit = mailEdit[t.code] ?? { subject: t.subject, html: t.html };
+            const dirty = edit.subject !== t.subject || edit.html !== t.html;
+            return (
+              <div key={t.code} className="px-5 py-4 space-y-2.5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-gray-900">{t.label}</p>
+                    <span className="text-[10px] font-mono bg-gray-50 border border-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+                      {t.code}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Placeholders: {t.placeholders.map((p) => `{{${p}}}`).join(', ')}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-500 mb-1">Subject</label>
+                  <input
+                    value={edit.subject}
+                    onChange={(e) => setMailEdit((m) => ({ ...m, [t.code]: { ...edit, subject: e.target.value } }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-500 mb-1">Body (HTML)</label>
+                  <textarea
+                    value={edit.html}
+                    onChange={(e) => setMailEdit((m) => ({ ...m, [t.code]: { ...edit, html: e.target.value } }))}
+                    rows={5}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-300"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => saveMailTemplate(t.code)}
+                    disabled={savingMail === t.code || !dirty}
+                    className="px-3 py-1.5 text-xs font-medium bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white rounded-lg transition-colors"
+                  >
+                    {savingMail === t.code ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => resetMailTemplate(t.code)}
+                    disabled={savingMail === t.code}
+                    className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 rounded-lg transition-colors"
+                  >
+                    Reset to default
+                  </button>
+                  {savedMail[t.code] && <span className="text-xs text-green-600">Saved</span>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

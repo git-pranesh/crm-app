@@ -19,7 +19,11 @@ slaRouter.get('/breaches', verifyToken, requireRole('BL', 'BRANCH_HEAD', 'ADMIN'
   }
 
   const where: any = {
-    lead: leadFilter,
+    // ONBOARDING excluded (task #14) — the legacy engine never had an OB→OBM
+    // rule, so any record here for a lead now in ONBOARDING is stale/left
+    // over from an earlier stage; that stage relies on the new stage-SLA
+    // system instead.
+    lead: { ...leadFilter, stage: { not: 'ONBOARDING' } },
   };
   if (rule) where.rule = rule;
   if (resolved === 'true') where.resolvedAt = { not: null };

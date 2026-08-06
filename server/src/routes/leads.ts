@@ -7,7 +7,7 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendSms } from '../services/smsService.js';
-import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail, stageMoveBackwardEmail, intentRatingChangedEmail } from '../lib/email.js';
+import { sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail, stageMoveBackwardEmail, intentRatingChangedEmail, leadReactivatedInternalEmail, leadReactivatedClientEmail } from '../lib/email.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
 import { sendWhatsAppMessage, fillTemplate } from '../lib/whatsapp.js';
 import { selectBLForLead } from '../services/assignmentService.js';
@@ -15,7 +15,7 @@ import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../con
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
-import { computeSlaInfoForLeads, computeSlaInfoForLead } from '../lib/stageSla.js';
+import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -105,7 +105,14 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     if (source) where.source = source;
     if (designerId) where.assignedDesignerId = designerId;
     if (blId) where.assignedBLId = blId;
-    if (isSLABreached === 'true') where.isSLABreached = true;
+    // ONBOARDING excluded (task #14) — the legacy flag is display-suppressed
+    // for that stage below, so it must also be excluded from this filter to
+    // avoid a lead appearing in "SLA breached" results while showing
+    // isSLABreached:false on its own record.
+    if (isSLABreached === 'true') {
+      where.isSLABreached = true;
+      if (!where.stage) where.stage = { not: 'ONBOARDING' };
+    }
     // G2: new filter params
     if (projectType) where.projectType = projectType;
     if (location) where.location = { contains: location, mode: 'insensitive' };
@@ -235,6 +242,10 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       isUnread: viewerIsDesigner && l.assignedDesignerId === user.id && !l.firstOpenedAt,
       daysInCurrentStage: slaInfoMap[l.id]?.daysInCurrentStage ?? 0,
       slaStatus: slaInfoMap[l.id]?.slaStatus ?? 'ok',
+      // Task #14: a lead in ONBOARDING is only "breached" per the new
+      // stage-SLA system (slaStatus, above) — never via a legacy flag left
+      // over from an earlier stage's rule.
+      isSLABreached: l.stage === 'ONBOARDING' ? false : l.isSLABreached,
     }));
 
     res.json({ leads: leadsWithMeta, total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) });
@@ -609,8 +620,11 @@ leadsRouter.get('/:id', verifyToken, async (req, res) => {
 
     // SLA breach indicator (task #56) — days stuck in current stage + status
     const slaInfo = await computeSlaInfoForLead(lead);
+    // Task #14: suppress the legacy breach flag in ONBOARDING — see the
+    // matching comment on GET /api/leads for why.
+    const isSLABreached = lead.stage === 'ONBOARDING' ? false : lead.isSLABreached;
 
-    res.json({ lead: { ...lead, ...slaInfo }, avgNps, npsPerStage });
+    res.json({ lead: { ...lead, ...slaInfo, isSLABreached }, avgNps, npsPerStage });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -783,9 +797,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(onHoldRevivalDate && { onHoldRevivalDate: new Date(onHoldRevivalDate) }),
         ...(stage === 'ON_HOLD' && stage !== prevStage && {
           onHoldReason: (onHoldReason?.trim() || reason?.trim() || ''),
+          // Task #40: remember what stage this lead was in so reactivation
+          // can restore it instead of guessing.
+          preHoldStage: prevStage,
         }),
         ...(stage === 'INACTIVE' && stage !== prevStage && {
           inactiveReason: (inactiveReason?.trim() || inactivationReason?.trim() || ''),
+          preHoldStage: prevStage === 'ON_HOLD' ? existing.preHoldStage : prevStage,
         }),
         ...(customFields && {
           customFields: { ...(existing.customFields as Record<string, unknown> ?? {}), ...customFields },
@@ -854,8 +872,14 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
-      // BUG-009 Part B: auto-resolve open SLA breaches when moving to a terminal stage
-      if (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || stage === 'INACTIVE') {
+      // BUG-009 Part B: auto-resolve open SLA breaches when moving to a terminal
+      // stage. ONBOARDING is included (task #14) because the legacy engine
+      // (server/src/jobs/slaCheck.ts) has no OB→OBM rule of its own — without
+      // this, a lead could carry a stale breach flag from an earlier stage
+      // (e.g. MQL/PROPOSAL_READY) into OB, where only the new stage-SLA
+      // system (computeStageSlaStatus, now covering ONBOARDING) should decide
+      // breach status.
+      if (stage === 'ONBOARDING' || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || stage === 'INACTIVE') {
         await prisma.sLABreach.updateMany({
           where: { leadId: id, resolvedAt: null },
           data: { resolvedAt: new Date() },
@@ -1238,6 +1262,99 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (r
   }
 });
 
+// ── POST /api/leads/:id/reactivate — reopen an ON_HOLD or INACTIVE lead ───────
+// Task #40: mandatory reason (dropdown value, "Other" free-typed) + optional
+// notes; always notifies the internal team, optionally emails the client.
+// Auto-reactivation on the reopen date itself stays out of scope per the
+// founder's direction — this is the manual flow only.
+const REACTIVATION_REASONS = [
+  'Client re-engaged',
+  'Budget approved',
+  'Timeline resumed',
+  'Placed on hold in error',
+  'Other',
+];
+
+leadsRouter.post('/:id/reactivate', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { reason, notes, notifyClient } = req.body as { reason?: string; notes?: string; notifyClient?: boolean };
+
+    if (!reason?.trim()) {
+      res.status(400).json({ error: 'A reason is required to reactivate this lead.' });
+      return;
+    }
+
+    const lead = await prisma.lead.findUnique({ where: { id } });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (lead.stage !== 'ON_HOLD' && lead.stage !== 'INACTIVE') {
+      res.status(400).json({ error: 'Only leads that are On Hold or Inactive can be reactivated.' });
+      return;
+    }
+
+    const fromStatus = lead.stage === 'ON_HOLD' ? 'On Hold' : 'Inactive';
+    // Restore the stage the lead was in before it was put on hold/inactive;
+    // fall back to MQL for older leads that predate preHoldStage tracking.
+    const restoredStage = lead.preHoldStage ?? 'MQL';
+
+    const updated = await prisma.lead.update({
+      where: { id },
+      data: {
+        stage: restoredStage,
+        preHoldStage: null,
+        onHoldRevivalDate: null,
+        onHoldReason: null,
+        inactiveReason: null,
+      },
+      include: LEAD_INCLUDE,
+    });
+
+    await logActivity(user.id, 'LEAD_REACTIVATED', id, {
+      from: fromStatus,
+      to: restoredStage,
+      reason: reason.trim(),
+      notes: notes?.trim() || undefined,
+      notifiedClient: !!notifyClient,
+    });
+
+    // Mandatory internal notification — BL, assigned designer, and managers.
+    const internalIds = new Set<string>();
+    if (lead.assignedBLId) internalIds.add(lead.assignedBLId);
+    if (lead.assignedDesignerId) internalIds.add(lead.assignedDesignerId);
+    const managers = await prisma.user.findMany({ where: { role: { in: ['BL', 'BRANCH_HEAD'] }, isActive: true }, select: { id: true } });
+    for (const m of managers) internalIds.add(m.id);
+
+    const msg = `Lead ${lead.leadId} (${lead.name}) reactivated from ${fromStatus} by ${user.name}. Reason: ${reason.trim()}`;
+    const internalUsers = await prisma.user.findMany({ where: { id: { in: [...internalIds] } }, select: { id: true, name: true, email: true } });
+    for (const t of internalUsers) {
+      await createNotification(t.id, 'LEAD_REACTIVATED', msg, id).catch(() => {});
+      const payload = leadReactivatedInternalEmail({
+        recipientName: t.name,
+        leadId: lead.leadId,
+        leadName: lead.name,
+        fromStatus,
+        reason: reason.trim(),
+        notes: notes?.trim(),
+        reactivatedByName: user.name,
+      });
+      payload.to = t.email;
+      sendEmail(payload).catch(() => {});
+    }
+
+    // Optional client email, only when explicitly opted in.
+    if (notifyClient && lead.email) {
+      const payload = leadReactivatedClientEmail({ clientName: lead.name, notes: notes?.trim() });
+      payload.to = lead.email;
+      sendEmail(payload).catch(() => {});
+    }
+
+    res.json({ lead: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/leads/:id/activity ────────────────────────────────────────────────
 leadsRouter.get('/:id/activity', verifyToken, async (req, res) => {
   try {
@@ -1389,7 +1506,17 @@ leadsRouter.get('/:id/stage-history', verifyToken, async (req, res) => {
       tatDays: Math.max(0, Math.floor(nowMs / (1000 * 60 * 60 * 24))),
     });
 
-    res.json({ history });
+    // Task #32: attach the admin-configured SLA benchmark for every visited
+    // stage so the client can colour-code TAT without duplicating thresholds.
+    const thresholds = await getEffectiveStageSla();
+    const historyWithBenchmark = history.map((h) => ({
+      ...h,
+      benchmark: thresholds[h.stage]
+        ? { warningDays: thresholds[h.stage].warningDays, breachDays: thresholds[h.stage].breachDays }
+        : null,
+    }));
+
+    res.json({ history: historyWithBenchmark });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1533,7 +1660,7 @@ leadsRouter.post('/:id/floor-plan', verifyToken, (req, res, next) => {
     // Use only known MIME types for storage; avoid uploading supplied arbitrary MIME
     const safeMime = isStandard ? file.mimetype : 'application/octet-stream';
 
-    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, floorPlanUrl: true } });
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, stage: true, floorPlanUrl: true } });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
 
     // Files cannot be replaced once uploaded — only new files may be added.
@@ -1543,28 +1670,54 @@ leadsRouter.post('/:id/floor-plan', verifyToken, (req, res, next) => {
     }
 
     if (!supabaseAdmin) {
-      res.status(500).json({ error: 'Supabase storage not configured (SUPABASE_SERVICE_ROLE_KEY missing)' });
+      res.status(500).json({ error: 'Floor plan storage is not configured — SUPABASE_SERVICE_ROLE_KEY is missing. Contact an admin to configure Supabase Storage.' });
       return;
     }
 
     const safeExt = (DWG_DXF_EXT.has(ext) || ['pdf','jpg','jpeg','png','webp'].includes(ext)) ? ext : 'pdf';
     const storagePath = `floor-plans/${lead.leadId}/${Date.now()}.${safeExt}`;
 
-    // Ensure bucket exists (idempotent)
-    await supabaseAdmin.storage.createBucket('crm-files', { public: true }).catch(() => {});
+    // Ensure bucket exists (idempotent — safe to call even if it already exists
+    // with the same settings; a mismatched pre-existing bucket is a one-time
+    // setup problem, see scripts/setup-supabase-storage.ts).
+    try {
+      await supabaseAdmin.storage.createBucket('crm-files', { public: true });
+    } catch {
+      // Ignore "already exists" — anything else surfaces via the upload call below.
+    }
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from('crm-files')
       .upload(storagePath, file.buffer, { contentType: safeMime, upsert: true });
 
     if (uploadError) {
-      res.status(500).json({ error: uploadError.message });
+      console.error('[leads:floor-plan] Supabase Storage upload failed:', uploadError.message);
+      res.status(502).json({
+        error: `Could not reach floor plan storage (${uploadError.message}). Verify the "crm-files" bucket exists in Supabase Storage and try again.`,
+      });
       return;
     }
 
     const { data: { publicUrl } } = supabaseAdmin.storage.from('crm-files').getPublicUrl(storagePath);
 
-    await prisma.lead.update({ where: { id }, data: { floorPlanUrl: publicUrl } });
+    // Also record it as a proper LeadFile at the lead's *current* stage so it
+    // shows up in the Files tab immediately — whichever of EL/MQL/DQL the lead
+    // happens to be in at upload time (task #30). `floorPlanUrl` is kept in
+    // sync too for older code paths that still read it directly.
+    const fileStage = (['EFFECTIVE_LEAD', 'MQL', 'DQL'] as const).includes(lead.stage as any) ? lead.stage : 'MQL';
+    await prisma.$transaction([
+      prisma.lead.update({ where: { id }, data: { floorPlanUrl: publicUrl } }),
+      prisma.leadFile.create({
+        data: {
+          leadId: id,
+          stage: fileStage as any,
+          fileType: 'FLOOR_PLAN',
+          fileName: file.originalname,
+          storagePath: `crm-files:${storagePath}`,
+          uploadedById: user.id,
+        },
+      }),
+    ]);
     await logActivity(user.id, 'FLOOR_PLAN_UPLOADED', id, { url: publicUrl, fileName: file.originalname });
 
     res.json({ url: publicUrl });

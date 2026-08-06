@@ -17,18 +17,36 @@ export interface StageSlaThreshold {
   label: string;
 }
 
+// Founder-specified windows (task #14): MQL→DQL 7-15d, DQL→Proposal Ready 2d,
+// Proposal Ready→Proposal Presented (or DQL→PP direct) 2d, Proposal
+// Discussion→Onboarding 7-15d, OB→OBM 3d. Flat (single-number) windows use
+// the same value for warning and breach so they turn red immediately rather
+// than passing through a yellow phase that was never specified.
 export const SALES_STAGE_SLA: Record<string, StageSlaThreshold> = {
   MQL: { warningDays: 7, breachDays: 15, label: 'MQL → DQL' },
-  DQL: { warningDays: 1, breachDays: 2, label: 'DQL → Proposal Ready/Presented' },
-  PROPOSAL_READY: { warningDays: 1, breachDays: 2, label: 'Proposal Ready → Proposal Presented' },
+  DQL: { warningDays: 2, breachDays: 2, label: 'DQL → Proposal Ready/Presented' },
+  PROPOSAL_READY: { warningDays: 2, breachDays: 2, label: 'Proposal Ready → Proposal Presented' },
   PROPOSAL_DISCUSSION: { warningDays: 7, breachDays: 15, label: 'Proposal Discussion → Onboarding' },
+  ONBOARDING: { warningDays: 3, breachDays: 3, label: 'Onboarding → Onboarding Meeting' },
 };
+
+/** Every stage this SLA system governs, for admin UI listing purposes. */
+export const SLA_GOVERNED_STAGES = Object.keys(SALES_STAGE_SLA);
 
 export type SlaStatus = 'ok' | 'warning' | 'breach';
 
-/** Compute the sales-funnel SLA status for a lead's current stage. */
-export function computeStageSlaStatus(stage: string, daysInStage: number): SlaStatus {
-  const threshold = SALES_STAGE_SLA[stage];
+/**
+ * Compute the sales-funnel SLA status for a lead's current stage. Accepts an
+ * optional thresholds map (the admin-configured effective thresholds from
+ * `getEffectiveStageSla()`) so callers aren't stuck with the hardcoded
+ * defaults; falls back to the defaults when omitted.
+ */
+export function computeStageSlaStatus(
+  stage: string,
+  daysInStage: number,
+  thresholds: Record<string, StageSlaThreshold> = SALES_STAGE_SLA,
+): SlaStatus {
+  const threshold = thresholds[stage];
   if (!threshold) return 'ok';
   if (daysInStage >= threshold.breachDays) return 'breach';
   if (daysInStage >= threshold.warningDays) return 'warning';
@@ -128,7 +146,11 @@ export function computeDesignPipelineTimeline(
   const effectiveKickoff = kickoffDate ?? null;
 
   const phases: DesignPhaseTimeline[] = DESIGN_PHASES.map((phase, idx) => {
-    const startDate = dates[idx];
+    // EIP has no checklist date field of its own (dateField is null, so
+    // dates[idx] is always null) — it actually begins the moment Sign Off
+    // (the previous phase) is recorded, per the doc comment above. Without
+    // this, EIP would incorrectly sit at "upcoming" forever.
+    const startDate = phase.key === 'EIP' ? dates[idx - 1] ?? null : dates[idx];
     if (!startDate) {
       return {
         key: phase.key,

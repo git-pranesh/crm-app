@@ -5,6 +5,9 @@ import { supabaseAdmin } from '../lib/supabase.js';
 import { runSLACheck } from '../jobs/slaCheck.js';
 import { runMidnightCheck } from '../jobs/midnightOverdueTask.js';
 import { runPerformanceRecalc } from '../jobs/performanceRecalc.js';
+import { SALES_STAGE_SLA, type StageSlaThreshold } from '../config/slaConfig.js';
+import { getEffectiveStageSla } from '../lib/stageSla.js';
+import { getEffectiveMailTemplates, setMailTemplateOverride, resetMailTemplateOverride, MAIL_TEMPLATES } from '../lib/mailTemplates.js';
 
 export const adminRouter = Router();
 
@@ -643,6 +646,64 @@ adminRouter.patch('/sla-config/:rule', async (req, res) => {
   }
 });
 
+// ── GET /api/admin/stage-sla-config — sales-funnel stage SLA thresholds ───────
+// Task #14: the *new* stage-transition SLA system (green/yellow/red, drives
+// lead-list/pipeline/StageRoadmap badges) — distinct from the older
+// /admin/sla-config (first-contact/legacy breach rules) above.
+const STAGE_SLA_CONFIG_KEY = 'stage_sla_thresholds';
+
+adminRouter.get('/stage-sla-config', async (_req, res) => {
+  try {
+    const effective = await getEffectiveStageSla();
+    const rows = Object.entries(effective).map(([stage, t]) => ({
+      stage,
+      label: t.label,
+      warningDays: t.warningDays,
+      breachDays: t.breachDays,
+      isDefault: JSON.stringify(t) === JSON.stringify(SALES_STAGE_SLA[stage]),
+    }));
+    res.json({ configs: rows });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/admin/stage-sla-config/:stage { warningDays, breachDays } ──────
+adminRouter.patch('/stage-sla-config/:stage', async (req, res) => {
+  try {
+    const { stage } = req.params;
+    const { warningDays, breachDays } = req.body as { warningDays?: number; breachDays?: number };
+
+    if (!SALES_STAGE_SLA[stage]) {
+      res.status(400).json({ error: `Unknown stage "${stage}". Must be one of: ${Object.keys(SALES_STAGE_SLA).join(', ')}` });
+      return;
+    }
+    if (!Number.isFinite(warningDays) || !Number.isFinite(breachDays) || warningDays! < 1 || breachDays! < 1) {
+      res.status(400).json({ error: 'warningDays and breachDays must be positive integers' });
+      return;
+    }
+    if (warningDays! > breachDays!) {
+      res.status(400).json({ error: 'warningDays cannot be greater than breachDays' });
+      return;
+    }
+
+    const row = await prisma.assignmentConfig.findUnique({ where: { key: STAGE_SLA_CONFIG_KEY } });
+    const overrides = (row?.value as Record<string, Partial<StageSlaThreshold>> | undefined) ?? {};
+    overrides[stage] = { warningDays, breachDays };
+
+    await prisma.assignmentConfig.upsert({
+      where: { key: STAGE_SLA_CONFIG_KEY },
+      create: { key: STAGE_SLA_CONFIG_KEY, value: overrides },
+      update: { value: overrides },
+    });
+
+    const effective = await getEffectiveStageSla();
+    res.json({ stage, config: { stage, ...effective[stage] } });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/admin/whatsapp-templates — read-only list (no DB needed) ─────────
 adminRouter.get('/whatsapp-templates', async (_req, res) => {
   const templates = [
@@ -684,6 +745,46 @@ adminRouter.get('/whatsapp-templates', async (_req, res) => {
     },
   ];
   res.json({ templates, note: 'Templates are pre-approved and managed server-side. Contact Twilio BSP to modify.' });
+});
+
+// ── Mail templates (Task #66) — admin-editable defaults for every system-
+// triggered email; overrides live in AssignmentConfig via lib/mailTemplates.ts.
+// GET returns each template's registry metadata + effective subject/html
+// (override if set, else hardcoded default) so Settings can show current state.
+adminRouter.get('/mail-templates', async (_req, res) => {
+  try {
+    const templates = await getEffectiveMailTemplates();
+    res.json({ templates });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+adminRouter.put('/mail-templates/:code', async (req, res) => {
+  try {
+    const { code } = req.params as { code: string };
+    const def = MAIL_TEMPLATES.find((t) => t.code === code);
+    if (!def) { res.status(404).json({ error: 'Unknown mail template' }); return; }
+    const { subject, html } = req.body as { subject?: string; html?: string };
+    if (!subject?.trim() || !html?.trim()) {
+      res.status(400).json({ error: 'subject and html are required' });
+      return;
+    }
+    await setMailTemplateOverride(code, subject, html);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+adminRouter.delete('/mail-templates/:code', async (req, res) => {
+  try {
+    const { code } = req.params as { code: string };
+    await resetMailTemplateOverride(code);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── POST /api/admin/jobs/trigger — run a background job immediately ────────────

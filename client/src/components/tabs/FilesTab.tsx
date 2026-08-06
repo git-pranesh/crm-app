@@ -18,6 +18,11 @@ interface LeadFile {
 interface Props {
   leadId: string;
   currentStage: string;
+  /** Legacy floor plan URL set directly on the Lead record (pre-LeadFile-system
+   * uploads, or leads created via webhook). If set and no FLOOR_PLAN LeadFile
+   * exists yet, the relevant EL/MQL/DQL folder shows it as satisfied instead
+   * of falsely flagging it as missing (task #39). */
+  floorPlanUrl?: string | null;
 }
 
 // EFFECTIVE_LEAD/HANDED_OVER kept as legacy bookends so currentIdx math still
@@ -101,9 +106,10 @@ interface StageFolder {
   files: LeadFile[];
   requiredFileType?: string;
   hasRequired: boolean;
+  isLegacy?: boolean;
 }
 
-export default function FilesTab({ leadId, currentStage }: Props) {
+export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) {
   const [files, setFiles] = useState<LeadFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
@@ -176,14 +182,31 @@ export default function FilesTab({ leadId, currentStage }: Props) {
 
   // Build stage folders for stages up to and including the current one, plus any with files
   const stagesWithContent = new Set<string>([currentStage, ...files.map((f) => f.stage)]);
+  const hasAnyFloorPlanFile = files.some((f) => f.fileType === 'FLOOR_PLAN');
+  // Floor plans can be attached at any of EL/MQL/DQL — a legacy floorPlanUrl
+  // (set before the LeadFile system, or via webhook) satisfies whichever of
+  // those folders would otherwise show it as missing. Only the first
+  // applicable folder shows the legacy badge, so it isn't duplicated across
+  // all three (task #39).
+  const LEGACY_FLOOR_PLAN_STAGES = ['EFFECTIVE_LEAD', 'MQL', 'DQL'];
+  let legacyFloorPlanApplied = false;
   const folders: StageFolder[] = STAGE_ORDER.filter((stage) => {
     const idx = STAGE_ORDER.indexOf(stage);
     return stagesWithContent.has(stage) || idx <= currentIdx;
   }).map((stage) => {
     const stageFiles = files.filter((f) => f.stage === stage);
     const requiredFileType = REQUIRED_FILES[stage];
-    const hasRequired = !requiredFileType || stageFiles.some((f) => f.fileType === requiredFileType);
-    return { stage, files: stageFiles, requiredFileType, hasRequired };
+    let hasRequired = !requiredFileType || stageFiles.some((f) => f.fileType === requiredFileType);
+    let isLegacy = false;
+    if (
+      !hasRequired && requiredFileType === 'FLOOR_PLAN' && floorPlanUrl && !hasAnyFloorPlanFile
+      && LEGACY_FLOOR_PLAN_STAGES.includes(stage) && !legacyFloorPlanApplied
+    ) {
+      hasRequired = true;
+      isLegacy = true;
+      legacyFloorPlanApplied = true;
+    }
+    return { stage, files: stageFiles, requiredFileType, hasRequired, isLegacy };
   });
 
   if (loading) {
@@ -200,7 +223,7 @@ export default function FilesTab({ leadId, currentStage }: Props) {
         <p className="text-xs text-gray-400">Files are organised by stage. Required files are marked with a badge.</p>
       </div>
 
-      {folders.map(({ stage, files: stageFiles, requiredFileType, hasRequired }) => {
+      {folders.map(({ stage, files: stageFiles, requiredFileType, hasRequired, isLegacy }) => {
         const isOpen = openFolders[stage] ?? false;
         const isActive = stage === currentStage;
         const isUploadOpen = showUploadForm === stage;
@@ -225,7 +248,9 @@ export default function FilesTab({ leadId, currentStage }: Props) {
               )}
               {requiredFileType && (
                 <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium ${hasRequired ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-700'}`}>
-                  {hasRequired ? `✓ ${FILE_TYPE_LABELS[requiredFileType]}` : `⚠ ${FILE_TYPE_LABELS[requiredFileType]} required`}
+                  {hasRequired
+                    ? `✓ ${FILE_TYPE_LABELS[requiredFileType]}${isLegacy ? ' (legacy)' : ''}`
+                    : `⚠ ${FILE_TYPE_LABELS[requiredFileType]} required`}
                 </span>
               )}
               {!requiredFileType && stageFiles.length > 0 && (

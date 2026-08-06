@@ -19,17 +19,13 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { renderMailTemplate } from '../lib/mailTemplates.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
-export function pdObWelcomeMailTemplate(clientName: string): { subject: string; html: string } {
-  return {
-    subject: `Welcome Onboard — Interiors by DeX`,
-    html: `<p>Dear ${clientName},</p>
-<p>Congratulations and welcome aboard! We're thrilled to begin your interior design journey with <strong>Interiors by DeX</strong>.</p>
-<p>Our onboarding team will be in touch shortly with the next steps, including your onboarding meeting.</p>
-<p>Thank you for choosing us — we can't wait to bring your space to life!<br/><em>Team Interiors by DeX</em></p>`,
-  };
+/** Admin-configurable default (see lib/mailTemplates.ts, code PD_OB_WELCOME). */
+export async function pdObWelcomeMailTemplate(clientName: string): Promise<{ subject: string; html: string }> {
+  return renderMailTemplate('PD_OB_WELCOME', { clientName });
 }
 
 async function loadLeadForChecklist(leadId: string, user: { id: string; role: string }) {
@@ -66,7 +62,7 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
       checklist: checklist ?? null,
       hasPaymentScreenshot: !!paymentScreenshot,
       hasObQuote: !!obQuote,
-      welcomeMailTemplate: pdObWelcomeMailTemplate(lead.name),
+      welcomeMailTemplate: await pdObWelcomeMailTemplate(lead.name),
     });
   } catch (err: any) {
     console.error('[pd-ob-checklist:get]', err.message);
@@ -153,7 +149,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     }
 
     const { subject, html } = req.body as { subject?: string; html?: string };
-    const template = pdObWelcomeMailTemplate(lead.name);
+    const template = await pdObWelcomeMailTemplate(lead.name);
     const emailPayload = { to: lead.email!, subject: subject?.trim() || template.subject, html: html?.trim() || template.html };
 
     await sendEmail(emailPayload);

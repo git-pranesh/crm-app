@@ -82,7 +82,10 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     prisma.lead.groupBy({ by: ['stage'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.lead.groupBy({ by: ['source'], where: { ...leadWhere, createdAt: { gte: rangeFrom, lte: rangeTo } }, _count: { id: true } }),
     prisma.sLABreach.findMany({
-      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS'] } }, resolvedAt: null },
+      // ONBOARDING excluded (task #14): legacy breach rules never covered
+      // OB→OBM, so any flag here would be stale/carried over from an earlier
+      // stage — that stage is judged solely by the new stage-SLA system.
+      where: { lead: { ...leadWhere, stage: { notIn: ['INACTIVE', 'ON_HOLD', 'HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] } }, resolvedAt: null },
       include: { lead: { select: { id: true, leadId: true, name: true, stage: true } } },
       orderBy: { breachedAt: 'desc' },
       take: 5,

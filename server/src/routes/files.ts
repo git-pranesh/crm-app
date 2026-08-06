@@ -139,9 +139,19 @@ filesRouter.get('/', verifyToken, async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Generate fresh signed URLs
+    // Generate fresh signed URLs. Files created via the legacy floor-plan
+    // upload endpoint (POST /leads/:id/floor-plan) live in the public
+    // `crm-files` bucket, not the private `crm-lead-files` bucket, and are
+    // tagged with a `crm-files:` storagePath prefix — those already have a
+    // permanent public URL and don't need signing.
     const files = await Promise.all(
       rawFiles.map(async (f) => {
+        if (f.storagePath.startsWith('crm-files:')) {
+          if (!supabaseAdmin) return { ...f, signedUrl: undefined };
+          const realPath = f.storagePath.slice('crm-files:'.length);
+          const { data } = supabaseAdmin.storage.from('crm-files').getPublicUrl(realPath);
+          return { ...f, signedUrl: data?.publicUrl };
+        }
         if (!supabaseAdmin) return { ...f, signedUrl: undefined };
         const { data } = await supabaseAdmin.storage
           .from(LEAD_FILES_BUCKET)

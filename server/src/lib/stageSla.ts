@@ -1,5 +1,29 @@
 import { prisma } from './prisma.js';
-import { computeStageSlaStatus, daysBetween, type SlaStatus } from '../config/slaConfig.js';
+import {
+  SALES_STAGE_SLA,
+  computeStageSlaStatus,
+  daysBetween,
+  type SlaStatus,
+  type StageSlaThreshold,
+} from '../config/slaConfig.js';
+
+const STAGE_SLA_CONFIG_KEY = 'stage_sla_thresholds';
+
+/**
+ * Effective stage SLA thresholds = hardcoded defaults (slaConfig.ts) with any
+ * admin-edited overrides layered on top (task #14, GET/PATCH
+ * /api/admin/stage-sla-config). Stored as a single JSON blob in the existing
+ * key-value `AssignmentConfig` table rather than a new model.
+ */
+export async function getEffectiveStageSla(): Promise<Record<string, StageSlaThreshold>> {
+  const row = await prisma.assignmentConfig.findUnique({ where: { key: STAGE_SLA_CONFIG_KEY } });
+  const overrides = (row?.value as Record<string, Partial<StageSlaThreshold>> | undefined) ?? {};
+  const effective: Record<string, StageSlaThreshold> = {};
+  for (const [stage, def] of Object.entries(SALES_STAGE_SLA)) {
+    effective[stage] = { ...def, ...(overrides[stage] ?? {}) };
+  }
+  return effective;
+}
 
 interface StageChangeMeta {
   from?: string;
@@ -53,13 +77,14 @@ export async function computeSlaInfoForLeads(
     logsByLead.get(log.leadId)!.push({ createdAt: log.createdAt, meta: log.meta });
   }
 
+  const thresholds = await getEffectiveStageSla();
   const now = new Date();
   for (const lead of leads) {
     const enteredAt = deriveCurrentStageEnteredAt(logsByLead.get(lead.id) ?? [], lead.createdAt);
     const daysInCurrentStage = daysBetween(enteredAt, now);
     result[lead.id] = {
       daysInCurrentStage,
-      slaStatus: computeStageSlaStatus(lead.stage, daysInCurrentStage),
+      slaStatus: computeStageSlaStatus(lead.stage, daysInCurrentStage, thresholds),
     };
   }
   return result;
