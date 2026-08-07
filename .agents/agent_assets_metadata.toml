@@ -1,0 +1,9 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "1DirpeqzPYyUiRxFPjTYx"
+uri = "file://attached_assets/lead_import_template.csv"
+type = "table"
+title = "Lead Import CSV Template"
+description = "Fill this in with your existing client data — only Name and Phone are required. Dates use DD-MM-YYYY, Estimated Value is a plain number."
