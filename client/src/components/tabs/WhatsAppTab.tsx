@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
+import { formatISTTime } from '../../lib/dateFormat';
 
 interface WaMessage {
   id: string;
@@ -37,7 +38,7 @@ export default function WhatsAppTab({ leadId }: Props) {
         `/leads/${leadId}/whatsapp`,
       );
       setMessages(data.messages);
-      setTemplates(data.templates);
+      setTemplates(data.templates ?? []);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -112,7 +113,7 @@ export default function WhatsAppTab({ leadId }: Props) {
                 <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
                 <div className={`flex items-center gap-1 mt-1 ${msg.direction === 'OUTBOUND' ? 'justify-end' : ''}`}>
                   <span className="text-[10px] text-gray-400">
-                    {new Date(msg.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    {formatISTTime(msg.createdAt)}
                   </span>
                   {msg.sentBy && (
                     <span className="text-[10px] text-gray-400">· {msg.sentBy.name}</span>

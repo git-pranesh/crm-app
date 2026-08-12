@@ -6,6 +6,7 @@ import { createNotification } from '../lib/notifications.js';
 import { sendEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, normalizePhoneE164 } from '../lib/whatsapp.js';
 import { isAuthorizedForLead, isAuthorizedToAssignTask } from '../lib/leadAuth.js';
+import { istDayBounds } from '../lib/istTime.js';
 
 export const tasksRouter = Router({ mergeParams: true });
 export const myTasksRouter = Router();
@@ -17,11 +18,12 @@ const taskInclude = {
 
 const TASK_TYPES = ['INTERNAL', 'EXTERNAL'] as const;
 
-// Local midnight "today" — used to block past-dated tasks without punishing same-day creation.
+// Midnight "today" in IST — used to block past-dated tasks without punishing
+// same-day creation. Must match the overdue job's own IST boundary (task
+// #112) or a task could be rejected as "in the past" client-side while the
+// midnight job's own definition of today would've still accepted it.
 function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return istDayBounds().start;
 }
 
 async function notifyExternalTask(lead: { id: string; leadId: string; name: string; email: string | null; phone: string | null }, task: { dueDate: Date; dueTime: string | null; agenda: string | null }) {

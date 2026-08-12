@@ -8,6 +8,7 @@ import {
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhone } from '../lib/validation';
+import { formatISTDate } from '../lib/dateFormat';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -253,12 +254,12 @@ const ACTIVITY_BUCKET: Record<string, number> = {
 
 function fmtDate(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return formatISTDate(iso);
 }
 
 function fmtDateTime(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+  return formatISTDate(iso, { year: '2-digit' });
 }
 
 export default function LeadDetail() {
@@ -1557,10 +1558,10 @@ export default function LeadDetail() {
                     <FactRow label="Builder" value={lead.builder} />
                     <FactRow label="Client Budget" value={fmtVal(lead.estimatedValue)} />
                     <FactRow label="Expected Move-in" value={lead.expectedMoveIn
-                      ? new Date(lead.expectedMoveIn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      ? formatISTDate(lead.expectedMoveIn, { year: 'numeric' })
                       : undefined} />
                     <FactRow label="Expected OB Date" value={lead.expectedObDate
-                      ? new Date(lead.expectedObDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      ? formatISTDate(lead.expectedObDate, { year: 'numeric' })
                       : undefined} />
                     <FactRow label="Possession" value={lead.possessionTimeline} />
                     <FactRow label="Source" value={lead.source?.replace(/_/g, ' ')} />
@@ -1829,7 +1830,7 @@ export default function LeadDetail() {
                 <InfoRow label="UTM Campaign" value={lead.utmCampaign} />
                 <InfoRow label="UTM AdSet" value={lead.utmAdSet} />
                 <InfoRow label="UTM Source" value={lead.utmSource} />
-                <InfoRow label="Created" value={new Date(lead.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
+                <InfoRow label="Created" value={formatISTDate(lead.createdAt, { year: 'numeric' })} />
                 {lead.currentOffer && (
                   <div className="mt-2">
                     <span className="inline-flex items-center gap-1 text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-medium">
@@ -1852,7 +1853,7 @@ export default function LeadDetail() {
                     {latestQuote.status ?? 'Draft'}
                   </span>
                 } />
-                <InfoRow label="Date" value={new Date(latestQuote.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} />
+                <InfoRow label="Date" value={formatISTDate(latestQuote.createdAt)} />
                 <button onClick={() => handleTabChange('quotes')}
                   className="mt-2 text-xs text-brand-500 hover:underline">View full quote →</button>
               </>

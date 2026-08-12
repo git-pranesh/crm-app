@@ -5,18 +5,16 @@ import { api } from '../lib/api';
 import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser } from '../lib/auth';
+import { formatISTDate, todayISTDateString } from '../lib/dateFormat';
 
 type Filter = 'upcoming' | 'overdue' | 'completed' | 'not_done' | 'all';
 
 function todayDateStr() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return todayISTDateString();
 }
 
 function formatDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return formatISTDate(iso, { year: 'numeric' });
 }
 
 function statusBadge(task: FollowUpTask) {

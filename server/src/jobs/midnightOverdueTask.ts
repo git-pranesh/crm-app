@@ -3,6 +3,7 @@ import { connection } from './index.js';
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
 import { reactivateLead } from '../lib/leadStatusActions.js';
+import { istDayBounds } from '../lib/istTime.js';
 
 // SYSTEM_USER_ID isn't a real user row (see .agents/memory/system-user-id-fk.md)
 // — logActivity/createNotification need an actual user id. Auto-reactivation
@@ -50,10 +51,11 @@ export async function scheduleMidnightJob() {
 export async function runMidnightCheck(): Promise<{ markedOverdue: number; reopenNotified: number; details: string[] }> {
   console.log('[jobs] Running midnight overdue-task scan…');
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // IST day boundaries — this job is cron-scheduled for 00:00 IST (18:30 UTC,
+  // see scheduleMidnightJob below), but the boundary itself must also be
+  // computed in IST rather than server-local (UTC) time, or "today"/"tomorrow"
+  // silently drift to UTC midnight (5:30am IST) instead of actual midnight IST.
+  const { start: today, end: tomorrow } = istDayBounds();
 
   // ── 1. Overdue follow-up tasks ─────────────────────────────────────────────
   // Only PENDING tasks are actionable — RESCHEDULED/NOT_DONE rows are terminal

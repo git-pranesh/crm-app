@@ -1,18 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { createNotification } from '../lib/notifications.js';
-
-const TZ = 'Asia/Kolkata';
-
-/** Start of "today" in IST, expressed as a UTC Date. */
-function istDayBounds(now = new Date()) {
-  const istNow = new Date(now.toLocaleString('en-US', { timeZone: TZ }));
-  const offsetMs = istNow.getTime() - now.getTime();
-  const istStart = new Date(istNow);
-  istStart.setHours(0, 0, 0, 0);
-  const start = new Date(istStart.getTime() - offsetMs);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { start, end };
-}
+import { IST_TZ as TZ, istDayBounds } from '../lib/istTime.js';
 
 /**
  * Sends an in-app reminder to the assignee for every incomplete follow-up task

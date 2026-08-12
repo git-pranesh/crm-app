@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { api, type FollowUpTask } from '../../lib/api';
+import { formatISTDate, todayISTDateString } from '../../lib/dateFormat';
 
 function todayDateStr() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return todayISTDateString();
 }
 
 interface Props { leadId: string }
@@ -321,7 +320,7 @@ export default function FollowUpTab({ leadId }: Props) {
                   {statusBadge(task)}
                   <div>
                     <p className="text-sm font-medium text-gray-900">
-                      {new Date(task.dueDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                      {formatISTDate(task.dueDate, { weekday: 'short' })}
                       {(task.timeFrom || task.dueTime) && (
                         <span className="text-gray-500 ml-1">
                           at {task.timeFrom ?? task.dueTime}{task.timeTo ? `–${task.timeTo}` : ''}
@@ -361,7 +360,7 @@ export default function FollowUpTab({ leadId }: Props) {
 
                 {task.status === 'COMPLETED' && task.completedAt && (
                   <p className="text-xs text-gray-400">
-                    Completed {new Date(task.completedAt).toLocaleDateString('en-IN')}
+                    Completed {formatISTDate(task.completedAt)}
                   </p>
                 )}
               </div>
@@ -378,7 +377,7 @@ export default function FollowUpTab({ leadId }: Props) {
                   {task.rescheduleHistory.map((h, i) => (
                     <div key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
                       <span className="font-medium">Reschedule {i + 1}:</span>{' '}
-                      was {new Date(h.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      was {formatISTDate(h.dueDate)}
                       {h.dueTime ? ` at ${h.dueTime}` : ''} — {h.reason}
                     </div>
                   ))}

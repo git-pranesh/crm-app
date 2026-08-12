@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import { api, type CallRecord, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
+import { formatISTDate, formatISTDateTime } from '../../lib/dateFormat';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
@@ -78,8 +79,8 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
   };
 
   const callDateStr = call.calledAt
-    ? new Date(call.calledAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : new Date(call.createdAt).toLocaleDateString('en-IN');
+    ? formatISTDateTime(call.calledAt)
+    : formatISTDate(call.createdAt);
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">

@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { notifIcon, notifLabel } from '../lib/notifTypes';
+import { formatISTTime, istDateGroupLabel } from '../lib/dateFormat';
 
 export interface NotifItem {
   id: string;
@@ -19,18 +20,11 @@ interface Props {
 }
 
 function dateGroupLabel(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  if (sameDay) return 'Today';
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  return istDateGroupLabel(iso);
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' });
+  return formatISTTime(iso);
 }
 
 // Land the user on the lead-detail tab most relevant to what the notification is about,

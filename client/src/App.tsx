@@ -22,6 +22,7 @@ import Notifications from './pages/Notifications';
 import FeedbackForm from './pages/FeedbackForm';
 import NpsForm from './pages/NpsForm';
 import AcceptInvite from './pages/AcceptInvite';
+import { formatISTTime } from './lib/dateFormat';
 
 
 // ── Auth Guard ────────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ function Home() {
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <span className="text-green-600 font-medium">online</span>
               <span className="text-gray-300">·</span>
-              <span className="text-gray-500 text-xs">{new Date(health.timestamp).toLocaleTimeString('en-IN')}</span>
+              <span className="text-gray-500 text-xs">{formatISTTime(health.timestamp)}</span>
             </div>
           ) : (
             <div className="flex items-center justify-center gap-2">

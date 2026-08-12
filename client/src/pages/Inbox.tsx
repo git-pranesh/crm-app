@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
+import { formatISTDate, formatISTTime } from '../lib/dateFormat';
 
 interface InboxRow {
   leadId: string; leadNumber: string; leadName: string; unreadCount: number;
@@ -25,7 +26,7 @@ function relTime(d: string) {
   if (h < 24) return `${h}h`;
   const days = Math.floor(h / 24);
   if (days < 7) return `${days}d`;
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return formatISTDate(d);
 }
 
 function avatarColor(name: string) {
@@ -263,7 +264,7 @@ export default function Inbox() {
                       <p className="whitespace-pre-wrap">{msg.body}</p>
                       <div className={`flex items-center gap-1 mt-1 ${msg.direction === 'OUTBOUND' ? 'justify-end' : ''}`}>
                         <span className="text-[10px] text-gray-400">
-                          {new Date(msg.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          {formatISTTime(msg.createdAt)}
                         </span>
                         {msg.sentBy && <span className="text-[10px] text-gray-400">· {msg.sentBy.name}</span>}
                       </div>
