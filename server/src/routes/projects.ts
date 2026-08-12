@@ -5,6 +5,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
 import { isAuthorizedForProject, isBLForProject } from '../lib/projectAuth.js';
 import { createNotification } from '../lib/notifications.js';
+import { buildLeadRoleWhere } from '../lib/leadScope.js';
 
 export const projectsRouter = Router();
 
@@ -115,15 +116,45 @@ async function buildProjectWhere(user: { id: string; role: string; blId?: string
 }
 
 // ── GET /api/projects — role-scoped list ─────────────────────────────────────
+// Default scope is the established designer/approved-team-membership rule
+// (buildProjectWhere) — unchanged for normal project listing so approved
+// ProjectTeamMembers keep seeing their working projects.
+//
+// The BRANCH_HEAD/BL dashboard's project-based KPIs (In Delivery, Outstanding,
+// Needs Attention) are computed via a different, lead-based predicate
+// (buildLeadRoleWhere). Passing `dashboardScope=true` swaps in that exact
+// predicate so KPI drill-through links reproduce the dashboard's counts
+// precisely — but this is ONLY honored for BRANCH_HEAD/BL. For BRANCH_HEAD
+// both predicates are already "all records" (no widening). For BL,
+// buildLeadRoleWhere is a superset that includes leads directly assigned to
+// the BL (a scope BL is independently entitled to via /api/leads); for any
+// other role (DESIGNER/CRE/ADMIN-as-non-BH) the flag is ignored and the
+// established designer/team-membership authorization always applies, so a
+// caller can never widen their own access by supplying the query param
+// (task #113 review — this used to trust the flag for every role, which let
+// CRE/DESIGNER read projects outside their normal authorization via their
+// lead-assignment/creation relationships).
 projectsRouter.get('/', verifyToken, async (req, res) => {
   try {
     const user = req.user!;
-    const { phase, health } = req.query as { phase?: string; health?: string };
+    const { phase, health, excludePhases, hasAttention, hasOutstanding, dashboardScope } = req.query as {
+      phase?: string; health?: string; excludePhases?: string; hasAttention?: string; hasOutstanding?: string; dashboardScope?: string;
+    };
 
-    const scopeWhere = await buildProjectWhere(user);
-    const where: any = { ...scopeWhere };
+    let where: any;
+    if (dashboardScope === 'true' && (user.role === 'BRANCH_HEAD' || user.role === 'BL')) {
+      const leadRoleWhere = await buildLeadRoleWhere(user, prisma);
+      where = Object.keys(leadRoleWhere).length > 0 ? { lead: leadRoleWhere } : {};
+    } else {
+      where = await buildProjectWhere(user);
+    }
     if (phase) where.phase = phase;
+    if (excludePhases) where.phase = { notIn: excludePhases.split(',').map((s) => s.trim()).filter(Boolean) };
     if (health) where.health = health;
+    // Task #113 — dashboard "Needs Attention"/"Outstanding" KPI tiles drill
+    // through here with the exact same predicates used to compute those counts.
+    if (hasAttention === 'true') where.attentionFlags = { some: { resolvedAt: null } };
+    if (hasOutstanding === 'true') where.outstandingAmount = { gt: 0 };
 
     const projects = await prisma.project.findMany({
       where,

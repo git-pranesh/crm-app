@@ -14,6 +14,7 @@ import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
 import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
 import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
+import { buildLeadRoleWhere } from '../lib/leadScope.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -59,38 +60,25 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
       possessionDateFrom, possessionDateTo,
       projectedObFrom, projectedObTo,
       pipelineMode,
+      // Task #113 — lets dashboard KPI drill-through links exactly reproduce
+      // a stage-excluding count (e.g. "active leads" excludes the terminal
+      // DESIGN_IN_PROGRESS/HANDED_OVER stages) without a separate endpoint.
+      excludeStages,
+      hasUnresolvedSlaBreach,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
     const where: any = {};
 
-    // Role-scope — G3: DESIGNER and CRE have separate clauses
-    if (user.role === 'DESIGNER') {
-      where.assignedDesignerId = user.id;
-    } else if (user.role === 'CRE') {
-      where.OR = [
-        { assignedDesignerId: user.id },
-        { createdById: user.id },
-      ];
-    } else if (user.role === 'BL') {
-      const members = await prisma.user.findMany({
-        where: { blId: user.id, isActive: true },
-        select: { id: true },
-      });
-      // BL sees leads assigned to their team OR directly assigned to them as BL
-      where.AND = [
-        {
-          OR: [
-            { assignedDesignerId: { in: [user.id, ...members.map((m) => m.id)] } },
-            { assignedBLId: user.id },
-          ],
-        },
-      ];
-    }
+    // Role-scope — shared with the dashboard (buildLeadRoleWhere) so the two
+    // never drift apart and KPI drill-through counts stay exact.
+    const roleWhere = await buildLeadRoleWhere(user, prisma);
+    if (Object.keys(roleWhere).length > 0) where.AND = [roleWhere];
 
     // Task #88: status (ACTIVE/ON_HOLD/INACTIVE) is a real field, independent
     // of stage — both filters can be applied together.
     if (stage) where.stage = stage;
+    if (excludeStages) where.stage = { ...(where.stage ?? {}), notIn: excludeStages.split(',').map((s) => s.trim()).filter(Boolean) };
     if (status) where.status = status;
     if (source) where.source = source;
     if (designerId) where.assignedDesignerId = designerId;
@@ -102,6 +90,14 @@ leadsRouter.get('/', verifyToken, async (req, res) => {
     if (isSLABreached === 'true') {
       where.isSLABreached = true;
       if (!where.stage) where.stage = { not: 'ONBOARDING' };
+    }
+    // Task #113 — exact match for the dashboard's "Needs Attention" SLA count,
+    // which queries unresolved SLABreach records (not the legacy isSLABreached
+    // flag) on active, non-terminal, non-onboarding leads.
+    if (hasUnresolvedSlaBreach === 'true') {
+      where.status = 'ACTIVE';
+      where.stage = { ...(where.stage ?? {}), notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] };
+      where.slaBreaches = { some: { resolvedAt: null } };
     }
     // G2: new filter params
     if (projectType) where.projectType = projectType;

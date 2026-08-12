@@ -34,10 +34,9 @@ interface NavItem { to: string; label: string; Icon: LucideIcon; comingSoon?: bo
 
 // Task #90 — "Sales" renamed to "Sales Pipeline" with Sales Pipeline / Design
 // Pipeline / Leads / Projects as its first four items. Design Pipeline already
-// exists as a tab inside Pipeline.tsx (linked via ?tab=design), but Projects
-// has no working standalone page yet (/projects just redirects to /dashboard)
-// so it's marked "Coming soon" rather than linking somewhere broken. Meetings/
-// Calendar/WhatsApp/Discounts keep their existing nav access underneath.
+// exists as a tab inside Pipeline.tsx (linked via ?tab=design). Projects (task
+// #113) is a real role-scoped list page (ProjectList.tsx, GET /api/projects).
+// Meetings/Calendar/WhatsApp/Discounts keep their existing nav access underneath.
 interface NavItemDef extends NavItem { rolesOnly?: string[] }
 interface NavGroupDef { label: string; items: NavItemDef[] }
 
@@ -55,7 +54,7 @@ const NAV_GROUPS: NavGroupDef[] = [
       // existing tab visibility there, so only those roles see the link.
       { to: '/pipeline?tab=design', label: 'Design Pipeline', Icon: Building2, rolesOnly: ['DESIGNER', 'CRE'] },
       { to: '/leads', label: 'Leads', Icon: Users },
-      { to: '/projects', label: 'Projects', Icon: Building2, comingSoon: true },
+      { to: '/projects', label: 'Projects', Icon: Building2 },
       { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
       { to: '/calendar', label: 'Calendar', Icon: Calendar },
       { to: '/whatsapp', label: 'WhatsApp', Icon: MessageCircle },

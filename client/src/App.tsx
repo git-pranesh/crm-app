@@ -22,6 +22,9 @@ import Notifications from './pages/Notifications';
 import FeedbackForm from './pages/FeedbackForm';
 import NpsForm from './pages/NpsForm';
 import AcceptInvite from './pages/AcceptInvite';
+import ProjectList from './pages/ProjectList';
+import CollectionList from './pages/CollectionList';
+import NpsList from './pages/NpsList';
 import { formatISTTime } from './lib/dateFormat';
 
 
@@ -125,7 +128,9 @@ export default function App() {
                     <Route path="/settings" element={<RequireRole role="BRANCH_HEAD"><Settings /></RequireRole>} />
                     <Route path="/calendar" element={<Calendar />} />
                     <Route path="/notifications" element={<Notifications />} />
-                    <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/projects" element={<ProjectList />} />
+                    <Route path="/collections" element={<CollectionList />} />
+                    <Route path="/nps" element={<NpsList />} />
                   </Routes>
                 </Layout>
               </RequireAuth>

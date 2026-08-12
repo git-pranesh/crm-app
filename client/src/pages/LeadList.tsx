@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Users, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
@@ -133,13 +133,25 @@ function avatar(name?: string | null) {
 
 export default function LeadList() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [filters, setFilters] = useState({ search: '', stage: '', source: '', status: '', designerId: '' });
+  // Seed filters from the URL so links elsewhere in the app (e.g. dashboard
+  // KPI tiles) can deep-link into a pre-filtered list, e.g. /leads?status=ACTIVE.
+  const [filters, setFilters] = useState({
+    search: '',
+    stage: searchParams.get('stage') ?? '',
+    source: searchParams.get('source') ?? '',
+    status: searchParams.get('status') ?? '',
+    designerId: '',
+    slaBreached: searchParams.get('slaBreached') ?? '',
+    excludeStages: searchParams.get('excludeStages') ?? '',
+    hasUnresolvedSlaBreach: searchParams.get('hasUnresolvedSlaBreach') ?? '',
+  });
   const [designers, setDesigners] = useState<{ id: string; name: string }[]>([]);
   const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
@@ -169,6 +181,9 @@ export default function LeadList() {
       if (filters.source) params.set('source', filters.source);
       if (filters.status) params.set('status', filters.status);
       if (filters.designerId) params.set('designerId', filters.designerId);
+      if (filters.slaBreached) params.set('isSLABreached', filters.slaBreached);
+      if (filters.excludeStages) params.set('excludeStages', filters.excludeStages);
+      if (filters.hasUnresolvedSlaBreach) params.set('hasUnresolvedSlaBreach', filters.hasUnresolvedSlaBreach);
       const data = await api.get<{ leads: Lead[]; total: number; pages: number }>(`/leads?${params}`);
       setLeads(data.leads);
       setTotal(data.total);
@@ -178,7 +193,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters.search, filters.stage, filters.source, filters.status, filters.designerId]);
+  }, [page, filters.search, filters.stage, filters.source, filters.status, filters.designerId, filters.slaBreached, filters.excludeStages, filters.hasUnresolvedSlaBreach]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -222,7 +237,7 @@ export default function LeadList() {
     setPage(1);
   };
 
-  const clearFilters = () => { setFilters({ search: '', stage: '', source: '', status: '', designerId: '' }); setPage(1); };
+  const clearFilters = () => { setFilters({ search: '', stage: '', source: '', status: '', designerId: '', slaBreached: '', excludeStages: '', hasUnresolvedSlaBreach: '' }); setPage(1); };
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (

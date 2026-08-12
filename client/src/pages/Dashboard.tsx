@@ -18,6 +18,7 @@ interface NpsBreakdown {
 
 interface DashboardData {
   totalLeads: number;
+  activeLeads: number;
   pipelineValue: number;
   avgNPS: number | null;
   npsBreakdown?: NpsBreakdown;
@@ -25,6 +26,7 @@ interface DashboardData {
   outstanding: number;
   inDelivery: { count: number; contractValueSum: number };
   needsAttention: { projectId: string; projectCode: string; clientName: string; leadId: string; category: string; description: string; daysOverdue: number }[];
+  needsAttentionTotal: number;
   collectionsDue: { projectId: string; clientName: string; milestone: string; amount: number; dueDate?: string; status?: string }[];
   phaseLoad: { phase: string; count: number; valueSum: number }[];
   stageFunnel: { stage: string; count: number }[];
@@ -80,19 +82,45 @@ function SkeletonCard() {
   return <div className="h-28 rounded-2xl animate-pulse" style={{ background: '#EDE8E3' }} />;
 }
 
-function KPICard({ label, value, sub, accent = false }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
-  return (
-    <div
-      className={`rounded-2xl p-5 shadow-warm-sm ${accent ? 'border border-brand-200' : ''}`}
-      style={accent
-        ? { background: '#FEF0E8', border: '1px solid #f6ccb8' }
-        : { background: '#fff', border: '1px solid #EDE8E3' }}
-    >
+function KPICard({ label, value, sub, accent = false, to, links }: {
+  label: string; value: string | number; sub?: string; accent?: boolean; to?: string;
+  // Use `links` instead of `to` when a single tile aggregates more than one
+  // underlying population (e.g. "Needs Attention" = flagged projects + SLA
+  // leads) — a single link can only point at one of them, silently hiding
+  // the other, so each contributing count gets its own drill-through link.
+  links?: { label: string; to: string }[];
+}) {
+  const className = `rounded-2xl p-5 shadow-warm-sm ${accent ? 'border border-brand-200' : ''} ${to ? 'block cursor-pointer transition-transform hover:-translate-y-0.5 hover:shadow-warm' : ''}`;
+  const style = accent
+    ? { background: '#FEF0E8', border: '1px solid #f6ccb8' }
+    : { background: '#fff', border: '1px solid #EDE8E3' };
+
+  if (links?.length) {
+    return (
+      <div className={`rounded-2xl p-5 shadow-warm-sm ${accent ? 'border border-brand-200' : ''}`} style={style}>
+        <p className={`text-2xl font-extrabold tracking-tight ${accent ? 'text-brand-700' : 'text-stone-900'}`}>{value}</p>
+        <p className={`text-sm font-semibold mt-1 ${accent ? 'text-brand-600' : 'text-stone-700'}`}>{label}</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+          {links.map((l) => (
+            <Link key={l.to} to={l.to} className="text-xs text-brand-600 hover:text-brand-700 underline underline-offset-2 leading-snug">
+              {l.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const content = (
+    <>
       <p className={`text-2xl font-extrabold tracking-tight ${accent ? 'text-brand-700' : 'text-stone-900'}`}>{value}</p>
       <p className={`text-sm font-semibold mt-1 ${accent ? 'text-brand-600' : 'text-stone-700'}`}>{label}</p>
       {sub && <p className="text-xs text-stone-400 mt-0.5 leading-snug">{sub}</p>}
-    </div>
+    </>
   );
+  return to
+    ? <Link to={to} className={className} style={style}>{content}</Link>
+    : <div className={className} style={style}>{content}</div>;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -119,7 +147,7 @@ function BHDashboard({ data }: { data: DashboardData }) {
 
   const totalSource = data.sourceBreakdown.reduce((a, s) => a + s.count, 0);
 
-  const attentionCount = data.needsAttention.length;
+  const attentionCount = data.needsAttentionTotal;
   const slaCount = data.slaBreaches.activeCount;
 
   return (
@@ -129,33 +157,42 @@ function BHDashboard({ data }: { data: DashboardData }) {
         <KPICard
           label="Sales Pipeline"
           value={fmt(data.pipelineValue)}
-          sub={`${data.totalLeads} active leads, est. value`}
+          sub={`${data.activeLeads} active leads, est. value`}
           accent
+          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         <KPICard
           label="In Delivery"
           value={data.inDelivery.count}
           sub={`${fmt(data.inDelivery.contractValueSum)} contract value in flight`}
+          to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED"
         />
         <KPICard
           label="Collected This Month"
           value={fmt(data.collectedThisMonth)}
-          sub="Payments in last 30 days"
+          sub="Payments this calendar month"
+          to="/collections?status=COLLECTED"
         />
         <KPICard
           label="Outstanding"
           value={fmt(data.outstanding)}
           sub="Yet to collect on delivery projects"
+          to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED&hasOutstanding=true"
         />
         <KPICard
           label="Needs Attention"
           value={attentionCount + slaCount}
           sub={`${attentionCount} project${attentionCount !== 1 ? 's' : ''} · ${slaCount} SLA lead${slaCount !== 1 ? 's' : ''}`}
+          links={[
+            ...(attentionCount > 0 ? [{ label: `${attentionCount} flagged project${attentionCount !== 1 ? 's' : ''}`, to: '/projects?dashboardScope=true&hasAttention=true' }] : []),
+            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
+          ]}
         />
         <KPICard
           label="NPS Score"
           value={data.avgNPS != null ? data.avgNPS.toFixed(1) : '—'}
-          sub="Avg across touchpoints"
+          sub="Avg across touchpoints this month"
+          to="/nps"
         />
       </div>
 
@@ -344,7 +381,7 @@ function BLDashboard({ data }: { data: DashboardData }) {
   }));
 
   const slaCount = data.slaBreaches?.activeCount ?? 0;
-  const attentionCount = data.needsAttention.length;
+  const attentionCount = data.needsAttentionTotal;
 
   return (
     <div className="space-y-6">
@@ -353,33 +390,42 @@ function BLDashboard({ data }: { data: DashboardData }) {
         <KPICard
           label="Sales Pipeline"
           value={fmt(data.pipelineValue)}
-          sub={`${data.totalLeads ?? 0} leads in scope`}
+          sub={`${data.activeLeads ?? 0} active leads in scope`}
           accent
+          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         <KPICard
           label="In Delivery"
           value={data.inDelivery.count}
           sub={`${fmt(data.inDelivery.contractValueSum)} in flight`}
+          to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED"
         />
         <KPICard
           label="Collected This Month"
           value={fmt(data.collectedThisMonth)}
-          sub="Payments in 30 days"
+          sub="Payments this calendar month"
+          to="/collections?status=COLLECTED"
         />
         <KPICard
           label="Outstanding"
           value={fmt(data.outstanding)}
           sub="Yet to collect"
+          to="/projects?dashboardScope=true&excludePhases=HANDOVER,COMPLETED&hasOutstanding=true"
         />
         <KPICard
           label="Needs Attention"
           value={attentionCount + slaCount}
           sub={`${attentionCount} project · ${slaCount} SLA`}
+          links={[
+            ...(attentionCount > 0 ? [{ label: `${attentionCount} flagged project${attentionCount !== 1 ? 's' : ''}`, to: '/projects?dashboardScope=true&hasAttention=true' }] : []),
+            ...(slaCount > 0 ? [{ label: `${slaCount} SLA-breached lead${slaCount !== 1 ? 's' : ''}`, to: '/leads?hasUnresolvedSlaBreach=true' }] : []),
+          ]}
         />
         <KPICard
           label="NPS"
           value={data.avgNPS != null ? data.avgNPS.toFixed(1) : '—'}
-          sub="Avg score"
+          sub="Avg score this month"
+          to="/nps"
         />
       </div>
 

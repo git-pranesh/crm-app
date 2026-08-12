@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
+import { buildLeadRoleWhere } from '../lib/leadScope.js';
 
 export const dashboardRouter = Router();
 
@@ -35,11 +36,12 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   const rangeTo = to ? (() => { const d = new Date(to); d.setHours(23, 59, 59, 999); return d; })() : endOfMonth();
 
   // ── Build lead filter based on role ─────────────────────────────────────────
-  let leadWhere: any = {};
+  // Shared with GET /api/leads (buildLeadRoleWhere) so dashboard KPI counts
+  // and their drill-through list populations never drift apart (task #113).
+  const leadWhere: any = await buildLeadRoleWhere(user, prisma);
   let teamUserIds: string[] = [user.id];
 
   if (user.role === 'DESIGNER' || user.role === 'CRE') {
-    leadWhere = { assignedDesignerId: user.id };
     teamUserIds = [user.id];
   } else if (user.role === 'BL') {
     const members = await prisma.user.findMany({
@@ -47,7 +49,6 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       select: { id: true },
     });
     teamUserIds = [user.id, ...members.map((m) => m.id)];
-    leadWhere = { assignedDesignerId: { in: members.map((m) => m.id) } };
   }
   // BRANCH_HEAD / ADMIN: no filter
 
@@ -64,6 +65,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     stageCounts,
     sourceCounts,
     slaBreaches,
+    slaBreachTotal,
     callsToday,
     stagesMovedToday,
     tasksCompletedToday,
@@ -85,10 +87,27 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       // ONBOARDING excluded (task #14): legacy breach rules never covered
       // OB→OBM, so any flag here would be stale/carried over from an earlier
       // stage — that stage is judged solely by the new stage-SLA system.
+      // NOTE: `take: 5` below is a display cap for the preview list only —
+      // `slaBreachTotal` (separate .count() query) is the real number shown
+      // on the KPI tile and must match what /leads?hasUnresolvedSlaBreach=true
+      // returns (task #113 — this used to be `slaBreaches.length`, which
+      // silently capped the displayed count at 5).
       where: { lead: { ...leadWhere, status: 'ACTIVE', stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] } }, resolvedAt: null },
       include: { lead: { select: { id: true, leadId: true, name: true, stage: true } } },
       orderBy: { breachedAt: 'desc' },
       take: 5,
+    }),
+    // Distinct-lead count, not a SLABreach-record count — a lead can carry
+    // more than one unresolved breach, but /leads?hasUnresolvedSlaBreach=true
+    // returns each such lead once, so the KPI must count leads too or the
+    // tile and its drill-through disagree (task #113 review).
+    prisma.lead.count({
+      where: {
+        ...leadWhere,
+        status: 'ACTIVE',
+        stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS', 'ONBOARDING'] },
+        slaBreaches: { some: { resolvedAt: null } },
+      },
     }),
     prisma.call.count({
       where: { createdAt: { gte: today }, loggedById: { in: teamUserIds } },
@@ -219,7 +238,9 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   if (user.role !== 'CRE') {
     const projectWhere: any = Object.keys(leadWhere).length > 0 ? { lead: leadWhere } : {};
 
-    const [inDeliveryAgg, phaseGroups, attentionProjects, collectionsDue] = await Promise.all([
+    const attentionWhere = { ...projectWhere, attentionFlags: { some: { resolvedAt: null } } };
+
+    const [inDeliveryAgg, phaseGroups, attentionProjects, attentionTotal, collectionsDue] = await Promise.all([
       prisma.project.aggregate({
         where: { ...projectWhere, phase: { notIn: ['HANDOVER', 'COMPLETED'] } },
         _count: { id: true },
@@ -232,10 +253,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         _sum: { contractValue: true },
       }),
       prisma.project.findMany({
-        where: {
-          ...projectWhere,
-          attentionFlags: { some: { resolvedAt: null } },
-        },
+        where: attentionWhere,
         include: {
           lead: { select: { id: true, leadId: true, name: true } },
           attentionFlags: {
@@ -244,8 +262,14 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
             take: 1,
           },
         },
+        // `take: 20` here is a display cap for the preview list only —
+        // `attentionTotal` (separate .count() below) is the real number
+        // shown on the KPI tile so it matches /projects?hasAttention=true's
+        // total exactly (task #113 — this used to be attentionProjects.length,
+        // which silently capped the displayed count at 20).
         take: 20,
       }),
+      prisma.project.count({ where: attentionWhere }),
       prisma.collection.findMany({
         where: {
           status: { not: 'COLLECTED' },
@@ -284,6 +308,10 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
           ? Math.floor((now - p.attentionFlags[0].createdAt.getTime()) / 86400000)
           : 0,
       })),
+      // Real total, not capped by the `take: 20` preview list above — this is
+      // what the "Needs Attention" KPI tile displays and must match
+      // /projects?dashboardScope=true&hasAttention=true's total exactly.
+      needsAttentionTotal: attentionTotal,
       collectionsDue: collectionsDue.map((c) => ({
         collectionId: c.id,
         projectId: c.projectId,
@@ -738,6 +766,11 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
 
   res.json({
     totalLeads,
+    // Always-current count of active leads (status ACTIVE, excluding the
+    // terminal DESIGN_IN_PROGRESS/HANDED_OVER stages) — unlike totalLeads,
+    // this is NOT scoped to the createdAt date range, so it reflects the
+    // real current pipeline even when no new leads were created this period.
+    activeLeads,
     leadsToday,
     leadsThisWeek,
     leadsThisMonth,
@@ -750,7 +783,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     sourceBreakdown,
     conversionRates,
     slaBreaches: {
-      activeCount: slaBreaches.length,
+      activeCount: slaBreachTotal,
       list: slaBreaches,
     },
     teamActivity: {
@@ -763,6 +796,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     ...(deliveryWidgets && {
       phaseLoad: deliveryWidgets.phaseLoad,
       needsAttention: deliveryWidgets.needsAttention,
+      needsAttentionTotal: deliveryWidgets.needsAttentionTotal,
       collectionsDue: deliveryWidgets.collectionsDue,
       inDelivery: deliveryWidgets.inDelivery,
     }),

@@ -40,6 +40,8 @@ import { calendarRouter } from './routes/calendar.js';
 import { projectsRouter } from './routes/projects.js';
 import { filesRouter } from './routes/files.js';
 import { configRouter } from './routes/config.js';
+import { collectionsRouter } from './routes/collections.js';
+import { npsRouter } from './routes/nps.js';
 import { scheduleMidnightJob } from './jobs/midnightOverdueTask.js';
 import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
@@ -172,6 +174,10 @@ app.use('/api/calendar', calendarRouter);
 
 // Projects (delivery)
 app.use('/api/projects', projectsRouter);
+
+// Collections (payments) and NPS drill-through lists
+app.use('/api/collections', collectionsRouter);
+app.use('/api/nps', npsRouter);
 
 // Public feedback form (no auth)
 app.use('/api/feedback', feedbackRouter);
