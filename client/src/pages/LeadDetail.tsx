@@ -20,6 +20,7 @@ import TeamTab from '../components/tabs/TeamTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
+import StageCaptureModal from '../components/StageCaptureModal';
 
 type Tab = 'overview' | 'activity' | 'calls' | 'followups' | 'meetings' | 'whatsapp' | 'quotes' | 'discount' | 'files' | 'team';
 
@@ -99,11 +100,17 @@ const STAGE_LABELS: Record<string, string> = {
 // Task #88: ON_HOLD/INACTIVE are status values now, not stages — removed
 // from the assignable stage list. Status is changed via the dedicated
 // On Hold / Mark Inactive actions instead.
+// Task #114: Effective Lead and Handed Over are legacy/off-funnel-only —
+// they must never appear as a *choosable* option in the stage-change
+// dropdown, but a lead already sitting in one of them still needs to show
+// its real current stage there (see ALL_STAGES usage at the select below).
+const LEGACY_STAGES = ['EFFECTIVE_LEAD', 'HANDED_OVER'];
 const ALL_STAGES = [
   'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY',
   'PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING',
   'DESIGN_IN_PROGRESS', 'HANDED_OVER',
 ];
+const SELECTABLE_STAGES = ALL_STAGES.filter((s) => !LEGACY_STAGES.includes(s));
 
 const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Active', ON_HOLD: 'On Hold', INACTIVE: 'Inactive' };
 const STATUS_COLORS: Record<string, string> = {
@@ -276,6 +283,11 @@ export default function LeadDetail() {
   const [stageModal, setStageModal] = useState(false);
   const [newStage, setNewStage] = useState('');
   const [changingStage, setChangingStage] = useState(false);
+  // Task #114 — every stage move captures intent rating + project value
+  // before it's committed. This is a second confirmation step shown after
+  // the target stage is picked in the modal above.
+  const [stageCapture, setStageCapture] = useState<{ targetStage: string } | null>(null);
+  const [stageCaptureError, setStageCaptureError] = useState<string | null>(null);
 
   // Task #88 — status change flow (On Hold / Inactive), separate from stage
   const [statusModal, setStatusModal] = useState<'ON_HOLD' | 'INACTIVE' | null>(null);
@@ -544,17 +556,40 @@ export default function LeadDetail() {
     }
   };
 
-  const handleStageChange = async (e: React.FormEvent) => {
+  // Task #114 — picking a target stage no longer commits it directly; it
+  // opens the intent-rating + project-value capture step, which is what
+  // actually persists the move.
+  const handleStageChange = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStage || newStage === lead?.stage) { setStageModal(false); return; }
+    setStageModal(false);
+    setStageCaptureError(null);
+    setStageCapture({ targetStage: newStage });
+  };
+
+  const handleStageCaptureConfirm = async (rating: number, value: number, reason: string) => {
+    if (!stageCapture || !lead) return;
     setChangingStage(true);
+    setStageCaptureError(null);
     try {
-      await api.patch(`/leads/${leadId}`, { stage: newStage });
-      toast.success(`Stage → ${STAGE_LABELS[newStage] ?? newStage}`);
-      setStageModal(false);
+      // Only touch the intent rating if it's actually changing — resubmitting
+      // an unchanged value that happens to differ from the system-computed
+      // rating would otherwise spuriously demand a reason every single time.
+      if (rating !== (lead.intentRating ?? 0)) {
+        try {
+          await api.patch(`/leads/${leadId}/intent-rating`, { rating, reason: reason || undefined });
+        } catch (e: any) {
+          setStageCaptureError(e.message ?? 'Could not update intent rating — a reason may be required if this overrides the system-computed rating.');
+          setChangingStage(false);
+          return;
+        }
+      }
+      await api.patch(`/leads/${leadId}`, { stage: stageCapture.targetStage, estimatedValue: value });
+      toast.success(`Stage → ${STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}`);
+      setStageCapture(null);
       loadLead(); loadActivities();
     } catch (e: any) {
-      toast.error(e.message ?? 'Could not change stage');
+      setStageCaptureError(e.message ?? 'Could not change stage');
     } finally {
       setChangingStage(false);
     }
@@ -759,7 +794,15 @@ export default function LeadDetail() {
               <select value={newStage} onChange={(e) => setNewStage(e.target.value)}
                 className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                 style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
-                {ALL_STAGES.map((s) => (
+                {/* Effective Lead / Handed Over are legacy — not selectable going
+                    forward, but still shown (disabled) if the lead is already
+                    sitting there so the dropdown reflects its real stage. */}
+                {LEGACY_STAGES.includes(lead?.stage ?? '') && (
+                  <option key={lead!.stage} value={lead!.stage} disabled>
+                    {STAGE_LABELS[lead!.stage] ?? lead!.stage} (legacy — current)
+                  </option>
+                )}
+                {SELECTABLE_STAGES.map((s) => (
                   <option key={s} value={s}>{STAGE_LABELS[s] ?? s}</option>
                 ))}
               </select>
@@ -775,6 +818,21 @@ export default function LeadDetail() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── Stage-change capture step (task #114) — intent rating + project
+           value must be confirmed before the move is committed. ───────────── */}
+      {stageCapture && lead && (
+        <StageCaptureModal
+          leadName={lead.name}
+          targetStageLabel={STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}
+          initialRating={lead.intentRating}
+          initialValue={lead.estimatedValue}
+          saving={changingStage}
+          error={stageCaptureError}
+          onCancel={() => { setStageCapture(null); setStageCaptureError(null); }}
+          onConfirm={handleStageCaptureConfirm}
+        />
       )}
 
       {/* ── On Hold / Inactive status modal (task #88) — separate from stage ──── */}

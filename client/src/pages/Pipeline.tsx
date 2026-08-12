@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
+import StageCaptureModal from '../components/StageCaptureModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Lead {
@@ -740,6 +741,12 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
   } | null>(null);
   const [checklistLead, setChecklistLead] = useState<Lead | null>(null);
 
+  // Task #114 — a drag-drop stage move is held back until intent rating +
+  // project value are confirmed, same as the lead-detail stage dropdown.
+  const [stageCapture, setStageCapture] = useState<{ lead: Lead; targetStage: string } | null>(null);
+  const [stageCaptureError, setStageCaptureError] = useState<string | null>(null);
+  const [stageCaptureSaving, setStageCaptureSaving] = useState(false);
+
   const isDesigner = userRole === 'DESIGNER' || userRole === 'CRE';
   const KANBAN_STAGES = isDesigner ? KANBAN_STAGES_DESIGNER : KANBAN_STAGES_ALL;
 
@@ -864,6 +871,8 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
 
   // Task #88: ON_HOLD/INACTIVE are no longer stages, so the kanban board only
   // ever has real-stage columns — dropping onto one is a plain stage move.
+  // Task #114: the drop no longer commits immediately — it opens the
+  // intent-rating + project-value capture step first.
   const handleDrop = (e: React.DragEvent, targetStage: string) => {
     e.preventDefault();
     dragCounters.current[targetStage] = 0;
@@ -871,7 +880,39 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     if (!draggedLead || draggedLead.stage === targetStage) { setDraggedLead(null); return; }
     const lead = draggedLead;
     setDraggedLead(null);
-    commitDrop(lead, targetStage, {});
+    setStageCaptureError(null);
+    setStageCapture({ lead, targetStage });
+  };
+
+  const confirmStageCapture = async (rating: number, value: number, reason: string) => {
+    if (!stageCapture) return;
+    const { lead, targetStage } = stageCapture;
+    setStageCaptureSaving(true);
+    setStageCaptureError(null);
+    try {
+      if (rating !== (lead.intentRating ?? 0)) {
+        try {
+          const token = localStorage.getItem('crm_token');
+          const res = await fetch(`/api/leads/${lead.id}/intent-rating`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ rating, reason: reason || undefined }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            setStageCaptureError(body.error ?? 'Could not update intent rating — a reason may be required if this overrides the system-computed rating.');
+            return;
+          }
+        } catch {
+          setStageCaptureError('Could not update intent rating — network error');
+          return;
+        }
+      }
+      await commitDrop(lead, targetStage, { estimatedValue: String(value) });
+      setStageCapture(null);
+    } finally {
+      setStageCaptureSaving(false);
+    }
   };
 
   const showKanban = activeTab === 'all' || activeTab === 'active';
@@ -1264,6 +1305,21 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
             })}
           </div>
         </div>
+      )}
+
+      {/* Stage-change capture step (task #114) — confirm intent rating + project
+          value before a drag-drop stage move is committed. */}
+      {stageCapture && (
+        <StageCaptureModal
+          leadName={stageCapture.lead.name}
+          targetStageLabel={STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}
+          initialRating={stageCapture.lead.intentRating}
+          initialValue={stageCapture.lead.estimatedValue}
+          saving={stageCaptureSaving}
+          error={stageCaptureError}
+          onCancel={() => { setStageCapture(null); setStageCaptureError(null); }}
+          onConfirm={confirmStageCapture}
+        />
       )}
 
       {/* Blocked-drag modal — actionable resolution instead of a plain error toast */}
