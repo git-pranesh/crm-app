@@ -334,6 +334,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       'TASK_SCHEDULED',
       `Follow-up task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${task.dueTime ? ` at ${task.dueTime}` : ''}`,
       leadId,
+      new Date(task.dueDate),
     );
   }
 

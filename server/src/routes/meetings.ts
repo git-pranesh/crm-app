@@ -565,9 +565,9 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
     // In-app notifications
     if (lead.assignedBLId) {
-      await createNotification(lead.assignedBLId, 'MEETING_NO_SHOW', noShowMsg, lead.id);
+      await createNotification(lead.assignedBLId, 'MEETING_NO_SHOW', noShowMsg, lead.id, meeting.scheduledAt);
     }
-    await notifyManagers('MEETING_NO_SHOW', noShowMsg, lead.id);
+    await notifyManagers('MEETING_NO_SHOW', noShowMsg, lead.id, meeting.scheduledAt);
 
     // Send email to BL + managers when no follow-up plan exists
     if (hasNoPlan) {

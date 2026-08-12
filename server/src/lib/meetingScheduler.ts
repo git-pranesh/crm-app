@@ -138,7 +138,7 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
     ));
     await Promise.all(
       [...notifyIds].map((id) =>
-        createNotification(id, 'MEETING_SCHEDULED', `${meetingLabel} meeting scheduled for ${lead.name} (${lead.leadId}) on ${dateStr}`, leadId),
+        createNotification(id, 'MEETING_SCHEDULED', `${meetingLabel} meeting scheduled for ${lead.name} (${lead.leadId}) on ${dateStr}`, leadId, new Date(scheduledAt)),
       ),
     );
   }

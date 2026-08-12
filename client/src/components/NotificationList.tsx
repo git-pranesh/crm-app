@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { notifIcon, notifLabel } from '../lib/notifTypes';
-import { formatISTTime, istDateGroupLabel } from '../lib/dateFormat';
+import { formatISTTime, formatISTDate, formatISTDateTime, istDateGroupLabel } from '../lib/dateFormat';
 
 export interface NotifItem {
   id: string;
@@ -8,6 +8,8 @@ export interface NotifItem {
   message: string;
   isRead: boolean;
   createdAt: string;
+  /** The task's due date/time or meeting's scheduled date/time this notification is about, if any. */
+  eventAt?: string | null;
   lead?: { id: string; leadId: string; name: string } | null;
 }
 
@@ -25,6 +27,32 @@ function dateGroupLabel(iso: string) {
 
 function fmtTime(iso: string) {
   return formatISTTime(iso);
+}
+
+// Task/meeting notifications should surface the date/time they're actually
+// *about* (a task's due date, a meeting's scheduled time) rather than when
+// the notification itself was logged — the latter is what `createdAt` means.
+//
+// Task due "dates" are stored as a date-only value (the time-of-day, if any,
+// lives separately in `dueTime`/`timeFrom` and is already embedded in the
+// notification's message text) — formatting that as a date+time would show
+// a misleading midnight-IST clock time, so task-flavoured events render as a
+// date only. Meeting `scheduledAt` is a real timestamp, so it renders with
+// its time.
+const EVENT_LABEL: Record<string, { label: string; withTime: boolean }> = {
+  TASK_SCHEDULED: { label: 'Due', withTime: false },
+  TASK_DUE: { label: 'Due', withTime: false },
+  OVERDUE_TASK: { label: 'Was due', withTime: false },
+  MEETING_SCHEDULED: { label: 'Meeting', withTime: true },
+  MEETING_NO_SHOW: { label: 'Meeting was', withTime: true },
+};
+
+function eventTimeLabel(n: NotifItem): string {
+  if (!n.eventAt) return fmtTime(n.createdAt);
+  const cfg = EVENT_LABEL[n.type];
+  if (!cfg) return formatISTDateTime(n.eventAt);
+  const value = cfg.withTime ? formatISTDateTime(n.eventAt) : formatISTDate(n.eventAt);
+  return `${cfg.label} ${value}`;
 }
 
 // Land the user on the lead-detail tab most relevant to what the notification is about,
@@ -100,7 +128,7 @@ export default function NotificationList({ notifications, onMarkRead, emptyLabel
                       <p className="text-[10px] font-medium text-brand-600 uppercase tracking-wide">{notifLabel(n.type)}</p>
                       <p className="text-xs text-stone-800 leading-snug mt-0.5">{n.message}</p>
                       {n.lead && <p className="text-[10px] text-stone-400 mt-0.5">{n.lead.name} · {n.lead.leadId}</p>}
-                      <p className="text-[10px] text-stone-400 mt-0.5">{fmtTime(n.createdAt)}</p>
+                      <p className="text-[10px] text-stone-400 mt-0.5">{eventTimeLabel(n)}</p>
                     </div>
                     <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 bg-brand-500" />
                   </button>
@@ -121,7 +149,7 @@ export default function NotificationList({ notifications, onMarkRead, emptyLabel
                       <p className="text-[10px] font-medium text-stone-400 uppercase tracking-wide">{notifLabel(n.type)}</p>
                       <p className="text-xs text-stone-600 leading-snug mt-0.5">{n.message}</p>
                       {n.lead && <p className="text-[10px] text-stone-400 mt-0.5">{n.lead.name} · {n.lead.leadId}</p>}
-                      <p className="text-[10px] text-stone-400 mt-0.5">{fmtTime(n.createdAt)}</p>
+                      <p className="text-[10px] text-stone-400 mt-0.5">{eventTimeLabel(n)}</p>
                     </div>
                   </button>
                 ))}

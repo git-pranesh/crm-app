@@ -40,7 +40,7 @@ export async function runTaskReminderSweep() {
     });
     if (already) continue;
 
-    await createNotification(t.assignedToId, 'TASK_DUE', message, t.leadId);
+    await createNotification(t.assignedToId, 'TASK_DUE', message, t.leadId, t.dueDate);
     sent++;
   }
   if (sent > 0) console.log(`[task-reminders] sent ${sent} reminder(s)`);

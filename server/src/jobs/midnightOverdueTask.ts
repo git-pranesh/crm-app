@@ -85,7 +85,7 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
   for (const task of overdueTasks) {
     const message = `Task for lead ${task.lead.leadId} (${task.lead.name}) assigned to ${task.assignedTo.name} is overdue.`;
     if (task.assignedTo.blId) {
-      await createNotification(task.assignedTo.blId, 'OVERDUE_TASK', message, task.lead.id);
+      await createNotification(task.assignedTo.blId, 'OVERDUE_TASK', message, task.lead.id, task.dueDate);
     }
     details.push(`task:${task.id} lead:${task.lead.leadId} assignee:${task.assignedTo.name}`);
   }

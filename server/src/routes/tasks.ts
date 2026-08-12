@@ -189,6 +189,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
       'TASK_SCHEDULED',
       `Task scheduled for ${lead.name} (${lead.leadId}) — due ${dueStr}${resolvedTimeFrom ? ` at ${resolvedTimeFrom}` : ''}`,
       leadId,
+      parsedDueDate,
     );
   }
 

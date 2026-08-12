@@ -724,6 +724,10 @@ model NotificationLog {
   leadId    String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  /// The task due date/time or meeting scheduled date/time this notification
+  /// is about — distinct from createdAt (when the notification fired). Null
+  /// for notification types with no inherent due/event date.
+  eventAt   DateTime?
 
   user User  @relation(fields: [userId], references: [id])
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)

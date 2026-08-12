@@ -33,9 +33,14 @@ export async function createNotification(
   type: NotificationType,
   message: string,
   leadId?: string,
+  // The date/time this notification is actually *about* (a task's due
+  // date/time, or a meeting's scheduled date/time) — distinct from
+  // createdAt, which is when the notification itself was generated. Left
+  // undefined for notification types with no inherent due/event date.
+  eventAt?: Date,
 ) {
   return prisma.notificationLog.create({
-    data: { userId, type, message, leadId },
+    data: { userId, type, message, leadId, eventAt },
   });
 }
 
@@ -44,6 +49,7 @@ export async function notifyManagers(
   type: NotificationType,
   message: string,
   leadId?: string,
+  eventAt?: Date,
 ) {
   const managers = await prisma.user.findMany({
     where: { role: { in: ['BL', 'BRANCH_HEAD'] }, isActive: true },
@@ -51,7 +57,7 @@ export async function notifyManagers(
   });
 
   await prisma.notificationLog.createMany({
-    data: managers.map((m) => ({ userId: m.id, type, message, leadId })),
+    data: managers.map((m) => ({ userId: m.id, type, message, leadId, eventAt })),
   });
 }
 
