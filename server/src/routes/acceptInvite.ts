@@ -89,11 +89,13 @@ acceptInviteRouter.post('/:token', async (req, res) => {
       }
     }
 
-    // Create or update User record
+    // Create or update User record — carry through the blId/designation the
+    // admin selected on the invite form so the person lands with the same
+    // reporting line / title, not a bare role.
     const user = existingUser
       ? await prisma.user.update({
           where: { id: existingUser.id },
-          data: { supabaseId, isActive: true },
+          data: { supabaseId, isActive: true, blId: invite.blId ?? undefined, designation: invite.designation ?? undefined },
         })
       : await prisma.user.create({
           data: {
@@ -101,6 +103,8 @@ acceptInviteRouter.post('/:token', async (req, res) => {
             name: invite.name,
             email: invite.email,
             role: invite.role,
+            blId: invite.blId ?? undefined,
+            designation: invite.designation ?? undefined,
             isActive: true,
           },
         });

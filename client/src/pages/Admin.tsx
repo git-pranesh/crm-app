@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, type LucideIcon } from 'lucide-react';
-import { api } from '../lib/api';
+import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, type LucideIcon } from 'lucide-react';
+import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 
 interface User {
@@ -36,7 +36,18 @@ const ROLE_COLORS: Record<string, string> = {
   BRANCH_HEAD: 'bg-green-100 text-green-700',
 };
 
-type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers';
+type AdminTab = 'users' | 'schedules' | 'health' | 'nps' | 'offers' | 'import';
+
+interface ImportPreviewRow {
+  row: number; status: 'WILL_IMPORT' | 'DUPLICATE' | 'INVALID';
+  name: string | null; phone: string | null; email?: string | null;
+  source?: string | null; stage?: string; leadStatus?: string; leadId?: string;
+  reason?: string;
+}
+interface ImportResult {
+  dryRun: boolean; status: string; total: number; imported: number; skipped: number;
+  errors: string[]; preview: ImportPreviewRow[];
+}
 
 interface OfferOption { id: string; label: string; isActive: boolean; sortOrder: number }
 
@@ -75,6 +86,12 @@ export default function Admin() {
   const [offersLoading, setOffersLoading] = useState(false);
   const [newOfferLabel, setNewOfferLabel] = useState('');
   const [savingOffer, setSavingOffer] = useState(false);
+
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importStatus, setImportStatus] = useState<'ACTIVE' | 'INACTIVE' | 'ON_HOLD'>('ACTIVE');
+  const [importPreview, setImportPreview] = useState<ImportResult | null>(null);
+  const [importRunning, setImportRunning] = useState(false);
+  const [importCommitted, setImportCommitted] = useState<ImportResult | null>(null);
 
   const bls = users.filter((u) => u.role === 'BL' && u.isActive);
   const activeDesigners = users.filter((u) => u.role === 'DESIGNER' && u.isActive);
@@ -135,6 +152,61 @@ export default function Admin() {
     }
   };
 
+  const downloadImportTemplate = async () => {
+    try {
+      const res = await fetch('/api/leads/import/template', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('crm_token')}` },
+      });
+      if (!res.ok) throw new Error('Could not download template');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'lead-import-template.csv'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const runImportPreview = async () => {
+    if (!importFile) { toast.error('Choose a CSV or Excel file first'); return; }
+    setImportRunning(true);
+    setImportPreview(null);
+    setImportCommitted(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      fd.append('status', importStatus);
+      const result = await uploadFile<ImportResult>('/leads/import?dryRun=true', fd);
+      setImportPreview(result);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setImportRunning(false);
+    }
+  };
+
+  const commitImport = async () => {
+    if (!importFile || !importPreview) return;
+    const willImportCount = importPreview.preview.filter((r) => r.status === 'WILL_IMPORT').length;
+    if (willImportCount === 0) { toast.error('Nothing to import'); return; }
+    if (!window.confirm(`Import ${willImportCount} lead(s) as ${importStatus}? This cannot be undone from here.`)) return;
+    setImportRunning(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', importFile);
+      fd.append('status', importStatus);
+      const result = await uploadFile<ImportResult>('/leads/import', fd);
+      setImportCommitted(result);
+      setImportPreview(null);
+      toast.success(`Imported ${result.imported} lead(s), skipped ${result.skipped}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setImportRunning(false);
+    }
+  };
+
   const openDeactivate = async (u: User) => {
     setDeactivateTarget(u);
     setReassignDesignerId('');
@@ -183,8 +255,23 @@ export default function Admin() {
     if (!inviteForm.name || !inviteForm.email) { toast.error('Name and email required'); return; }
     setInviting(true);
     try {
-      await api.post('/admin/users/invite', { ...inviteForm, blId: inviteForm.blId || undefined, designation: inviteForm.designation || undefined });
-      toast.success(`${inviteForm.name} invited successfully`);
+      // Task: fix broken login for admin-created users. `/admin/users/invite`
+      // creates a User row with no password, so the person can never sign in.
+      // `/admin/users/send-invite` creates a UserInvite + emails a link to
+      // /accept-invite/:token where the person sets their own password —
+      // that's the flow that actually results in a working login.
+      const { inviteLink, note } = await api.post<{ inviteLink: string; note: string }>(
+        '/admin/users/send-invite',
+        {
+          name: inviteForm.name, email: inviteForm.email, role: inviteForm.role,
+          blId: inviteForm.blId || undefined, designation: inviteForm.designation || undefined,
+        },
+      );
+      if (note && note.includes('SMTP not configured')) {
+        toast.success(`Invite created for ${inviteForm.name}. Email isn't configured yet — share this link with them: ${inviteLink}`, { duration: 12000 });
+      } else {
+        toast.success(`Invite email sent to ${inviteForm.email}`);
+      }
       setInviteForm({ name: '', email: '', role: 'DESIGNER', blId: '', designation: '' });
       await loadAll();
     } catch (e: any) {
@@ -281,6 +368,7 @@ export default function Admin() {
     { id: 'health', label: 'System Health', Icon: Activity },
     { id: 'nps', label: 'NPS Tracker', Icon: Star },
     { id: 'offers', label: 'Offers', Icon: Tag },
+    { id: 'import', label: 'Import Leads', Icon: Upload },
   ];
 
   const hasLeads = (deactivatePreview?.activeLeads ?? 0) > 0;
@@ -762,6 +850,129 @@ export default function Admin() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── IMPORT LEADS TAB ───────────────────────────────────────────────── */}
+        {tab === 'import' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="font-semibold text-gray-900 mb-1">Bulk-import leads from CSV / Excel</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                Preview first — nothing is saved until you confirm the import. Duplicate phone numbers,
+                emails, or PIDs already in the CRM are skipped automatically.{' '}
+                <button onClick={downloadImportTemplate} className="text-brand-600 hover:underline font-medium">
+                  Download a template
+                </button>
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end mb-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">File</label>
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx"
+                    onChange={(e) => { setImportFile(e.target.files?.[0] ?? null); setImportPreview(null); setImportCommitted(null); }}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 file:mr-3 file:py-1 file:px-2 file:rounded-md file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Lead status for this file</label>
+                  <select
+                    value={importStatus}
+                    onChange={(e) => { setImportStatus(e.target.value as any); setImportPreview(null); setImportCommitted(null); }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                    <option value="ON_HOLD">On Hold</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={runImportPreview}
+                  disabled={!importFile || importRunning}
+                  className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {importRunning && !importPreview ? 'Analyzing…' : 'Preview import'}
+                </button>
+                {importPreview && (
+                  <button
+                    onClick={commitImport}
+                    disabled={importRunning || importPreview.preview.filter((r) => r.status === 'WILL_IMPORT').length === 0}
+                    className="bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {importRunning ? 'Importing…' : `Confirm import (${importPreview.preview.filter((r) => r.status === 'WILL_IMPORT').length})`}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {importCommitted && (
+              <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+                <p className="text-sm font-medium text-green-800 mb-1">
+                  <CheckCircle2 size={14} strokeWidth={2} className="inline mr-1 -mt-0.5" />
+                  Imported {importCommitted.imported} of {importCommitted.total} rows as {importCommitted.status}. Skipped {importCommitted.skipped}.
+                </p>
+                {importCommitted.errors.length > 0 && (
+                  <ul className="text-xs text-green-700 mt-2 list-disc pl-5 space-y-0.5">
+                    {importCommitted.errors.slice(0, 20).map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {importPreview && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <span className="text-gray-900 font-semibold">{importPreview.total} rows parsed</span>
+                  <span className="text-green-600">{importPreview.preview.filter((r) => r.status === 'WILL_IMPORT').length} will import</span>
+                  <span className="text-amber-600">{importPreview.preview.filter((r) => r.status === 'DUPLICATE').length} duplicates</span>
+                  <span className="text-red-600">{importPreview.preview.filter((r) => r.status === 'INVALID').length} invalid</span>
+                </div>
+                <div className="max-h-96 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Row</th>
+                        <th className="text-left px-3 py-2 font-medium">Status</th>
+                        <th className="text-left px-3 py-2 font-medium">Name</th>
+                        <th className="text-left px-3 py-2 font-medium">Phone</th>
+                        <th className="text-left px-3 py-2 font-medium">Stage</th>
+                        <th className="text-left px-3 py-2 font-medium">Lead ID</th>
+                        <th className="text-left px-3 py-2 font-medium">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {importPreview.preview.map((r) => (
+                        <tr key={r.row} className={r.status !== 'WILL_IMPORT' ? 'bg-gray-50 text-gray-400' : ''}>
+                          <td className="px-3 py-1.5">{r.row}</td>
+                          <td className="px-3 py-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              r.status === 'WILL_IMPORT' ? 'bg-green-100 text-green-700'
+                              : r.status === 'DUPLICATE' ? 'bg-amber-100 text-amber-700'
+                              : 'bg-red-100 text-red-700'
+                            }`}>{r.status}</span>
+                          </td>
+                          <td className="px-3 py-1.5">{r.name || '—'}</td>
+                          <td className="px-3 py-1.5">{r.phone || '—'}</td>
+                          <td className="px-3 py-1.5">{r.stage || '—'}</td>
+                          <td className="px-3 py-1.5">{r.leadId || '—'}</td>
+                          <td className="px-3 py-1.5">{r.reason || ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {importPreview.errors.length > 0 && (
+                  <div className="px-5 py-3 border-t border-gray-100 text-xs text-amber-700 space-y-0.5">
+                    {importPreview.errors.slice(0, 20).map((e, i) => <div key={i}>{e}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

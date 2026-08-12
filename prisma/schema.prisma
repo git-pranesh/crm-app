@@ -778,6 +778,10 @@ model UserInvite {
   email       String
   role        Role
   name        String
+  /// Carried through from the invite form so acceptance can set the same
+  /// reporting line / title the admin picked — not just role.
+  blId        String?
+  designation Designation?
   invitedById String
   token       String    @unique @default(cuid())
   expiresAt   DateTime

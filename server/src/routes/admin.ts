@@ -368,7 +368,9 @@ adminRouter.get('/invites', async (_req, res) => {
 adminRouter.post('/users/send-invite', async (req, res) => {
   try {
     const adminUser = (req as any).user!;
-    const { name, email, role } = req.body as { name?: string; email?: string; role?: string };
+    const { name, email, role, blId, designation } = req.body as {
+      name?: string; email?: string; role?: string; blId?: string; designation?: string;
+    };
     if (!name?.trim() || !email?.trim() || !role) {
       res.status(400).json({ error: 'name, email, and role are required' });
       return;
@@ -378,6 +380,24 @@ adminRouter.post('/users/send-invite', async (req, res) => {
       res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
       return;
     }
+    // blId only makes sense for Designers/CREs reporting to a BL; designation
+    // only exists for Designers (see Designation enum) — silently ignore
+    // otherwise rather than persisting a value that can never apply.
+    if (blId && !['DESIGNER', 'CRE'].includes(role)) {
+      res.status(400).json({ error: 'blId only applies to DESIGNER or CRE invites' });
+      return;
+    }
+    if (designation && role !== 'DESIGNER') {
+      res.status(400).json({ error: 'designation only applies to DESIGNER invites' });
+      return;
+    }
+    if (blId) {
+      const bl = await prisma.user.findUnique({ where: { id: blId } });
+      if (!bl || bl.role !== 'BL') {
+        res.status(400).json({ error: 'blId must reference an existing BL user' });
+        return;
+      }
+    }
 
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
     const invite = await prisma.userInvite.create({
@@ -385,6 +405,8 @@ adminRouter.post('/users/send-invite', async (req, res) => {
         email: email.toLowerCase().trim(),
         role: role as any,
         name: name.trim(),
+        blId: blId || undefined,
+        designation: designation ? (designation as any) : undefined,
         invitedById: adminUser.id,
         expiresAt,
       },
