@@ -1,0 +1,43 @@
+Here's the complete list — everything confirmed as broken, missing, or mismatched against your originally agreed feature scope, with the 18 new-feature items excluded. Organized by area.
+
+1. Login & Access
+New users can't log in — "Add user" never sets a password; the working invite-email flow exists in code but isn't wired to the button. (agreed 12.6)
+2. Bulk Import
+No import screen exists in the app at all; the backend importer that does exist doesn't recognize your real column headers, mangles multi-line Location cells, discards your existing PID numbers, and can't tell Active/Inactive/On Hold apart. (agreed 1.10)
+3. Pipeline & Stage Gates
+Cards can't be moved from Pipeline — dragging just throws a red error listing missing requirements; there's no way to fix those requirements from the board itself.
+The two hardest gates (PD→OB, OBM→DIP) require checklists that only exist inside the individual lead page — unreachable from Pipeline.
+Any lead with intent rating = 1 is blocked from every forward move, globally — likely the real reason many leads are "stuck."
+Only DQL→PP, MQL→PP, PP→OB skips are allowed; your document says DQL, PR, and PD should all be skippable — a genuine mismatch.
+On Hold / Inactive views aren't grouped by stage the way the live board is. (agreed 2.1–2.4)
+4. Timezone
+Activity feed, WhatsApp tab, Inbox, Call Log, Follow-ups, and the header clock all display server time (UTC) instead of India time — timestamps read 5.5 hours off.
+The overdue-task job computes "midnight" in server time, so tasks flip to overdue at 5:30 AM IST instead of actual midnight. (agreed 3.6, "flag task incomplete by midnight")
+5. Dashboard
+Shows "0 active leads" even when leads exist — confirmed broken/disconnected from real data, independently confirmed on the client's video. (agreed 13.1)
+KPI tiles aren't clickable/drill-through (agreed 13.6 implies live team activity should be actionable, not just numbers)
+6. Lead & Stage Data
+Effective Lead and Handed Over still appear as selectable options in stage dropdowns even though they're meant to be legacy/off-funnel only — inconsistent labelling.
+No auto pop-up capturing intent + project value on every stage change. (agreed 1.7)
+7. Files
+Files category dropdown is missing Final Pitch Presentation, PP quotation, PR quotation, PR presentation — categories your team actually uses.
+8. Meetings & Calls
+Meeting Location is free text instead of a dropdown (EC Visit / Site Visit / Virtual / Public place). (agreed 4.3)
+Only one attachment allowed per call/meeting/task — no multi-attachment support. (agreed 3.1/4.4 imply full logging, not capped at one file)
+Meetings summary lacks a rescheduled/total breakdown.
+9. Notifications & Tasks
+Task details are incomplete/wrong: shows lead name but not the specific meeting date/time tied to the task, and reflects creation time instead of due time — confirmed independently on the client's video.
+No "load older notifications" beyond the most recent 50. (agreed 11.1, full timeline)
+10. Reports/Design Pipeline
+Design phases have no recorded start dates, so the Design Pipeline can't show a real timeline. (agreed 14.2, "days each lead has been in its stage")
+Per-stage NPS averages aren't surfaced on the designer dashboard. (agreed 13.6 team view)
+11. Team/Admin
+No way for a BL or admin to remove someone from a project's team once added.
+Granting the Design Team Lead designation is more cumbersome than it should be for admins. (agreed 12.6)
+No admin UI for editing the PD→OB/OB→OBM welcome-email wording, even though it's editable server-side already. (agreed 8.4, "designer can preview/edit email")
+12. WhatsApp
+No indicator of whether a WhatsApp message was actually delivered vs just sent. (agreed 7.1)
+WhatsApp inbox has no protection against spoofed inbound messages.
+13. Incentives
+Incentive figures shown are placeholders, not computed from the real incentive model once it's defined. (this depends on the incentive engine docs being finalized — not a pure bug, but currently non-functional)
+This is the full "fix, don't add" list — roughly 20 concrete items, all traceable to something already in your agreed 125-item feature sheet or a plain defect (dashboard showing 0, wrong timestamps, broken login) rather than new scope. Let me know if you want this turned into the formal task queue, or if you'd like to trim/reorder before I do.
