@@ -20,6 +20,13 @@ const MEETING_MODES = [
   { value: 'PUBLIC_PLACE', label: 'Public Place' },
   { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
+// Task #115 — Meeting Location is a fixed dropdown, not free text.
+const MEETING_LOCATION_OPTIONS = [
+  { value: 'EC_VISIT', label: 'EC Visit' },
+  { value: 'SITE_VISIT', label: 'Site Visit' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: 'PUBLIC_PLACE', label: 'Public place' },
+];
 
 function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
@@ -185,6 +192,9 @@ export default function CallLogTab({ leadId }: Props) {
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const attachmentFileRef = useRef<HTMLInputElement>(null);
+  // Task #115 — the mandatory follow-up task sub-form also supports multiple attachments.
+  const [taskAttachmentFiles, setTaskAttachmentFiles] = useState<File[]>([]);
+  const taskAttachmentFileRef = useRef<HTMLInputElement>(null);
 
   const loadCalls = async () => {
     try {
@@ -203,20 +213,15 @@ export default function CallLogTab({ leadId }: Props) {
 
   useEffect(() => { loadCalls(); }, [leadId]);
 
-  // Attachments require an exact one-file-per-selected-category pairing — enforced
-  // here rather than at submit time, so it's impossible to end up with more
-  // categories than files (an unmatched category) or more files than categories
-  // (an uploaded-but-unreferenced file left orphaned in storage).
-  const toggleAttachmentType = (type: string) => {
-    setSelectedAttachmentTypes((prev) => {
-      if (prev.includes(type)) {
-        const next = prev.filter((t) => t !== type);
-        // Trim any extra file beyond the new (smaller) category count.
-        setAttachmentFiles((files) => files.slice(0, next.length));
-        return next;
-      }
-      return [...prev, type];
-    });
+  // Task #115 — attachments support multiple files per category. Each click
+  // on a category button adds a new attachment slot (categories can repeat);
+  // slots and uploaded files are paired by position, in the order added.
+  const addAttachmentType = (type: string) => {
+    setSelectedAttachmentTypes((prev) => [...prev, type]);
+  };
+  const removeAttachmentSlot = (index: number) => {
+    setSelectedAttachmentTypes((prev) => prev.filter((_, i) => i !== index));
+    setAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const resetForm = () => {
@@ -272,6 +277,30 @@ export default function CallLogTab({ leadId }: Props) {
         ? selectedAttachmentTypes.map((type, i) => ({ type, storagePath: uploadedPaths[i] }))
         : undefined;
 
+      // Task #115 — upload the follow-up task's own attachments (no fixed category list).
+      let taskAttachments: { type: string; storagePath: string }[] | undefined;
+      if (!['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome) && taskAttachmentFiles.length > 0) {
+        setUploadingAttachment(true);
+        const token = localStorage.getItem('crm_token') ?? '';
+        taskAttachments = [];
+        for (const file of taskAttachmentFiles) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (!uploadResp.ok) {
+            const err = await uploadResp.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Attachment upload failed');
+          }
+          const uploadData = await uploadResp.json();
+          taskAttachments.push({ type: 'ATTACHMENT', storagePath: uploadData.storagePath });
+        }
+        setUploadingAttachment(false);
+      }
+
       await api.post(`/leads/${leadId}/calls`, {
         outcome: form.outcome,
         duration: form.duration ? Number(form.duration) * 60 : undefined,
@@ -280,7 +309,7 @@ export default function CallLogTab({ leadId }: Props) {
         location: form.location.trim() || undefined,
         attachments,
         followUpTask: !['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome)
-          ? { dueDate: form.dueDate, dueTime: form.dueTime }
+          ? { dueDate: form.dueDate, dueTime: form.dueTime, attachments: taskAttachments }
           : undefined,
         callbackDetails: form.outcome === 'CALLBACK'
           ? { dueDate: form.callbackDueDate, dueTime: form.callbackDueTime, agenda: form.callbackAgenda.trim() || undefined }
@@ -291,6 +320,7 @@ export default function CallLogTab({ leadId }: Props) {
         nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
       });
       resetForm();
+      setTaskAttachmentFiles([]);
       setShowForm(false);
       await loadCalls();
     } catch (e: any) {
@@ -389,7 +419,10 @@ export default function CallLogTab({ leadId }: Props) {
             </div>
           </div>
 
-          {/* Attachments — now occupies the slot the free-text Agenda field used to */}
+          {/* Attachments — now occupies the slot the free-text Agenda field used to.
+              Task #115: multiple attachments are allowed, including repeats of the
+              same category — clicking a category adds another slot rather than
+              toggling a single one. */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
             <div className="flex flex-wrap gap-2 mb-2">
@@ -397,19 +430,25 @@ export default function CallLogTab({ leadId }: Props) {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => toggleAttachmentType(type)}
-                  className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                    selectedAttachmentTypes.includes(type)
-                      ? 'bg-brand-100 border-brand-400 text-brand-700 font-medium'
-                      : 'border-gray-200 text-gray-500 hover:border-brand-300'
-                  }`}
+                  onClick={() => addAttachmentType(type)}
+                  className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-brand-300 hover:text-brand-700"
                 >
-                  {type}
+                  + {type}
                 </button>
               ))}
             </div>
             {selectedAttachmentTypes.length > 0 && (
               <div className="space-y-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedAttachmentTypes.map((type, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-xs bg-brand-50 border border-brand-200 text-brand-700 px-2 py-0.5 rounded-full">
+                      {type}{attachmentFiles[i] ? `: ${attachmentFiles[i].name}` : ' (no file yet)'}
+                      <button type="button" onClick={() => removeAttachmentSlot(i)} className="text-brand-400 hover:text-red-400">
+                        <X size={10} strokeWidth={2} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
                 <label className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed w-fit transition-colors ${
                   attachmentFiles.length >= selectedAttachmentTypes.length
                     ? 'border-gray-200 text-gray-300 cursor-not-allowed'
@@ -431,21 +470,9 @@ export default function CallLogTab({ leadId }: Props) {
                     }}
                   />
                 </label>
-                {attachmentFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {attachmentFiles.map((f, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {selectedAttachmentTypes[i]}: {f.name}
-                        <button type="button" onClick={() => setAttachmentFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
-                          <X size={10} strokeWidth={2} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
                 {attachmentFiles.length < selectedAttachmentTypes.length && (
                   <p className="text-[11px] text-amber-600">
-                    Upload {selectedAttachmentTypes.length - attachmentFiles.length} more file(s) to match the selected categories, or remove a category.
+                    Upload {selectedAttachmentTypes.length - attachmentFiles.length} more file(s) to match the added attachment slots, or remove a slot.
                   </p>
                 )}
               </div>
@@ -531,13 +558,14 @@ export default function CallLogTab({ leadId }: Props) {
                   required
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
-                <input
-                  type="text"
+                <select
                   value={form.meetingLocation}
                   onChange={(e) => setForm({ ...form, meetingLocation: e.target.value })}
-                  placeholder="Location…"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                />
+                >
+                  <option value="">Location…</option>
+                  {MEETING_LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
               </div>
               <p className="text-xs text-gray-400 mt-1">A meeting will be created automatically and linked back to this call.</p>
             </div>
@@ -569,6 +597,38 @@ export default function CallLogTab({ leadId }: Props) {
                     required
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className="block text-xs text-gray-500 mb-1">Attachments</label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400 w-fit">
+                    <Paperclip size={11} strokeWidth={2} />
+                    Add attachment(s)
+                    <input
+                      ref={taskAttachmentFileRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const picked = Array.from(e.target.files ?? []);
+                        setTaskAttachmentFiles((prev) => [...prev, ...picked]);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {taskAttachmentFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {taskAttachmentFiles.map((f, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                          {f.name}
+                          <button type="button" onClick={() => setTaskAttachmentFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
+                            <X size={10} strokeWidth={2} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

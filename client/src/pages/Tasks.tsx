@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar, User } from 'lucide-react';
+import { Calendar, User, Paperclip } from 'lucide-react';
 import { api } from '../lib/api';
 import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -98,6 +98,30 @@ function TaskCard({
         {task.agenda && <p className="text-xs text-stone-400 italic mt-1">{task.agenda}</p>}
         {task.outcome && (
           <p className="text-xs text-stone-500 mt-1"><span className="font-medium">Outcome:</span> {task.outcome}</p>
+        )}
+        {task.attachments && task.attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {task.attachments.map((att, i) => (
+              att.fileUrl ? (
+                <a
+                  key={i}
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded-lg hover:bg-brand-100 transition-colors"
+                  style={{ border: '1px solid #EDE8E3' }}
+                >
+                  <Paperclip size={11} strokeWidth={1.8} />
+                  {att.fileName ?? `Attachment ${i + 1}`}
+                </a>
+              ) : (
+                <span key={i} className="inline-flex items-center gap-1 text-xs bg-stone-100 text-stone-400 px-2 py-1 rounded-lg">
+                  <Paperclip size={11} strokeWidth={1.8} />
+                  Attachment unavailable
+                </span>
+              )
+            ))}
+          </div>
         )}
       </div>
 

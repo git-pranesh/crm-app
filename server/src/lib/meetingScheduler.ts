@@ -20,6 +20,13 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 type Tx = Omit<PrismaClient, '$transaction' | '$connect' | '$disconnect' | '$on' | '$use' | '$extends'> | Prisma.TransactionClient;
 
+// Task #115 — canonical "meeting location" categories. Replaces the old
+// free-text location fields on meeting-scheduling forms/replan/OB-checklist
+// flows with this fixed set. Kept in lockstep with the client-side
+// LOCATION_OPTIONS constants duplicated per form (CallLogTab, MeetingsTab,
+// NextPlanOfActionPicker, PDOBChecklistPanel).
+export const MEETING_LOCATION_TYPES = ['EC_VISIT', 'SITE_VISIT', 'VIRTUAL', 'PUBLIC_PLACE'] as const;
+
 export interface ScheduleMeetingLead {
   id: string;
   leadId: string;

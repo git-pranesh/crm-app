@@ -21,6 +21,13 @@ const MEETING_MODES = [
   { value: 'PUBLIC_PLACE', label: 'Public Place' },
   { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
+// Task #115 — Meeting Location is a fixed dropdown, not free text.
+const LOCATION_OPTIONS = [
+  { value: 'EC_VISIT', label: 'EC Visit' },
+  { value: 'SITE_VISIT', label: 'Site Visit' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: 'PUBLIC_PLACE', label: 'Public place' },
+];
 
 function emptyItem(kind: NextPlanItem['kind']): NextPlanItem {
   return { kind, sendExternalMail: false };
@@ -141,13 +148,14 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
                 onChange={(e) => updateItem(idx, { scheduledAt: e.target.value })}
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
-              <input
-                type="text"
+              <select
                 value={item.location ?? ''}
                 onChange={(e) => updateItem(idx, { location: e.target.value })}
-                placeholder="Location…"
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
+              >
+                <option value="">Location…</option>
+                {LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
             </div>
           )}
 

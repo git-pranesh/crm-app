@@ -51,7 +51,7 @@ function fmtDateTime(iso: string) {
   };
 }
 
-function KpiCard({ label, value, sub, color }: { label: string; value: number; sub?: string; color?: string }) {
+function KpiCard({ label, value, sub, color }: { label: string; value: number | string; sub?: string; color?: string }) {
   return (
     <div className="bg-white rounded-2xl p-5 flex flex-col gap-1 shadow-warm-sm" style={{ border: '1px solid #EDE8E3' }}>
       <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">{label}</p>
@@ -93,10 +93,12 @@ export default function Meetings() {
   const past = meetings.filter(m => m.status !== 'SCHEDULED' || new Date(m.scheduledAt) < now)
     .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime());
 
+  const rescheduled = meetings.filter(m => m.status === 'RESCHEDULED').length;
   const kpi = {
     upcoming: meetings.filter(m => m.status === 'SCHEDULED' && new Date(m.scheduledAt) >= now).length,
     completed: meetings.filter(m => m.status === 'COMPLETED').length,
     noShow: meetings.filter(m => m.status === 'NO_SHOW').length,
+    rescheduled,
     total: meetings.length,
   };
 
@@ -214,10 +216,11 @@ export default function Meetings() {
 
       <div className="px-6 py-4 space-y-4">
         {/* KPI bar */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiCard label="Upcoming" value={kpi.upcoming} sub="Scheduled ahead" color="text-brand-600" />
           <KpiCard label="Completed" value={kpi.completed} sub="Successfully done" color="text-green-600" />
           <KpiCard label="No-show" value={kpi.noShow} sub="Client absent" color="text-red-500" />
+          <KpiCard label="Rescheduled" value={`${kpi.rescheduled}/${kpi.total}`} sub="Of all meetings" color="text-amber-600" />
           <KpiCard label="Total" value={kpi.total} sub="All in scope" />
         </div>
 

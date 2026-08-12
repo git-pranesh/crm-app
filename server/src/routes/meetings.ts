@@ -15,7 +15,7 @@ import { computeAutoRatingFromMode } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
 import { assertAttachmentTypesMatch, validateAttachmentPairing } from '../lib/attachmentValidation.js';
-import { computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
+import { computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, MEETING_LOCATION_TYPES } from '../lib/meetingScheduler.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 
 // Selectable when scheduling a NEW meeting. DESIGN_FREEZE/SIGN_OFF remain valid
@@ -76,6 +76,10 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   }
   if (!validModes.includes(mode)) {
     res.status(400).json({ error: `mode must be one of: ${validModes.join(', ')}` });
+    return;
+  }
+  if (location && !MEETING_LOCATION_TYPES.includes(location as any)) {
+    res.status(400).json({ error: `location must be one of: ${MEETING_LOCATION_TYPES.join(', ')}` });
     return;
   }
 
@@ -261,10 +265,8 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       res.status(400).json({ error: `momAttachmentTypes must be a subset of: ${MOM_ATTACHMENT_TYPES.join(', ')}` });
       return;
     }
-    if (momAttachmentTypes && new Set(momAttachmentTypes).size !== momAttachmentTypes.length) {
-      res.status(400).json({ error: 'momAttachmentTypes must not contain duplicate categories — exactly one file is allowed per category' });
-      return;
-    }
+    // Task #115 — multiple files per category are allowed; momAttachmentTypes
+    // may repeat a category once per file attached under it.
     try {
       validateAttachmentPairing(momAttachments, MOM_ATTACHMENT_TYPES, 'momAttachments');
       assertAttachmentTypesMatch(momAttachmentTypes, momAttachments, 'momAttachmentTypes');
@@ -312,6 +314,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
     if (!replanLocation?.trim()) {
       res.status(400).json({ error: 'replanLocation is required when marking NO_SHOW' });
+      return;
+    }
+    if (!MEETING_LOCATION_TYPES.includes(replanLocation as any)) {
+      res.status(400).json({ error: `replanLocation must be one of: ${MEETING_LOCATION_TYPES.join(', ')}` });
       return;
     }
   }

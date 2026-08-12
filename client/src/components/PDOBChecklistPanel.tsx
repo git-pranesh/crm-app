@@ -28,6 +28,14 @@ interface Props {
 
 const VISIBLE_STAGES = new Set(['PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
 
+// Task #115 — Meeting Location is a fixed dropdown, not free text.
+const LOCATION_OPTIONS = [
+  { value: 'EC_VISIT', label: 'EC Visit' },
+  { value: 'SITE_VISIT', label: 'Site Visit' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: 'PUBLIC_PLACE', label: 'Public place' },
+];
+
 function toLocalInputValue(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -240,13 +248,15 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting location</label>
-          <input
-            type="text"
+          <select
             disabled={!isEditable || saving}
             value={form.obMeetingLocation}
             onChange={(e) => setForm((f) => ({ ...f, obMeetingLocation: e.target.value }))}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
-          />
+          >
+            <option value="">Select…</option>
+            {LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
         </div>
       </div>
 

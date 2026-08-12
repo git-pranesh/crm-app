@@ -21,6 +21,7 @@ import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
+import { MEETING_LOCATION_TYPES } from '../lib/meetingScheduler.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
@@ -113,7 +114,13 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
     if (projectValue !== undefined) data.projectValue = projectValue === '' || projectValue === null ? null : parseFloat(projectValue);
     if (furnitureValue !== undefined) data.furnitureValue = furnitureValue === '' || furnitureValue === null ? null : parseFloat(furnitureValue);
     if (obMeetingScheduledAt !== undefined) data.obMeetingScheduledAt = obMeetingScheduledAt ? new Date(obMeetingScheduledAt) : null;
-    if (obMeetingLocation !== undefined) data.obMeetingLocation = obMeetingLocation?.trim() || null;
+    if (obMeetingLocation !== undefined) {
+      if (obMeetingLocation && !MEETING_LOCATION_TYPES.includes(obMeetingLocation as any)) {
+        res.status(400).json({ error: `obMeetingLocation must be one of: ${MEETING_LOCATION_TYPES.join(', ')}` });
+        return;
+      }
+      data.obMeetingLocation = obMeetingLocation || null;
+    }
     if (notes !== undefined) data.notes = notes?.trim() || null;
     if (welcomeMailApprovedByClient !== undefined) data.welcomeMailApprovedByClient = !!welcomeMailApprovedByClient;
 

@@ -9,7 +9,7 @@ import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { sendEmail } from '../lib/email.js';
 import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, summarizeNextPlanItems, validateFutureDate, validateMeetingTypeMode, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
 import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
-import { validateAttachmentPairing } from '../lib/attachmentValidation.js';
+import { validateAttachmentPairing, validateGenericAttachments } from '../lib/attachmentValidation.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -48,9 +48,9 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     location?: string;
     calledAt?: string;
     attachments?: { type: string; fileUrl?: string; storagePath?: string }[];
-    followUpTask?: { dueDate: string; dueTime?: string; assignedToId?: string };
+    followUpTask?: { dueDate: string; dueTime?: string; assignedToId?: string; attachments?: { type: string; fileUrl?: string; storagePath?: string }[] };
     // Required when outcome === 'CALLBACK': asks for date/time + agenda
-    callbackDetails?: { dueDate: string; dueTime?: string; agenda?: string; assignedToId?: string };
+    callbackDetails?: { dueDate: string; dueTime?: string; agenda?: string; assignedToId?: string; attachments?: { type: string; fileUrl?: string; storagePath?: string }[] };
     // Required when outcome === 'MEETING_SCHEDULED': creates a linked Meeting instead of a follow-up task
     meetingDetails?: { type: string; mode: string; scheduledAt: string; location?: string };
     // Shared Call/Meeting/Task multi-select "next plan of action" flow
@@ -74,6 +74,12 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   if (outcome === 'CALLBACK') {
+    try {
+      validateGenericAttachments(callbackDetails?.attachments, 'callbackDetails.attachments');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (!callbackDetails?.dueTime) {
       res.status(400).json({ error: 'callbackDetails.dueDate and dueTime are required when outcome is CALLBACK' });
       return;
@@ -86,13 +92,19 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     }
   } else if (outcome === 'MEETING_SCHEDULED') {
     try {
-      validateMeetingTypeMode(meetingDetails?.type, meetingDetails?.mode, meetingDetails?.scheduledAt);
+      validateMeetingTypeMode(meetingDetails?.type, meetingDetails?.mode, meetingDetails?.scheduledAt, 'meetingDetails', meetingDetails?.location);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
       return;
     }
   } else {
     // Enforce mandatory follow-up with both date and time for every other outcome
+    try {
+      validateGenericAttachments(followUpTask?.attachments, 'followUpTask.attachments');
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (!followUpTask?.dueTime) {
       res.status(400).json({
         error: 'A follow-up task with due date and time must be set before saving the call',
@@ -218,6 +230,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
           timeFrom: callbackDetails!.dueTime,
           agenda: callbackDetails!.agenda?.trim() || undefined,
           originatingCallId: newCall.id,
+          attachments: callbackDetails!.attachments?.length ? (callbackDetails!.attachments as any) : undefined,
         },
       });
       logAt = newTask.createdAt;
@@ -241,6 +254,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
           dueTime: followUpTask!.dueTime,
           timeFrom: followUpTask!.dueTime,
           originatingCallId: newCall.id,
+          attachments: followUpTask!.attachments?.length ? (followUpTask!.attachments as any) : undefined,
         },
       });
       logAt = newTask.createdAt;

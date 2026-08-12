@@ -160,6 +160,14 @@ enum LeadFileType {
   OB_QUOTE
   /// Task #74 — OB→OBM checklist upload: proof the client approved the welcome mail wording
   WELCOME_MAIL_SCREENSHOT
+  /// Task #115 — distinct from the DQL-stage PITCH_PRESENTATION, for the final version shared at PD.
+  FINAL_PITCH_PRESENTATION
+  /// Task #115 — quotation shared during Proposal Presented.
+  PP_QUOTATION
+  /// Task #115 — quotation shared during Proposal Ready.
+  PR_QUOTATION
+  /// Task #115 — presentation shared during Proposal Ready.
+  PR_PRESENTATION
   OTHER
 }
 
@@ -456,6 +464,8 @@ model FollowUpTask {
   rescheduleHistory Json?
   /// Set when this task was auto-created from a call outcome (callback / meeting-scheduled).
   originatingCallId String?
+  /// Task #115 — array of { type, storagePath?, fileUrl? }, multiple attachments allowed.
+  attachments  Json?
 
   lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   assignedTo      User  @relation(fields: [assignedToId], references: [id])

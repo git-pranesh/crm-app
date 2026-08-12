@@ -7,6 +7,10 @@ import { sendEmail } from '../lib/email.js';
 import { sendWhatsAppMessage, normalizePhoneE164 } from '../lib/whatsapp.js';
 import { isAuthorizedForLead, isAuthorizedToAssignTask } from '../lib/leadAuth.js';
 import { istDayBounds } from '../lib/istTime.js';
+import { validateGenericAttachments, type AttachmentEntry } from '../lib/attachmentValidation.js';
+import { supabaseAdmin } from '../lib/supabase.js';
+
+type TaskAttachmentInput = AttachmentEntry;
 
 export const tasksRouter = Router({ mergeParams: true });
 export const myTasksRouter = Router();
@@ -15,6 +19,33 @@ const taskInclude = {
   assignedTo: { select: { id: true, name: true, role: true } },
   lead: { select: { id: true, leadId: true, name: true, stage: true, email: true, phone: true } },
 } as const;
+
+// Task attachments are uploaded via the shared calls upload-attachment
+// endpoint, so they live in the same private bucket as call attachments.
+const TASK_ATTACHMENTS_BUCKET = 'crm-call-attachments';
+
+// Re-signs any storagePath-based attachments on a batch of tasks so the
+// client always gets a fresh, short-lived download link — mirrors the same
+// hydration pattern used for Call.attachments in calls.ts.
+async function hydrateTaskAttachments<T extends { attachments: unknown }>(tasks: T[]): Promise<T[]> {
+  if (!supabaseAdmin) return tasks;
+  return Promise.all(
+    tasks.map(async (task) => {
+      const attachments = task.attachments as { type: string; storagePath?: string; fileUrl?: string; fileName?: string }[] | null;
+      if (!attachments?.length) return task;
+      const hydrated = await Promise.all(
+        attachments.map(async (att) => {
+          if (!att.storagePath) return att; // legacy/external URL — return as-is
+          const { data, error } = await supabaseAdmin!.storage
+            .from(TASK_ATTACHMENTS_BUCKET)
+            .createSignedUrl(att.storagePath, 60 * 60); // 1-hour signed URL
+          return { type: att.type, fileName: att.fileName, fileUrl: error ? undefined : data?.signedUrl };
+        }),
+      );
+      return { ...task, attachments: hydrated };
+    }),
+  );
+}
 
 const TASK_TYPES = ['INTERNAL', 'EXTERNAL'] as const;
 
@@ -61,13 +92,13 @@ tasksRouter.get('/', verifyToken, async (req, res) => {
     return;
   }
 
-  const tasks = await prisma.followUpTask.findMany({
+  const rawTasks = await prisma.followUpTask.findMany({
     where: { leadId },
     include: taskInclude,
     orderBy: [{ isOverdue: 'desc' }, { isCompleted: 'asc' }, { dueDate: 'asc' }],
   });
 
-  res.json({ tasks });
+  res.json({ tasks: await hydrateTaskAttachments(rawTasks) });
 });
 
 // ── POST /api/leads/:leadId/tasks ─────────────────────────────────────────────
@@ -75,7 +106,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
   const user = req.user!;
 
-  const { dueDate, dueTime, timeFrom, timeTo, assignedToId, taskType, agenda } = req.body as {
+  const { dueDate, dueTime, timeFrom, timeTo, assignedToId, taskType, agenda, attachments } = req.body as {
     dueDate?: string;
     dueTime?: string;
     timeFrom?: string;
@@ -83,7 +114,15 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
     assignedToId?: string;
     taskType?: string;
     agenda?: string;
+    attachments?: TaskAttachmentInput[];
   };
+
+  try {
+    validateGenericAttachments(attachments, 'attachments');
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
 
   if (!dueDate) {
     res.status(400).json({ error: 'dueDate is required' });
@@ -136,6 +175,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
       timeTo: timeTo,
       taskType: (taskType as any) ?? undefined,
       agenda: agenda?.trim() || undefined,
+      attachments: attachments?.length ? (attachments as any) : undefined,
     },
     include: taskInclude,
   });
@@ -176,13 +216,13 @@ myTasksRouter.get('/my', verifyToken, async (req, res) => {
     where.isOverdue = false;
   }
 
-  const tasks = await prisma.followUpTask.findMany({
+  const rawTasks = await prisma.followUpTask.findMany({
     where,
     include: taskInclude,
     orderBy: [{ isOverdue: 'desc' }, { dueDate: 'asc' }],
   });
 
-  res.json({ tasks });
+  res.json({ tasks: await hydrateTaskAttachments(rawTasks) });
 });
 
 // ── GET /api/tasks/team ───────────────────────────────────────────────────────
@@ -204,13 +244,13 @@ myTasksRouter.get(
     }
     // BRANCH_HEAD: no filter → all users
 
-    const tasks = await prisma.followUpTask.findMany({
+    const rawTasks = await prisma.followUpTask.findMany({
       where: user.role === 'BL' ? { assignedToId: { in: teamMemberIds } } : {},
       include: taskInclude,
       orderBy: [{ isOverdue: 'desc' }, { dueDate: 'asc' }],
     });
 
-    res.json({ tasks });
+    res.json({ tasks: await hydrateTaskAttachments(rawTasks) });
   },
 );
 

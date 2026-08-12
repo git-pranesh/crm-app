@@ -15,7 +15,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { renderMailTemplate } from './mailTemplates.js';
 import { sendEmail } from './email.js';
-import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, type ScheduleMeetingLead } from './meetingScheduler.js';
+import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, MEETING_LOCATION_TYPES, type ScheduleMeetingLead } from './meetingScheduler.js';
+import { validateGenericAttachments } from './attachmentValidation.js';
 
 export type NextPlanKind = 'CALL' | 'MEETING' | 'TASK';
 
@@ -35,6 +36,8 @@ export interface NextPlanItem {
   timeTo?: string;
   taskType?: 'INTERNAL' | 'EXTERNAL';
   agenda?: string;
+  // TASK / CALL — Task #115, multiple attachments allowed, no fixed category list.
+  attachments?: { type: string; storagePath?: string; fileUrl?: string }[];
   // MEETING
   meetingType?: string;
   mode?: string;
@@ -67,7 +70,7 @@ export function validateFutureDate(value: string | undefined, label: string): vo
 }
 
 /** Validates one item, or the shared meetingDetails/callbackDetails-style payload for a standalone meeting/task. */
-export function validateMeetingTypeMode(type: string | undefined, mode: string | undefined, scheduledAt: string | undefined, label = 'meetingDetails'): void {
+export function validateMeetingTypeMode(type: string | undefined, mode: string | undefined, scheduledAt: string | undefined, label = 'meetingDetails', location?: string): void {
   if (!type || !NEXT_PLAN_MEETING_TYPES.includes(type as any)) {
     throw new Error(`${label}.type must be one of ${NEXT_PLAN_MEETING_TYPES.join(', ')}`);
   }
@@ -78,6 +81,9 @@ export function validateMeetingTypeMode(type: string | undefined, mode: string |
   const parsed = new Date(scheduledAt);
   if (Number.isNaN(parsed.getTime())) throw new Error(`${label}.scheduledAt is invalid`);
   if (parsed < startOfToday()) throw new Error(`${label}.scheduledAt cannot be in the past`);
+  if (location && !MEETING_LOCATION_TYPES.includes(location as any)) {
+    throw new Error(`${label}.location must be one of ${MEETING_LOCATION_TYPES.join(', ')}`);
+  }
 }
 
 /**
@@ -105,9 +111,14 @@ export function validateNextPlanItems(items: NextPlanItem[]): void {
       if (item.kind === 'TASK' && item.taskType && !TASK_TYPES.includes(item.taskType)) {
         throw new Error(`${label}: taskType must be one of ${TASK_TYPES.join(', ')}`);
       }
+      try {
+        validateGenericAttachments(item.attachments, `${label}.attachments`);
+      } catch (err: any) {
+        throw new Error(err.message);
+      }
     } else if (item.kind === 'MEETING') {
       try {
-        validateMeetingTypeMode(item.meetingType, item.mode, item.scheduledAt, label);
+        validateMeetingTypeMode(item.meetingType, item.mode, item.scheduledAt, label, item.location);
       } catch (err: any) {
         throw new Error(err.message);
       }
@@ -195,6 +206,7 @@ export async function createNextPlanRecords(
           taskType: item.kind === 'TASK' ? item.taskType : undefined,
           agenda: item.agenda ?? (item.kind === 'CALL' ? 'Follow-up call' : undefined),
           originatingCallId: ctx.originatingCallId,
+          attachments: item.attachments?.length ? (item.attachments as any) : undefined,
         },
       });
       tasksCreated++;

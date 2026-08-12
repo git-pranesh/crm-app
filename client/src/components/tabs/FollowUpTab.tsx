@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Paperclip, X } from 'lucide-react';
 import { api, type FollowUpTask } from '../../lib/api';
 import { formatISTDate, todayISTDateString } from '../../lib/dateFormat';
 
 function todayDateStr() {
   return todayISTDateString();
+}
+
+function getApiBase() {
+  return (import.meta as any).env?.VITE_API_BASE ?? '/api';
 }
 
 interface Props { leadId: string }
@@ -18,6 +23,10 @@ export default function FollowUpTab({ leadId }: Props) {
   const [form, setForm] = useState({
     dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '',
   });
+  // Task #115 — tasks support multiple attachments; no fixed category list.
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const attachmentFileRef = useRef<HTMLInputElement>(null);
 
   // Action modal: complete / not-done / reschedule
   const [actionModal, setActionModal] = useState<{ taskId: string; kind: 'complete' | 'not-done' | 'reschedule' } | null>(null);
@@ -45,6 +54,29 @@ export default function FollowUpTab({ leadId }: Props) {
     setSubmitting(true);
     setError(null);
     try {
+      let attachments: { type: string; storagePath: string }[] | undefined;
+      if (attachmentFiles.length > 0) {
+        setUploadingAttachment(true);
+        const token = localStorage.getItem('crm_token') ?? '';
+        attachments = [];
+        for (const file of attachmentFiles) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (!uploadResp.ok) {
+            const err = await uploadResp.json().catch(() => ({}));
+            throw new Error(err.error ?? 'Attachment upload failed');
+          }
+          const uploadData = await uploadResp.json();
+          attachments.push({ type: 'ATTACHMENT', storagePath: uploadData.storagePath });
+        }
+        setUploadingAttachment(false);
+      }
+
       await api.post(`/leads/${leadId}/tasks`, {
         dueDate: form.dueDate,
         dueTime: form.dueTime || undefined,
@@ -52,12 +84,15 @@ export default function FollowUpTab({ leadId }: Props) {
         timeTo: form.timeTo || undefined,
         taskType: form.taskType,
         agenda: form.agenda.trim() || undefined,
+        attachments,
       });
       setForm({ dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '' });
+      setAttachmentFiles([]);
       setShowForm(false);
       await loadTasks();
     } catch (e: any) {
       setError(e.message);
+      setUploadingAttachment(false);
     } finally {
       setSubmitting(false);
     }
@@ -198,13 +233,45 @@ export default function FollowUpTab({ leadId }: Props) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400 w-fit">
+                <Paperclip size={11} strokeWidth={2} />
+                Add attachment(s)
+                <input
+                  ref={attachmentFileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    setAttachmentFiles((prev) => [...prev, ...picked]);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {attachmentFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {attachmentFiles.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                      {f.name}
+                      <button type="button" onClick={() => setAttachmentFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
+                        <X size={10} strokeWidth={2} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || uploadingAttachment}
             className="w-full bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >
-            {submitting ? 'Creating…' : 'Create Task'}
+            {uploadingAttachment ? 'Uploading attachment…' : submitting ? 'Creating…' : 'Create Task'}
           </button>
         </form>
       )}
@@ -369,6 +436,30 @@ export default function FollowUpTab({ leadId }: Props) {
                 <div className="mt-2 bg-gray-50 rounded-lg px-3 py-2">
                   <p className="text-xs font-medium text-gray-500 mb-0.5">Outcome</p>
                   <p className="text-xs text-gray-700">{task.outcome}</p>
+                </div>
+              )}
+
+              {task.attachments && task.attachments.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {task.attachments.map((att, i) => (
+                    att.fileUrl ? (
+                      <a
+                        key={i}
+                        href={att.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs bg-brand-50 text-brand-700 border border-brand-200 px-2 py-1 rounded-lg hover:bg-brand-100 transition-colors"
+                      >
+                        <Paperclip size={11} strokeWidth={2} />
+                        {att.fileName ?? `Attachment ${i + 1}`}
+                      </a>
+                    ) : (
+                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-400 px-2 py-1 rounded-lg">
+                        <Paperclip size={11} strokeWidth={2} />
+                        Attachment unavailable
+                      </span>
+                    )
+                  ))}
                 </div>
               )}
 

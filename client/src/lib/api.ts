@@ -111,6 +111,7 @@ export interface FollowUpTask {
   taskType?: 'INTERNAL' | 'EXTERNAL';
   agenda?: string;
   rescheduleHistory?: { dueDate: string; dueTime?: string; reason: string; rescheduledAt: string }[];
+  attachments?: { type: string; fileUrl?: string; fileName?: string }[];
   completedAt?: string;
   createdAt: string;
   assignedTo: { id: string; name: string; role: string };

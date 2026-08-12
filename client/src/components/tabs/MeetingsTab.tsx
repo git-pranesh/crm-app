@@ -16,6 +16,13 @@ const MODES = [
   { value: 'PUBLIC_PLACE', label: 'Public Place' },
   { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
+// Task #115 — Meeting Location is a fixed dropdown, not free text.
+const LOCATION_OPTIONS = [
+  { value: 'EC_VISIT', label: 'EC Visit' },
+  { value: 'SITE_VISIT', label: 'Site Visit' },
+  { value: 'VIRTUAL', label: 'Virtual' },
+  { value: 'PUBLIC_PLACE', label: 'Public place' },
+];
 
 /** Earliest allowed datetime-local value: tomorrow at 00:00 (blocks same-day-or-earlier). */
 function minRescheduleDateTime() {
@@ -78,19 +85,15 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
   const momFileRef = useRef<HTMLInputElement>(null);
   const [nextPlanItems, setNextPlanItems] = useState<NextPlanItem[]>([]);
 
-  // Same exact-one-file-per-category pairing requirement as CallLogTab —
-  // enforced on selection so it's never possible to submit more categories
-  // than files (unmatched category) or more files than categories (orphaned
-  // upload with no category reference).
-  const toggleMomAttachmentType = (type: string) => {
-    setMomAttachmentTypes((prev) => {
-      if (prev.includes(type)) {
-        const next = prev.filter((t) => t !== type);
-        setMomFiles((files) => files.slice(0, next.length));
-        return next;
-      }
-      return [...prev, type];
-    });
+  // Task #115 — multiple attachments per category are allowed. Each click on
+  // a category button adds a new attachment slot (categories can repeat);
+  // slots and uploaded files are paired by position, in the order added.
+  const addMomAttachmentType = (type: string) => {
+    setMomAttachmentTypes((prev) => [...prev, type]);
+  };
+  const removeMomAttachmentSlot = (index: number) => {
+    setMomAttachmentTypes((prev) => prev.filter((_, i) => i !== index));
+    setMomFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const loadMeetings = async () => {
@@ -294,13 +297,14 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-              <input
-                type="text"
+              <select
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="e.g. Office, Client's site…"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
+              >
+                <option value="">Select…</option>
+                {LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
             </div>
           </div>
           <p className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -363,19 +367,25 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                         <button
                           key={type}
                           type="button"
-                          onClick={() => toggleMomAttachmentType(type)}
-                          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                            momAttachmentTypes.includes(type)
-                              ? 'bg-brand-100 border-brand-400 text-brand-700 font-medium'
-                              : 'border-gray-200 text-gray-500 hover:border-brand-300'
-                          }`}
+                          onClick={() => addMomAttachmentType(type)}
+                          className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-brand-300 hover:text-brand-700"
                         >
-                          {type}
+                          + {type}
                         </button>
                       ))}
                     </div>
                     {momAttachmentTypes.length > 0 && (
                       <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          {momAttachmentTypes.map((type, i) => (
+                            <span key={i} className="inline-flex items-center gap-1 text-xs bg-brand-50 border border-brand-200 text-brand-700 px-2 py-0.5 rounded-full">
+                              {type}{momFiles[i] ? `: ${momFiles[i].name}` : ' (no file yet)'}
+                              <button type="button" onClick={() => removeMomAttachmentSlot(i)} className="text-brand-400 hover:text-red-400">
+                                <X size={10} strokeWidth={2} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                         <label className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed w-fit transition-colors ${
                           momFiles.length >= momAttachmentTypes.length
                             ? 'border-gray-200 text-gray-300 cursor-not-allowed'
@@ -397,21 +407,9 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                             }}
                           />
                         </label>
-                        {momFiles.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {momFiles.map((f, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                                {momAttachmentTypes[i]}: {f.name}
-                                <button type="button" onClick={() => setMomFiles((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400">
-                                  <X size={10} strokeWidth={2} />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
                         {momFiles.length < momAttachmentTypes.length && (
                           <p className="text-[11px] text-amber-600">
-                            Upload {momAttachmentTypes.length - momFiles.length} more file(s) to match the selected categories, or remove a category.
+                            Upload {momAttachmentTypes.length - momFiles.length} more file(s) to match the added attachment slots, or remove a slot.
                           </p>
                         )}
                       </div>
@@ -497,14 +495,15 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Location <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="text"
+                        <select
                           value={statusForm.replanLocation}
                           onChange={(e) => setStatusForm({ ...statusForm, replanLocation: e.target.value })}
                           required
-                          placeholder="e.g. Office, Client's site…"
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                        />
+                        >
+                          <option value="">Select…</option>
+                          {LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+                        </select>
                       </div>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">Required so this no-show doesn't fall through the cracks — you can formally reschedule later.</p>
@@ -610,7 +609,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                 </p>
               )}
               {meeting.location && (
-                <p className="text-xs text-gray-400 mt-1">📍 {meeting.location}</p>
+                <p className="text-xs text-gray-400 mt-1">📍 {LOCATION_OPTIONS.find(o => o.value === meeting.location)?.label ?? meeting.location}</p>
               )}
               {meeting.mom && (
                 <div className="mt-2 bg-gray-50 rounded-lg px-3 py-2">

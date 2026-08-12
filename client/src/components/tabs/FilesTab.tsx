@@ -48,6 +48,10 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   PAYMENT_SCREENSHOT: 'Payment Screenshot',
   OB_QUOTE: 'OB Quote',
   WELCOME_MAIL_SCREENSHOT: 'Welcome Mail Approval Screenshot',
+  FINAL_PITCH_PRESENTATION: 'Final Pitch Presentation',
+  PP_QUOTATION: 'PP quotation',
+  PR_QUOTATION: 'PR quotation',
+  PR_PRESENTATION: 'PR presentation',
   OTHER: 'Other',
 };
 
@@ -92,6 +96,10 @@ const FILE_TYPE_OPTIONS = [
   { value: 'PAYMENT_SCREENSHOT', label: 'Payment Screenshot' },
   { value: 'OB_QUOTE', label: 'OB Quote' },
   { value: 'WELCOME_MAIL_SCREENSHOT', label: 'Welcome Mail Approval Screenshot' },
+  { value: 'FINAL_PITCH_PRESENTATION', label: 'Final Pitch Presentation' },
+  { value: 'PP_QUOTATION', label: 'PP quotation' },
+  { value: 'PR_QUOTATION', label: 'PR quotation' },
+  { value: 'PR_PRESENTATION', label: 'PR presentation' },
   { value: 'OTHER', label: 'Other' },
 ];
 
