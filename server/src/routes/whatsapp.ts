@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import twilio from 'twilio';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
@@ -9,6 +10,34 @@ import {
   WA_TEMPLATES,
   isTwilioConfigured,
 } from '../lib/whatsapp.js';
+
+/**
+ * Verifies that an inbound WhatsApp webhook request genuinely came from
+ * Twilio using the `X-Twilio-Signature` header (HMAC-SHA1 of the request URL
+ * + sorted form params, keyed by TWILIO_AUTH_TOKEN) — see
+ * https://www.twilio.com/docs/usage/webhooks/webhooks-security. Without this,
+ * anything claiming to be from a matching phone number would be accepted and
+ * silently attributed to that lead's conversation thread.
+ *
+ * TWILIO_AUTH_TOKEN missing means we have no way to verify — that is treated
+ * as a failed verification (fail closed), not a bypass, since a spoofed
+ * request could otherwise reach production if the secret was never set.
+ */
+function isVerifiedTwilioRequest(req: import('express').Request): boolean {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const signature = req.header('X-Twilio-Signature');
+  if (!authToken || !signature) return false;
+
+  // Twilio signs the exact public URL it POSTed to. BASE_URL is the same
+  // configured base used elsewhere (e.g. NPS survey links) to build
+  // externally-reachable URLs, so the signed URL matches what Twilio has on
+  // file for the webhook regardless of how the request reached this process
+  // (proxy, load balancer, etc).
+  const base = (process.env.BASE_URL ?? '').replace(/\/$/, '');
+  const url = `${base}/api/whatsapp/webhook`;
+
+  return twilio.validateRequest(authToken, signature, url, req.body as Record<string, string>);
+}
 
 export const whatsappRouter = Router();
 export const leadWhatsAppRouter = Router({ mergeParams: true });
@@ -76,6 +105,15 @@ whatsappRouter.post('/send', verifyToken, async (req, res) => {
 
 // ── POST /api/whatsapp/webhook — Twilio inbound ───────────────────────────────
 whatsappRouter.post('/webhook', async (req, res) => {
+  if (!isVerifiedTwilioRequest(req)) {
+    console.warn(
+      `[whatsapp:webhook] Rejected unverified inbound request from ${req.ip} — ` +
+      `missing/invalid X-Twilio-Signature (claimed From: ${(req.body as any)?.From ?? 'unknown'})`,
+    );
+    res.status(403).send('Forbidden');
+    return;
+  }
+
   const { From, Body, MessageSid } = req.body as {
     From?: string;
     Body?: string;
