@@ -50,7 +50,16 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
 
-    const checklist = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+    let checklist = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
+    // Self-healing safety net: a lead can be sitting in PROPOSAL_DISCUSSION (or
+    // later) without a checklist row if it reached that stage before this
+    // gate existed, or via any path that bypassed the leads.ts auto-create.
+    // Without this, any entry point (Pipeline board or Lead Detail) shows a
+    // permanent "not yet created" dead end instead of the actual checklist.
+    const STAGES_PAST_PD = new Set(['PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
+    if (!checklist && STAGES_PAST_PD.has(lead.stage)) {
+      checklist = await prisma.pDOBChecklist.upsert({ where: { leadId }, create: { leadId }, update: {} });
+    }
 
     // Uploaded-file status is sourced from LeadFile (single source of truth —
     // mirrors how stageRequirements.ts checks file gates).

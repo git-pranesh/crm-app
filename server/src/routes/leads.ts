@@ -812,13 +812,13 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         });
         return;
       }
-      // Structural skip guard: only the three explicitly-allowed skip jumps
-      // (DQL→PP, MQL→PP, PP→Onboarding) may skip a stage. Every other forward
-      // move must go one funnel step at a time, even if the accumulated gate
-      // requirements happen to be met.
+      // Structural skip guard: DQL, Proposal Ready and Proposal Discussion are
+      // the only stages the agreed spec allows skipping over — every other
+      // forward move must go one funnel step at a time, even if the
+      // accumulated gate requirements happen to be met.
       if (!isBackwardFunnelMove && !isStageJumpAllowed(prevStage, stage)) {
         res.status(400).json({
-          error: `Cannot move directly from ${prevStage} to ${stage} — stages cannot be skipped except DQL→Proposal Presented, MQL→Proposal Presented, or Proposal Presented→Onboarding.`,
+          error: `Cannot move directly from ${prevStage} to ${stage} — only DQL, Proposal Ready and Proposal Discussion can be skipped over.`,
         });
         return;
       }
@@ -846,16 +846,27 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       };
       const gate = await checkStageRequirements(prospective, prevStage, stage);
       if (!gate.ok) {
-        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing });
+        // `details` (with per-item `type`) rides along so callers like the
+        // Pipeline board can offer an actionable fix — e.g. open the PD→OB
+        // or OBM→DIP checklist inline — instead of just showing text.
+        res.status(400).json({ error: `Cannot move to ${stage}`, missing: gate.missing, details: gate.details });
         return;
       }
     }
 
     // Stage-skip flags — persisted so downstream views/reports can tell this
-    // lead bypassed a stage. MQL→PP also skips Proposal Ready, so it sets the
-    // same skippedProposalReady flag as the DQL→PP skip.
-    const isPpToObSkip = stage === 'ONBOARDING' && prevStage === 'PROPOSAL_PRESENTED';
-    const isProposalReadySkip = stage === 'PROPOSAL_PRESENTED' && (prevStage === 'DQL' || prevStage === 'MQL');
+    // lead bypassed a stage. Derived generically from FUNNEL_ORDER (rather
+    // than a hardcoded list of (from,to) pairs) so any allowed skip
+    // combination — e.g. MQL→Proposal Ready, which only skips DQL — sets the
+    // right flag(s), not just the three combinations that used to be
+    // hardcoded here.
+    const skipFromIdx = FUNNEL_ORDER.indexOf(prevStage as any);
+    const skipToIdx = FUNNEL_ORDER.indexOf(stage as any);
+    const skippedStages = skipFromIdx !== -1 && skipToIdx !== -1 && skipToIdx > skipFromIdx
+      ? FUNNEL_ORDER.slice(skipFromIdx + 1, skipToIdx)
+      : [];
+    const isProposalReadySkip = skippedStages.includes('PROPOSAL_READY' as any);
+    const isPpToObSkip = skippedStages.includes('PROPOSAL_DISCUSSION' as any);
 
     const lead = await prisma.lead.update({
       where: { id },

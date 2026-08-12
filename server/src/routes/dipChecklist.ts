@@ -17,7 +17,19 @@ export const dipChecklistRouter = Router({ mergeParams: true });
 dipChecklistRouter.get('/', verifyToken, async (req, res) => {
   try {
     const { leadId: id } = req.params;
-    const checklist = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
+    let checklist = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
+    // Self-healing safety net (mirrors pdObChecklist.ts): a lead can be
+    // sitting at ONBOARDING_MEETING or later without a checklist row if it
+    // reached that stage via a path that bypassed the leads.ts auto-create —
+    // without this, the Pipeline board / lead detail entry point shows a
+    // dead end instead of the actual checklist.
+    if (!checklist) {
+      const lead = await prisma.lead.findUnique({ where: { id }, select: { stage: true } });
+      const STAGES_PAST_OBM = new Set(['ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
+      if (lead && STAGES_PAST_OBM.has(lead.stage)) {
+        checklist = await prisma.dIPChecklist.upsert({ where: { leadId: id }, create: { leadId: id }, update: {} });
+      }
+    }
     res.json({ checklist: checklist ?? null });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

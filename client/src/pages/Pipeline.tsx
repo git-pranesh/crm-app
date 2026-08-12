@@ -2,9 +2,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Search, SlidersHorizontal, X, ChevronRight, Activity, AlertCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, X, ChevronRight, Activity, AlertCircle, ClipboardList, Check } from 'lucide-react';
 import { api } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
+import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
+import DIPChecklistPanel from '../components/DIPChecklistPanel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Lead {
@@ -12,6 +14,7 @@ interface Lead {
   leadId: string;
   name: string;
   phone: string;
+  email?: string | null;
   stage: string;
   status: 'ACTIVE' | 'ON_HOLD' | 'INACTIVE';
   source?: string;
@@ -106,6 +109,17 @@ const KANBAN_STAGES_DESIGNER = [
   'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
 ] as const;
 
+// On Hold / Inactive is a status independent of stage (Task #88), so leads in
+// that list view can sit on ANY stage — including the legacy off-funnel ones
+// (EFFECTIVE_LEAD, HANDED_OVER) that never appear as live kanban columns.
+// Grouping that view must cover every stage a lead can actually have, not
+// just the kanban board's columns, or those leads silently vanish from the list.
+const STAGE_GROUPING_ORDER = [
+  'EFFECTIVE_LEAD', 'MQL', 'DQL', 'PROPOSAL_READY', 'PROPOSAL_PRESENTED',
+  'PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS',
+  'HANDED_OVER',
+] as const;
+
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead',
   MQL: 'MQL',
@@ -131,6 +145,7 @@ const STAGE_ACCENT: Record<string, string> = {
   ONBOARDING: 'bg-green-500',
   ONBOARDING_MEETING: 'bg-teal-500',
   DESIGN_IN_PROGRESS: 'bg-emerald-600',
+  HANDED_OVER: 'bg-stone-500',
 };
 
 const PHASE_LABELS: Record<string, string> = {
@@ -211,18 +226,28 @@ function StarFilter({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+// Stages whose gate-critical checklist (PD→OB, OBM→DIP) can be completed
+// straight from the Pipeline board instead of requiring the full lead page.
+const CHECKLIST_ENTRY_STAGES: Record<string, { title: string }> = {
+  PROPOSAL_DISCUSSION: { title: 'PD → OB checklist' },
+  ONBOARDING_MEETING: { title: 'OBM → DIP checklist' },
+};
+
 // ── LeadCard ──────────────────────────────────────────────────────────────────
 function LeadCard({
   lead,
   onDragStart,
   onDragEnd,
+  onOpenChecklist,
 }: {
   lead: Lead;
   onDragStart: (e: React.DragEvent, lead: Lead) => void;
   onDragEnd: () => void;
+  onOpenChecklist: (lead: Lead) => void;
 }) {
   const val = fmt(lead.estimatedValue);
   const scope = [lead.projectType, lead.scope].filter(Boolean).join(' · ');
+  const checklistEntry = CHECKLIST_ENTRY_STAGES[lead.stage];
 
   return (
     <div
@@ -244,6 +269,17 @@ function LeadCard({
           {lead.leadId}
         </span>
       </div>
+
+      {checklistEntry && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onOpenChecklist(lead); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
+          className="flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5 mb-1.5 hover:bg-purple-100 transition-colors"
+        >
+          <ClipboardList size={10} strokeWidth={2.5} /> {checklistEntry.title}
+        </button>
+      )}
 
       {/* Task #88 — status badge, since status no longer maps to stage */}
       {lead.status !== 'ACTIVE' && (
@@ -311,6 +347,104 @@ function LeadCard({
           <span className="text-[10px] text-stone-400 shrink-0 hidden sm:block">{lead.source.replace(/_/g, ' ')}</span>
         )}
         <span className="text-[10px] text-stone-400 shrink-0">{relTime(lead.createdAt)} ago</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Checklist modal (PD→OB / OBM→DIP) — lets Pipeline complete these gate
+// checklists without leaving the board, reusing the same panels the lead
+// detail page uses so there's only one implementation of each checklist. ──
+function ChecklistModal({ lead, onClose, onDone }: { lead: Lead; onClose: () => void; onDone: () => void }) {
+  const entry = CHECKLIST_ENTRY_STAGES[lead.stage];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3.5 sticky top-0 bg-white z-10" style={{ borderBottom: '1px solid #EDE8E3' }}>
+          <div>
+            <h3 className="text-sm font-bold text-stone-900">{entry?.title ?? 'Checklist'}</h3>
+            <p className="text-xs text-stone-500">{lead.name} · {lead.leadId}</p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5">
+          {lead.stage === 'PROPOSAL_DISCUSSION' && (
+            <PDOBChecklistPanel leadId={lead.id} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={onDone} />
+          )}
+          {lead.stage === 'ONBOARDING_MEETING' && (
+            <DIPChecklistPanel leadId={lead.id} stage={lead.stage} onComplete={onDone} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Gate-blocked modal — shown instead of a plain error toast when a drag is
+// blocked, so the missing items are actionable without leaving the board. ──
+function GateBlockedModal({
+  lead,
+  targetStageLabel,
+  details,
+  onClose,
+  onOpenChecklist,
+}: {
+  lead: Lead;
+  targetStageLabel: string;
+  details: { label: string; satisfied: boolean; type: string }[];
+  onClose: () => void;
+  onOpenChecklist: (lead: Lead) => void;
+}) {
+  const hasPdObChecklist = details.some((d) => !d.satisfied && d.type === 'pdObChecklist');
+  const hasDip = details.some((d) => !d.satisfied && d.type === 'dip');
+  const canOpenInlineChecklist = (hasPdObChecklist && lead.stage === 'PROPOSAL_DISCUSSION')
+    || (hasDip && lead.stage === 'ONBOARDING_MEETING');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid #EDE8E3' }}>
+          <h3 className="text-sm font-bold text-stone-900">Can't move to {targetStageLabel}</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-xs text-stone-500 mb-3">
+            {lead.name} is missing the following before it can move forward:
+          </p>
+          <div className="space-y-1.5 mb-4">
+            {details.map((d, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span className={`mt-0.5 shrink-0 ${d.satisfied ? 'text-green-500' : 'text-red-500'}`}>
+                  {d.satisfied ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}
+                </span>
+                <span className={d.satisfied ? 'text-stone-400 line-through' : 'text-stone-700 font-medium'}>{d.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            {canOpenInlineChecklist && (
+              <button
+                onClick={() => onOpenChecklist(lead)}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-brand-500 text-white py-2 rounded-lg text-xs font-semibold hover:bg-brand-600 transition-colors"
+              >
+                <ClipboardList size={12} strokeWidth={2.5} /> Open checklist
+              </button>
+            )}
+            <Link
+              to={`/leads/${lead.id}`}
+              className="flex-1 flex items-center justify-center gap-1.5 bg-stone-100 text-stone-700 py-2 rounded-lg text-xs font-semibold hover:bg-stone-200 transition-colors"
+            >
+              Open lead
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -598,6 +732,14 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const dragCounters = useRef<Record<string, number>>({});
 
+  // Blocked-drag modal + inline checklist modal (Task #111)
+  const [gateBlocked, setGateBlocked] = useState<{
+    lead: Lead;
+    targetStage: string;
+    details: { label: string; satisfied: boolean; type: string }[];
+  } | null>(null);
+  const [checklistLead, setChecklistLead] = useState<Lead | null>(null);
+
   const isDesigner = userRole === 'DESIGNER' || userRole === 'CRE';
   const KANBAN_STAGES = isDesigner ? KANBAN_STAGES_DESIGNER : KANBAN_STAGES_ALL;
 
@@ -706,10 +848,13 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       } else {
         const body = await res.json().catch(() => ({}));
         setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: originalStage } : l));
-        const msg = body.missing?.length
-          ? `Cannot move to ${STAGE_LABELS[targetStage] ?? targetStage} — missing: ${body.missing.join(', ')}`
-          : (body.error ?? `Stage update failed (${res.status})`);
-        toast.error(msg, { duration: 6000 });
+        if (body.details?.length) {
+          // Actionable modal instead of a plain toast — lists exactly what's
+          // missing and, where possible, a way to fix it without leaving the board.
+          setGateBlocked({ lead: { ...lead, stage: originalStage }, targetStage, details: body.details });
+        } else {
+          toast.error(body.error ?? `Stage update failed (${res.status})`, { duration: 6000 });
+        }
       }
     } catch {
       setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, stage: originalStage } : l));
@@ -1027,7 +1172,13 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
                       </div>
                     )}
                     {cards.map((lead) => (
-                      <LeadCard key={lead.id} lead={lead} onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        onOpenChecklist={setChecklistLead}
+                      />
                     ))}
                     {isDragTarget && !isDraggingFromHere && (
                       <div className="border-2 border-dashed border-brand-300 rounded-xl h-20 flex items-center justify-center text-xs text-brand-500 font-medium">
@@ -1042,63 +1193,98 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         </div>
       )}
 
-      {/* List view for On Hold / Inactive */}
+      {/* List view for On Hold / Inactive — grouped by stage, same grouping the
+          live kanban board uses, so it reads the same way (Task #111 item 5). */}
       {!loading && !showKanban && (
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-2xl mx-auto space-y-2">
+          <div className="max-w-2xl mx-auto space-y-5">
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <Search size={28} strokeWidth={1.5} className="text-gray-300 mb-2" />
                 <p className="text-sm font-medium">No leads in this view</p>
               </div>
-            ) : filtered.map((lead) => (
-              <Link
-                key={lead.id}
-                to={`/leads/${lead.id}`}
-                className="flex items-center gap-4 bg-white rounded-xl p-4 hover:border-gray-300 hover:shadow-sm transition-all"
-                style={{ border: '1px solid #EDE8E3' }}
-              >
-                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                  <span className="text-gray-600 text-sm font-bold">{lead.name[0]?.toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">{lead.name}</p>
-                    <span className="text-[10px] font-mono text-gray-400">{lead.leadId}</span>
+            ) : [...STAGE_GROUPING_ORDER, ...Array.from(new Set(filtered.map((l) => l.stage))).filter((s) => !(STAGE_GROUPING_ORDER as readonly string[]).includes(s))].map((stage) => {
+              const stageLeads = filtered.filter((l) => l.stage === stage);
+              if (stageLeads.length === 0) return null;
+              return (
+                <div key={stage}>
+                  <div className="flex items-center gap-2 mb-2 px-0.5">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${STAGE_ACCENT[stage]}`} />
+                    <p className="text-xs font-semibold text-gray-700">{STAGE_LABELS[stage]}</p>
+                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{stageLeads.length}</span>
                   </div>
-                  <p className="text-xs text-gray-500">{lead.phone}</p>
+                  <div className="space-y-2">
+                    {stageLeads.map((lead) => (
+                      <Link
+                        key={lead.id}
+                        to={`/leads/${lead.id}`}
+                        className="flex items-center gap-4 bg-white rounded-xl p-4 hover:border-gray-300 hover:shadow-sm transition-all"
+                        style={{ border: '1px solid #EDE8E3' }}
+                      >
+                        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                          <span className="text-gray-600 text-sm font-bold">{lead.name[0]?.toUpperCase()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-gray-900 truncate">{lead.name}</p>
+                            <span className="text-[10px] font-mono text-gray-400">{lead.leadId}</span>
+                          </div>
+                          <p className="text-xs text-gray-500">{lead.phone}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-gray-700">{fmt(lead.estimatedValue) ?? '—'}</p>
+                          <p className="text-[10px] text-gray-400">{relTime(lead.createdAt)} ago</p>
+                        </div>
+                        {lead.isSLABreached && (
+                          <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">
+                            SLA
+                          </span>
+                        )}
+                        {lead.slaStatus === 'breach' && (
+                          <span
+                            className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0"
+                            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+                          >
+                            Stage overdue
+                          </span>
+                        )}
+                        {lead.slaStatus === 'warning' && (
+                          <span
+                            className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0"
+                            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
+                          >
+                            Stage due soon
+                          </span>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs font-semibold text-gray-700">{fmt(lead.estimatedValue) ?? '—'}</p>
-                  <p className="text-[10px] text-gray-400">{relTime(lead.createdAt)} ago</p>
-                </div>
-                {lead.isSLABreached && (
-                  <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">
-                    SLA
-                  </span>
-                )}
-                {lead.slaStatus === 'breach' && (
-                  <span
-                    className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0"
-                    title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
-                  >
-                    Stage overdue
-                  </span>
-                )}
-                {lead.slaStatus === 'warning' && (
-                  <span
-                    className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0"
-                    title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
-                  >
-                    Stage due soon
-                  </span>
-                )}
-              </Link>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* Blocked-drag modal — actionable resolution instead of a plain error toast */}
+      {gateBlocked && (
+        <GateBlockedModal
+          lead={gateBlocked.lead}
+          targetStageLabel={STAGE_LABELS[gateBlocked.targetStage] ?? gateBlocked.targetStage}
+          details={gateBlocked.details}
+          onClose={() => setGateBlocked(null)}
+          onOpenChecklist={(lead) => { setGateBlocked(null); setChecklistLead(lead); }}
+        />
+      )}
+
+      {/* Inline PD→OB / OBM→DIP checklist modal */}
+      {checklistLead && (
+        <ChecklistModal
+          lead={checklistLead}
+          onClose={() => setChecklistLead(null)}
+          onDone={() => { setChecklistLead(null); load(); }}
+        />
+      )}
     </div>
   );
 }

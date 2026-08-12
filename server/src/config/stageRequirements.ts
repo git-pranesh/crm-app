@@ -24,9 +24,11 @@ import { prisma } from '../lib/prisma.js';
  * Key format: `${fromStage}->${toStage}` for adjacent funnel steps. Forward
  * jumps that skip stages are gated by accumulating the requirements of every
  * intermediate step (see FUNNEL_ORDER), so a lead can never bypass a gate by
- * leaping ahead — except the three explicitly-allowed skip transitions below,
- * which drop specific items the founder marked optional when skipped.
- * Backward moves and off-funnel stages are unrestricted.
+ * leaping ahead — except when every skipped stage is in SKIPPABLE_STAGES
+ * (DQL, Proposal Ready, Proposal Discussion per the agreed spec), which each
+ * drop the specific items the founder marked optional when skipped over (see
+ * isExcludedWhenSkipping). Backward moves and off-funnel stages are
+ * unrestricted.
  */
 export type StageRequirement =
   | {
@@ -183,19 +185,20 @@ export const FUNNEL_ORDER = [
 ] as const;
 
 /**
- * Forward jumps besides plain adjacent steps that are explicitly allowed to
- * skip a stage:
- *   - DQL → Proposal Presented (skips Proposal Ready)
- *   - MQL → Proposal Presented (skips both DQL and Proposal Ready)
- *   - Proposal Presented → Onboarding (skips Proposal Discussion)
- * Every other forward move must go one step at a time even if the
- * accumulated gate would technically be satisfied.
+ * Stages the founder's agreed spec marks as genuinely optional — a lead may
+ * jump straight past any of these without visiting them. MQL, Proposal
+ * Presented, Onboarding, Onboarding Meeting and Design in Progress are NOT
+ * skippable: they remain mandatory one-at-a-time steps.
+ *
+ * A forward jump from `fromStage` to `toStage` is allowed whenever every
+ * FUNNEL_ORDER stage strictly between them is in this set — see
+ * isStageJumpAllowed(). This generalises what used to be a hardcoded list of
+ * three exact (from,to) pairs (DQL→PP, MQL→PP, PP→OB) into "DQL, Proposal
+ * Ready and Proposal Discussion are all skippable", which also legalises the
+ * previously-missing MQL→Proposal Ready combination (skip DQL only) without
+ * opening up any jump that would also skip the mandatory PP step.
  */
-const ALLOWED_SKIP_TRANSITIONS = new Set<string>([
-  'DQL->PROPOSAL_PRESENTED',
-  'MQL->PROPOSAL_PRESENTED',
-  'PROPOSAL_PRESENTED->ONBOARDING',
-]);
+const SKIPPABLE_STAGES = new Set<string>(['DQL', 'PROPOSAL_READY', 'PROPOSAL_DISCUSSION']);
 
 /**
  * Whether a stage change from `fromStage` to `toStage` is structurally
@@ -232,19 +235,33 @@ export function isStageJumpAllowed(fromStage: string, toStage: string): boolean 
   if (fromIdx === -1 || toIdx === -1) return true; // other legacy/off-funnel — unrestricted
   if (toIdx <= fromIdx) return true; // backward/no-op — handled elsewhere
   if (toIdx === fromIdx + 1) return true; // adjacent forward step always fine
-  return ALLOWED_SKIP_TRANSITIONS.has(`${fromStage}->${toStage}`);
+  // Every stage strictly between fromStage and toStage must be an
+  // explicitly-skippable one, or the jump is not structurally allowed.
+  for (let i = fromIdx + 1; i < toIdx; i++) {
+    if (!SKIPPABLE_STAGES.has(FUNNEL_ORDER[i])) return false;
+  }
+  return true;
 }
 
-/** True when a requirement's label matches one of the founder's "becomes
- * optional when skipped" exclusions for a given skipped-over stage. */
-function isExcludedWhenSkipping(req: StageRequirement, skippedStage: 'DQL' | 'PROPOSAL_READY'): boolean {
+/** True when a requirement on the edge INTO `skippedStage` becomes optional
+ * because `skippedStage` itself is being skipped over on this jump. */
+function isExcludedWhenSkipping(req: StageRequirement, skippedStage: string): boolean {
   if (skippedStage === 'DQL') {
     // "the DQL meeting" becomes optional when DQL itself is skipped over.
     return req.type === 'meeting' && req.meetingType === 'DQL';
   }
-  // "the PR file" (pitch-ready file, uploaded during Proposal Ready) becomes
-  // optional when Proposal Ready is skipped over.
-  return req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL');
+  if (skippedStage === 'PROPOSAL_READY') {
+    // "the PR file" (pitch-ready file, uploaded during Proposal Ready)
+    // becomes optional when Proposal Ready is skipped over.
+    return req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL');
+  }
+  if (skippedStage === 'PROPOSAL_DISCUSSION') {
+    // Per spec, skipping Proposal Discussion drops that leg's requirements
+    // (meeting/call + PD quote) entirely — only the PD→OB leg's own
+    // requirements (the PD→OB checklist etc.) still apply.
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -260,33 +277,8 @@ function isExcludedWhenSkipping(req: StageRequirement, skippedStage: 'DQL' | 'PR
 function requirementsForTransition(fromStage: string, toStage: string): StageRequirement[] {
   const key = `${fromStage}->${toStage}`;
 
-  // Proposal Presented → Onboarding (skip Proposal Discussion): per spec this
-  // must NOT require the PD quote or PD meeting/call — use only the PD→OB
-  // leg's requirements, dropping the PP→PD leg entirely.
-  if (key === 'PROPOSAL_PRESENTED->ONBOARDING') {
-    return [...STAGE_REQUIREMENTS['PROPOSAL_DISCUSSION->ONBOARDING']];
-  }
-
-  // DQL → Proposal Presented (skip Proposal Ready): drop the PR file.
-  if (key === 'DQL->PROPOSAL_PRESENTED') {
-    return [
-      ...STAGE_REQUIREMENTS['DQL->PROPOSAL_READY'].filter((r) => !isExcludedWhenSkipping(r, 'PROPOSAL_READY')),
-      ...STAGE_REQUIREMENTS['PROPOSAL_READY->PROPOSAL_PRESENTED'],
-    ];
-  }
-
-  // MQL → Proposal Presented (skip both DQL and Proposal Ready): drop the DQL
-  // meeting and the PR file.
-  if (key === 'MQL->PROPOSAL_PRESENTED') {
-    return [
-      ...STAGE_REQUIREMENTS['MQL->DQL'].filter((r) => !isExcludedWhenSkipping(r, 'DQL')),
-      ...STAGE_REQUIREMENTS['DQL->PROPOSAL_READY'].filter((r) => !isExcludedWhenSkipping(r, 'PROPOSAL_READY')),
-      ...STAGE_REQUIREMENTS['PROPOSAL_READY->PROPOSAL_PRESENTED'],
-    ];
-  }
-
-  // An explicit STAGE_REQUIREMENTS entry always takes precedence for anything
-  // else (adjacent steps).
+  // An explicit STAGE_REQUIREMENTS entry always takes precedence for a plain
+  // adjacent step.
   const explicit = STAGE_REQUIREMENTS[key];
   if (explicit !== undefined) return explicit;
 
@@ -294,10 +286,17 @@ function requirementsForTransition(fromStage: string, toStage: string): StageReq
   const toIdx = FUNNEL_ORDER.indexOf(toStage as (typeof FUNNEL_ORDER)[number]);
 
   if (fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx) {
+    // Skip jump: accumulate every intermediate edge's requirements, dropping
+    // whichever items become optional for each stage that's skipped over
+    // (see isExcludedWhenSkipping). The edge landing exactly on `toStage` is
+    // never treated as "skipped" — its requirements always apply in full.
     const reqs: StageRequirement[] = [];
     for (let i = fromIdx; i < toIdx; i++) {
-      const stepReqs = STAGE_REQUIREMENTS[`${FUNNEL_ORDER[i]}->${FUNNEL_ORDER[i + 1]}`];
-      if (stepReqs) reqs.push(...stepReqs);
+      const stepFrom = FUNNEL_ORDER[i];
+      const stepTo = FUNNEL_ORDER[i + 1];
+      const stepReqs = STAGE_REQUIREMENTS[`${stepFrom}->${stepTo}`] ?? [];
+      const isSkippedStage = stepTo !== toStage;
+      reqs.push(...(isSkippedStage ? stepReqs.filter((r) => !isExcludedWhenSkipping(r, stepTo)) : stepReqs));
     }
     return reqs;
   }
@@ -316,8 +315,10 @@ function hasValue(v: unknown): boolean {
 export interface StageCheckResult {
   ok: boolean;
   missing: string[];
-  /** Per-requirement satisfaction, in the same order as configured, so UI can show which specific items are met vs. missing. */
-  details: { label: string; satisfied: boolean }[];
+  /** Per-requirement satisfaction, in the same order as configured, so UI can show which specific items are met vs. missing.
+   * `type` mirrors the requirement's config type (or 'intent' for the intent-rating gate) so callers can decide how to act on
+   * an unmet item — e.g. deep-link to the PD→OB / OBM→DIP checklist rather than just showing text. */
+  details: { label: string; satisfied: boolean; type: string }[];
 }
 
 /**
@@ -337,7 +338,7 @@ export async function checkStageRequirements(
 
   const reqs = requirementsForTransition(fromStage, toStage);
   const missing: string[] = [];
-  const details: { label: string; satisfied: boolean }[] = [];
+  const details: { label: string; satisfied: boolean; type: string }[] = [];
 
   for (const r of reqs) {
     let satisfied = false;
@@ -438,15 +439,24 @@ export async function checkStageRequirements(
       }
     }
     if (!satisfied) missing.push(r.label);
-    details.push({ label: r.label, satisfied });
+    details.push({ label: r.label, satisfied, type: r.type });
   }
 
-  // Global rule: a lead with 1-star intent cannot advance forward in the funnel.
-  // This applies to ALL forward moves regardless of which transition.
-  if (isForwardFunnelMove && lead.intentRating === 1) {
-    const label = 'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before advancing';
+  // Intent-rating=1 ("no action planned") gate — scoped to the MQL→DQL
+  // qualification decision only. This previously blocked EVERY forward move
+  // for the rest of a lead's life once its rating hit 1★ (e.g. an early
+  // low-signal meeting auto-scored it 1★, and the lead was then frozen at
+  // every later stage even after real progress was made) — a lead that has
+  // already been qualified past MQL has, by definition, had action taken on
+  // it, so re-checking this rating on every subsequent hop served no purpose
+  // and was the reported cause of leads looking permanently "stuck". The one
+  // gate the founder's spec actually cares about is the qualification
+  // decision itself: don't let a "no action planned" lead be qualified out
+  // of MQL in the first place.
+  if (fromStage === 'MQL' && toIdx > fromIdx && lead.intentRating === 1) {
+    const label = 'Intent rating is 1★ (no action planned) — update the lead\'s intent rating before qualifying past MQL';
     missing.push(label);
-    details.push({ label, satisfied: false });
+    details.push({ label, satisfied: false, type: 'intent' });
   }
 
   return { ok: missing.length === 0, missing, details };
