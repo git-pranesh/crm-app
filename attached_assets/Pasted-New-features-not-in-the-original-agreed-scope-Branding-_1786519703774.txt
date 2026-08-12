@@ -1,0 +1,59 @@
+New features - not in the original agreed scope
+
+
+Branding
+
+Rename product from "CRM" to "FYX" throughout (login screen, header, all labels),  PDF: "Replace CRM under the logo to FYX"
+Replace the current logo with a new "X" logo
+Add a show/hide (eye) toggle on the password field at login
+
+
+Lead stage & data model 
+
+4. Restore "Effective Lead" as a distinct visible funnel stage with its own record,  the agreed list (2.1) already named EL as a stage, so this is a reversal of a decision made mid-build (your team asked to drop EL from the live funnel earlier), not new scope by itself. Flagging it here because it directly conflicts with 1,935 of the 2,090 leads in the CSVs sitting at EL. 
+
+
+5. Replace the single 1–5 star intent rating with a "Stage Stationed Days + Budget Update" table recorded at every stage move 
+
+
+6. New mandatory "Internal Notes" field, separate from meeting/call notes, that is never sent to the client (explicitly split from MOM) 
+
+
+7. A checkbox on every outbound client email/SMS to mark it "internal" vs "external," with internal always mandatory,  a workflow rule that didn't exist before
+
+
+Reasons & dropdowns 
+
+8. Expand the on-hold/inactive reason list to ~19 specific named reasons (Ring No Response, UPVC/SS/Stone/Aluminium material required, Window Shopping, etc.) replacing the current 6 generic ones 
+
+
+9. Add "Custom date" and "Possession Already Received" (no date needed) as new possession-timeline options
+
+
+Performance & incentives 
+
+10. Split the single performance score into two separate scores: Sales Performance Score and Design Performance Score, each with its own formula (conversion ratio, TAT, target achieved, average booking value) 
+
+11. Add gold/silver/bronze medal awards based on over-achievement of target, TAT and NPS,  entirely new gamification layer 
+
+12. Remove the NPS Forecast tile from the dashboard ("it can't be forecasted"),  this is a removal, not covered by the original list either way 
+
+13. Redefine Booking Forecast to be calculated from the Expected OB date on the project details tab (current forecast logic is unspecified/different)
+
+
+Dashboard & reporting 
+
+14. Make every dashboard KPI tile clickable, drilling into the underlying filtered list (e.g. clicking "SLA Breach" opens the breached-lead list; clicking "OB Progress" opens projects that reached DIP/completed OBM) 
+
+15. Change the conversion/pipeline % formula to: Stage % = (current unique leads sitting in that stage today ÷ total leads ever received) × 100,  a different formula than "stage-by-stage conversion rate" in the original list (14.3) 
+
+16. New report: "number of onboardings per offer",  this one actually is already in your agreed list (bottom of section 14, "Additional feature"), so it's a re-statement, not new.
+Leads & flagging 
+
+17. Give BL and Branch Head the ability to flag a lead directly (today only projects can be flagged, not leads)
+
+
+Tasks 
+
+18. When a lead is marked Inactive, auto-null/cancel any open tasks tied to that lead
+

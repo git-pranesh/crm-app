@@ -1,0 +1,281 @@
+Search transcript
+0:05
+Hello team. Let's start from the dashboard. This is the current dashboard
+0:10
+that has been given. First I wanted to rearrange the format of the dashboard.
+0:17
+So the rearrangement format is given in the slide. First the entire what had
+0:23
+happened for that month visibility and then month forecast and then performance
+0:29
+score and that can be uh team leaderboard and once that is done
+0:35
+followed by that today's focus attention required incentive overview NPS
+0:41
+analytics and then recent notification can be at the bottom this is the uh this
+0:48
+is this you can follow this but you can rearrange and then work whether it's
+0:54
+rectangle or next to next or side by side or you
+0:59
+But it would be nice it goes as per the given format across here next to next so
+1:06
+that people can compare and then see right. Okay. So in the dashboard right
+1:13
+now the dashboard has it says zero active leads. Even though there is
+1:19
+number of multiple number of leads that are active inside the system still the
+1:24
+dashboard shows just zero leads. I feel it's not integrated
+1:32
+yet but that needs to be integrated. So the things that I would want is you have
+1:41
+to rename the active projects to active leads or you can add one more tab for
+1:48
+active leads and where the total number of active leads at the moment plus value
+1:54
+will be shown the overall active leads and then OB progress the total number of
+2:01
+onboarding progress once the stage is moved
+2:07
+uh DIP that is once the stage has crossed OBM then that has to be
+2:12
+reflected across your total number of project cross OBM
+2:18
+move to DIP plus the value with the percentage achieved. Say for example
+2:24
+there are two project which have cost OBM then uh with the value of 30 lakhs
+2:32
+and then the designer 60 lakhs. Then it has to say
+2:38
+two projects cross to view the value of 30 and then target percentage achieved
+2:44
+is 50. That can be like a green color of like a like small rectangle and then it
+2:51
+can show the level they have achieved as well. The graphical representation
+2:56
+you can take and then after that I would require actor projects. This will be in
+3:04
+DIP stages but it applies the same formula. Total number of active projects
+3:10
+in DIP stages along with their and then to progress is nothing but the project
+3:18
+that that passes the sign off and then moved to EIP in particularly in that
+3:24
+particular month or the date that we add across the total number of project move
+3:30
+to EIP plus value and percentage of the target achieved over there. Revenue
+3:36
+generated is nothing but total payment collected in both sales and design
+3:41
+stages. That is the revenue generated and then estimated incentive is asked
+3:47
+for the calculation that is previously given to you. overall NPS
+3:54
+uh since the client you know since the client uh is going to get the NPS form
+4:01
+and that is being filled and that will be reflected in the uh leads and then
+4:06
+they can you can get a column average of NPS that they have got in that
+4:11
+particular date that is filtered SLA B as well total number of SLA B in both
+4:18
+projects you can spread SLA breach in projects. This is a beach in leads.
+4:28
+So when any of these tabs are clicked like say for example if I click booking
+4:34
+progress tab it should automatically lead me to those two project which has
+4:40
+been passed OBM. So it should reflect that if I am clicking into uh active
+4:48
+leads then it should take me to the active leads that are in the system. So
+4:55
+likewise this applies for each and every column in the dashboard each and every
+5:00
+tab in the dashboard. Now the performance.
+5:29
+So the performance code should be based on should have two performance code.
+5:34
+This is one for sale and another one is for design. Since we are only talking
+5:39
+about preent right now the design uh performance code will be given later.
+5:46
+You can have a toggle option here to choose sale performance score and design
+5:51
+performance score or you can create in another tab as well as per your
+5:57
+convenience. The space sales performance score criteria is calculated. So these
+6:02
+are the four criteria that is going to be displayed across here. One is the
+6:07
+conversion ratio. So another one is turn around and then target average volume.
+6:15
+So the conversion ratio is a percentage of conversion from MQL
+6:20
+to DIP. Say for example 10 leads is being given to a designer and one
+6:26
+project is being crossed OBM stage and move to DIP. Then out of 10 one what is
+6:33
+a 10%? 10% conversion ratio has to be displayed across you turn around time
+6:40
+average um you know uh you can the turnar around time will be in the report
+6:46
+detail what are the turnaround time for each stages but cumulatively for one
+6:53
+person to you know from the day that they get the lead and then they
+7:00
+move the project out into a What is the turn around that is coming
+7:08
+across that number has to be given. So the target will be will be given in the
+7:15
+admin dashboard according to each and every person and as that against it what
+7:21
+is the target achieved in sales has to be reflected across 50% target achieved
+7:27
+and 50% achieved average all the project
+7:36
+and then if 10 project is then all the project develop
+7:55
+right now required. There is no flag
+8:02
+project given inside the lead. There is nowhere that we can go and flag the
+8:08
+project. So the option has to be given across
+8:13
+here. The BL and the BH should be able to flag the project and those details
+8:20
+has to be reflected across here also alongside with it add silver bronze
+8:29
+medal silver gold and bronze medal. Let's say
+8:34
+there are 10 designers and each designer's value booking value will be
+8:40
+shown across here and once the person reaches their target let's say for
+8:45
+example Arjun has a target of 40 lakhs then once the stage is like you know
+8:52
+crossed 40 then they can get the medal that will be gold medal for now then
+8:58
+afterwards let's say target is like 50 lakhs and is getting you know achieved
+9:06
+the target then it can go to gold. Let's say there is another third designer
+9:12
+whose target is 40 lakhs but they have achieved you know they have achieved 50
+9:18
+lakhs above their target then the gold medal will go to that person who
+9:24
+achieves the whoever has achieved the extra target then symbol will be given
+9:30
+to these two people is because they have achieved target. So like that you can
+9:36
+organize and then you can give the med for each
+9:41
+If the person then gets
+9:47
+for the achievement turn around and everything. You can calculate as the
+9:53
+other criter. So in the project details where the
+10:14
+expected OB date is there if it is filled then that can be reflected across
+10:22
+forecast as well expected that there will be a timeline and then if the
+10:28
+timeline then the PO has to be pushed uh the sign up has to be done during that
+10:34
+date can be reflected across incentive forecasters as per the achievement and
+10:40
+as their eligibility to achieve the numbers in terms of let's say for
+10:48
+example already they have achieved five closure and still they can you know
+10:53
+expect five more bookings based on the intent as well let's say for example
+10:58
+expected OB is given and the high intent alone can be calculated across here even
+11:06
+here the high intent booking code should only calculate the high intent which
+11:10
+like five stars or four star below three star not to calculate it across here.
+11:18
+Same way when the high intent looking
+11:23
+forecast as well as po uh based on that you know the incentive forecast can be
+11:30
+calculated. Instead of tomorrow, this week and next
+11:43
+week, replace that because this is the today's focus. If in case the filter is
+11:49
+applied for the particular date or particular week, then it can show the
+11:55
+due for that day and all of those things. But here you can mention task,
+12:01
+calls and meetings, total due You can have a calendar option across
+12:14
+here where they can view the tomorrow's next week or this week they can select
+12:20
+the date across from this to this and then within which they can they can when
+12:28
+I click view all in today's when the lead is inactated the task
+12:36
+should also become inactive. So the task should be removed. Right now
+12:40
+the inactated lead also has a task and then this needs to be little bit more
+12:48
+specific as in right now I can only see there is a lead name and then we are in
+12:55
+effectively let's say for example date time what let's say for example it needs
+13:02
+to have a PP meeting to be done on this this time for
+13:10
+the lead whatever the lead lead in currencies you can show that as well
+13:17
+and then when the task is created when it has to be it's it's not showing the
+13:23
+exact date and time when it has to be done it's reflecting when it is created
+13:29
+so please do cross check on that so upcoming overdue first it has to show
+13:35
+the over Then it has to show the upcoming then
+13:40
+completed content and then you can after that.
+13:47
+So coming back to the sales funnel right now the conversion percentages
+13:55
+is calculated wrong. So for the designer the lead starts from MQL. So the total
+14:02
+number of leads that they receive starts from MQL. Let's assume the total number
+14:08
+of leads received is 10. But currently the MQL at the MQL state there is only
+14:15
+two counters present and then at DQL state there is only five counters
+14:20
+present and proposal there is only two and then one. Let's assume I have
+14:26
+skipped PR and then PD but you can have that across here right instead of
+14:33
+looking let's say OB in OB whatever that is this is just for an example but how
+14:39
+it is calculated so each lead crosses all the stage and then they they move so
+14:46
+uh even if it is an MQL there is only two leads it has to show 100%age
+14:53
+and you can You can also add one more thing total number of leads received.
+14:59
+You can add that above in keyword. Total number of lead received. So that will be
+15:05
+your 100%. And then from there uh still two projects are there in MQL then it
+15:13
+has to be 80% out of 10 two is still stuck in uh MQL right. So the conversion
+15:21
+percentage will be 80. And then Let's assume two is in dql. So what out of 10
+15:29
+two is in dql as in you have nql and then the other rest of
+15:38
+so the percentage of dql should be 60% and you minus nql and then dql the
+15:47
+percent of uh dql will be 60% 80% right and then proposal presented. Let's
+15:57
+assume proposal presented is 2 and then booking is 1. 2 + 1 is 3. So 30% of
+16:06
+proposal presented. So you should add the below underneath number as well. And
+16:11
+then you should calculate the percentage.
