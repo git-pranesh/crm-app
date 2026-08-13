@@ -72,10 +72,20 @@ export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, pro
 
   // Prefill the external Quote Builder with everything the CRM already knows
   // about this lead so nothing has to be re-typed there.
+  //
+  // NOTE (task #129): the Quote Builder app (proposals.interiorsbydex.com,
+  // a separate Replit project) reads the client's name from a `clientName`
+  // param, not `name` — sending `name` left the field blank. If a quote
+  // already exists for this lead, its `quoteBuilderRef` is the identifier
+  // the Quote Builder actually knows the project by, so prefer that over
+  // the CRM's own project code for `pid`.
+  const existingQuoteRef = quotes.find((q) => q.quoteBuilderRef)?.quoteBuilderRef;
+  const effectivePid = existingQuoteRef ?? pid ?? undefined;
+
   const prefillParams = new URLSearchParams();
   prefillParams.set('leadId', leadRef);
-  if (pid) prefillParams.set('pid', pid);
-  if (name) prefillParams.set('name', name);
+  if (effectivePid) prefillParams.set('pid', effectivePid);
+  if (name) prefillParams.set('clientName', name);
   if (phone) prefillParams.set('phone', phone);
   if (email) prefillParams.set('email', email);
   if (projectType) prefillParams.set('projectType', projectType);
