@@ -1,0 +1,62 @@
+I've now read all five files and checked every item against the actual code. Here's the honest picture.
+
+1. New users can't log in — confirmed bug, and I know why
+The "Add user" form in Team & Roles creates the CRM record but never creates a login password. It writes a placeholder auth ID, so when that person tries to sign in, Supabase either rejects the password (none was ever set) or the CRM can't match them to an account.
+
+A complete, working invite flow already exists in the code — invite email → user sets their own password → account activated. It was just never wired to the button your admin is using. That's a small fix, not a rebuild.
+
+Meanwhile the existing 5 accounts work with the password I set earlier.
+
+2. Bulk import — an importer exists, but it will mangle your files
+There is an import endpoint (Branch Head / BL only), but no screen in the app to reach it, and against your three actual files it would fail badly:
+
+Its CSV reader splits on commas and line breaks, so your multi-line Location cells (e.g. "Puravankara ⏎ Windimere") shift every column after them.
+It doesn't recognise your headers — PID, Lead Name, Contact number, Mail id, Scope, Builder, Offer Committed, Alternate Phone/Email, Possession Timeline, Expected Move-In. Those columns would be silently dropped.
+Stage values like 1- Effective Lead / 2- MQL aren't understood → all 2,090 leads would land in MQL.
+Your PIDs (X1169 etc.) would be thrown away and replaced with newly generated IDs.
+Active / Inactive / On Hold isn't captured — everything imports as Active.
+Your data, for the record: 642 Active + 1,398 Inactive + 50 On Hold = 2,090 leads (1,935 at Effective Lead, 124 MQL, 30 DQL). 9 rows have no phone, 1 has no name, 598 have no email. Estimated Value, Builder and Possession Timeline are blank on all but ~2 rows per file. Sources need mapping — EXPO Walkin Lead, Expo lead, Cold Call, Instagram, Refferal aren't CRM values.
+
+I had the corrected importer written and ready to save when the workspace switched to Plan mode and blocked the file write (more on that at the end).
+
+3 & 7. Leads stuck in Pipeline — this is real, and it's a design problem, not just a bug
+The gates are working as specified, but you cannot satisfy them from the Pipeline board. Dragging a card just attempts the move and shows a red error listing what's missing. The two hardest gates (PD→OB and OBM→DIP) require completing checklists that only exist inside the lead page — so from Pipeline they're impossible, and the team has no way to know that.
+
+Two more things that match your team's complaints exactly:
+
+Any lead with intent rating = 1 is blocked from every forward move, globally. If leads were auto-rated 1, that alone would freeze them.
+Your document says DQL, PR and PD should all be skippable. The code only allows DQL→PP, MQL→PP and PP→OB. So "PR can't be skipped" is a genuine spec mismatch, as is "I filled everything and still couldn't move PD→OB".
+4. Clock is not on Indian time — confirmed, ~10 places
+Meeting emails and task notifications are correct IST. But the activity feed, WhatsApp tab, Inbox, call log, follow-ups and the header clock all render in server time (UTC) — so timestamps read 5½ hours behind. Worse, the overdue-task job and "today's tasks" queries compute midnight in server time, so tasks flip to overdue at 5:30 AM IST instead of midnight.
+
+5 & 6. The 65-page document — verified item by item
+Roughly 120 distinct comments once the repetition is stripped. Summary:
+
+Already built (~45%): PD→OB and OBM→DIP checklists with all the numeric fields, welcome-mail editable preview, OBM timeline dates and welcome-document items, NPS trigger, meeting mode/agenda/mandatory MOM, reschedule reason, multi-file MOM upload, task Completed/Rescheduled/Not-Done, date-grouped notifications, expected OB date filter, stage-gate engine, add-only files.
+
+Not done — highest impact:
+
+EL and HANDED_OVER still appear in stage dropdowns; DIP labelling is inconsistent
+No auto pop-up for intent + project value on each stage move
+Intent rating still on overview instead of the per-stage stationed-days + budget table
+Inactive reason dropdown has 6 options, not your 19 (Ring No Response, UPVC/SS/Stone material, Window Shopping, Project value below 5L, etc.)
+Files dropdown missing Final Pitch Presentation, PP/PR quotation, PR presentation
+No internal-notes tab; no internal/external tick box on client mails; notes have no client/internal toggle
+Only one attachment per call/meeting/task
+Conversion % still computed from historical transitions, not "current leads in stage ÷ total received"
+NPS Forecast is still on the dashboard (you asked for it removed); booking forecast isn't driven by Expected OB date
+One combined performance score, no separate Sales/Design scores; tiers are Basic/Standard/Premium, not gold/silver/bronze
+BL/BH can flag projects but not leads
+Dashboard tiles aren't clickable for drill-down
+Branding: still the old logo, "CRM", and "CRM platform – Sign in"; no password eye toggle
+Offer 1/2/3 still free text — no admin offer master feeding an "Offer proposed" dropdown
+Possession still Immediate/3/6/12-months — no Custom date or "Possession received"
+On Hold / Inactive views aren't grouped by stage like the active board
+The stress test you asked for: is anything genuinely new?
+Yes. Comparing against the agreed feature list, about 25 items in the PDF are new scope, not bug fixes. The largest: the FYX rebrand (new name, logo, sign-in copy), the admin-managed offer master, replacing intent rating with a per-stage TAT + budget table, medals and split sales/design performance scores, a full internal-notes layer with mandatory internal/external mail selection on every client-facing message, multi-attachment everywhere, dashboard drill-downs, restoring EL as a live funnel stage, and the changed conversion formula.
+
+The other ~95 are either defects against what was agreed or refinements of agreed features — legitimately in scope.
+
+Two conflicts worth naming before anyone builds: your team asked to remove EL from the funnel in an earlier round (it's why new leads start at MQL) and this document asks to put EL back in the dropdown — and 1,935 of your 2,090 import rows are sitting at Effective Lead. That decision needs settling first, because it determines what the import does. Second, the document lists the OB→OBM gate as needing the client's welcome-mail approval screenshot; the code collects that screenshot one stage earlier, at PD→OB.
+
+One blocker: the workspace is in Plan mode, so I can't save code — my corrected importer was rejected mid-write. Switch me to Build mode and I'll start on it.
