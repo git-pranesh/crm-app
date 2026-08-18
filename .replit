@@ -85,5 +85,8 @@ externalPort = 3000
 [userenv.shared]
 SUPABASE_URL = "https://xtsgbuirhwwpxhzjshho.supabase.co"
 
+[userenv.production]
+BASE_URL = "https://fyx.interiorsbydex.com"
+
 [nix]
 channel = "stable-25_05"

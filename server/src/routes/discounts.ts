@@ -289,12 +289,19 @@ discountsRouter.get('/pending', verifyToken, requireRole('BL', 'BRANCH_HEAD'), a
 });
 
 // ── GET /api/discount-requests — all requests (filterable) ───────────────────
+// The Discounts nav page is visible to every role (Designers see it to track
+// their own submissions), but only BL/BRANCH_HEAD have an approval mandate
+// spanning other people's requests. Without this scope, any DESIGNER/CRE
+// could see every discount amount and reason company-wide via this endpoint,
+// not just what they raised — narrow it to `requestedById` for those roles.
 discountsRouter.get('/', verifyToken, async (req, res) => {
   try {
+    const user = req.user!;
     const { status, leadId } = req.query as { status?: string; leadId?: string };
     const where: any = {};
     if (status) where.status = status;
     if (leadId) where.leadId = leadId;
+    if (!['BL', 'BRANCH_HEAD'].includes(user.role)) where.requestedById = user.id;
 
     const requests = await prisma.discountRequest.findMany({
       where,

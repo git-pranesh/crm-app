@@ -10,6 +10,7 @@ import { getEffectiveStageSla } from '../lib/stageSla.js';
 import { getEffectiveMailTemplates, setMailTemplateOverride, resetMailTemplateOverride, MAIL_TEMPLATES } from '../lib/mailTemplates.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
+import { resolveBaseUrl } from '../lib/baseUrl.js';
 
 export const adminRouter = Router();
 
@@ -412,7 +413,18 @@ adminRouter.post('/users/send-invite', async (req, res) => {
       },
     });
 
-    const baseUrl = process.env.BASE_URL ?? 'http://localhost:5173';
+    // A hardcoded localhost fallback here would silently hand the admin a
+    // link nobody outside this container can open — resolve the real public
+    // URL (explicit BASE_URL, else the Replit dev domain) and fail loudly
+    // instead of pretending the invite worked.
+    const baseUrl = resolveBaseUrl();
+    if (!baseUrl) {
+      await prisma.userInvite.delete({ where: { id: invite.id } });
+      res.status(500).json({
+        error: 'Could not determine the app\'s public URL (BASE_URL is not configured), so no usable invite link could be created. Set BASE_URL and try again.',
+      });
+      return;
+    }
     const inviteLink = `${baseUrl}/accept-invite/${invite.token}`;
 
     // Send invite email (via email service if configured, else log)

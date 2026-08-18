@@ -14,6 +14,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from './prisma.js';
 import { npsEmail } from './email.js';
 import { queues } from '../jobs/index.js';
+import { resolveBaseUrl as resolveBaseUrlShared } from './baseUrl.js';
 
 const NPS_STAGE_LABELS: Record<string, string> = {
   SALE: 'Sales',
@@ -22,20 +23,11 @@ const NPS_STAGE_LABELS: Record<string, string> = {
   SIGN_OFF: 'Sign Off',
 };
 
-/**
- * Resolve the absolute public base URL from available environment variables.
- * Priority: BASE_URL (explicit config) → REPLIT_DEV_DOMAIN (Replit-injected dev URL).
- * Returns null only when no usable absolute URL exists.
- */
+/** Same resolution as {@link resolveBaseUrlShared}, but warns with NPS-specific context when unset. */
 function resolveBaseUrl(): string | null {
-  const explicit = (process.env.BASE_URL ?? '').trim().replace(/\/$/, '');
-  if (explicit.startsWith('http://') || explicit.startsWith('https://')) return explicit;
-
-  const devDomain = (process.env.REPLIT_DEV_DOMAIN ?? '').trim();
-  if (devDomain) return `https://${devDomain}`;
-
-  console.warn('[nps] Neither BASE_URL nor REPLIT_DEV_DOMAIN is configured — NPS survey email will not be sent.');
-  return null;
+  const url = resolveBaseUrlShared();
+  if (!url) console.warn('[nps] Neither BASE_URL nor REPLIT_DEV_DOMAIN is configured — NPS survey email will not be sent.');
+  return url;
 }
 
 /**

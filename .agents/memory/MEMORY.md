@@ -37,3 +37,5 @@
 - [Project scope post-handover](project-scope-post-handover.md) — lead.assignedDesignerId/assignedBLId go empty after handover; use project.designerId (+approved team members) for project-level auth
 - [DIP checklist stage-gate is transitive](dip-checklist-gate.md) — make DIP-checklist completion explicit in incentive queries, not just implicit via the stage-gate
 - [Meeting location vs mode fields](meeting-location-vs-mode.md) — Meeting.mode and Meeting.location/replanLocation/PDOBChecklist.obMeetingLocation are separate fields sharing similar value vocab; don't conflate
+- [Discount-requests list scoping](discount-requests-scoping.md) — unscoped "list all" endpoints reachable by broad roles are a recurring over-exposure pattern here; check server-side `where` filtering, not just UI role gates
+- [Public base URL resolution](base-url-resolution.md) — shared `resolveBaseUrl()` helper (BASE_URL → REPLIT_DEV_DOMAIN) prevents localhost links leaking into invites/emails; prod needs BASE_URL set explicitly, dev doesn't
