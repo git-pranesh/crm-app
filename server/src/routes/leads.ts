@@ -735,6 +735,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       email2, pan, gst, notes,
       // Task #83 — Expected OB date (PR→PP gate field, also filterable)
       expectedObDate,
+      // Task #133 — clearing the "Offer proposed" selection back to "No
+      // offer". Setting a real offer must go through the dedicated
+      // POST /leads/:leadId/offer endpoint (keeps the LeadOffer audit trail
+      // and OFFER_APPLIED activity log in sync) — this PATCH only accepts a
+      // falsy value here, to explicitly clear the link.
+      currentOfferId,
     } = req.body as Record<string, any>;
 
     // ── Format validation ─────────────────────────────────────────────────────
@@ -902,6 +908,9 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(offer1 !== undefined && { offer1: offer1?.trim() || null }),
         ...(offer2 !== undefined && { offer2: offer2?.trim() || null }),
         ...(offer3 !== undefined && { offer3: offer3?.trim() || null }),
+        // Only allow clearing via this route; setting a real offer must go
+        // through POST /leads/:leadId/offer so the audit trail stays intact.
+        ...(currentOfferId !== undefined && !currentOfferId && { currentOfferId: null }),
         ...(expectedMoveIn !== undefined && { expectedMoveIn: expectedMoveIn ? new Date(expectedMoveIn) : null }),
         ...(email2 !== undefined && { email2: email2?.trim() || null }),
         ...(pan !== undefined && { pan: pan?.trim() || null }),

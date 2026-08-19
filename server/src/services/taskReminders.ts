@@ -3,6 +3,21 @@ import { createNotification } from '../lib/notifications.js';
 import { IST_TZ as TZ, istDayBounds } from '../lib/istTime.js';
 
 /**
+ * dueDate carries the calendar date; the actual time-of-day lives separately
+ * in dueTime ("HH:MM"). Combining them gives a single instant that uniquely
+ * identifies a task's due moment, so two different tasks for the same lead
+ * due on the same day at different times don't collide in the dedupe check.
+ */
+function dueInstant(dueDate: Date, dueTime: string | null): Date {
+  if (!dueTime) return dueDate;
+  const [h, m] = dueTime.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return dueDate;
+  const combined = new Date(dueDate);
+  combined.setHours(h, m, 0, 0);
+  return combined;
+}
+
+/**
  * Sends an in-app reminder to the assignee for every incomplete follow-up task
  * due today (IST) or overdue. Deduped: max one reminder per task per IST day.
  */
@@ -28,19 +43,25 @@ export async function runTaskReminderSweep() {
        ? `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is due today${t.dueTime ? ` at ${t.dueTime}` : ''}`
        : `Reminder: follow-up for lead ${t.lead.leadId} (${t.lead.name}) is overdue since ${t.dueDate.toLocaleDateString('en-IN', { timeZone: TZ })}`;
 
-    // Dedupe: one TASK_DUE reminder per task per IST day
+    const dueAt = dueInstant(t.dueDate, t.dueTime);
+
+    // Dedupe: one TASK_DUE reminder per task per IST day. Keyed on the task's
+    // own due date+time (stored as eventAt) rather than embedding the task id
+    // in the user-visible message text — dueAt combines dueDate and dueTime so
+    // two same-day tasks for the same lead at different times don't collide.
     const already = await prisma.notificationLog.findFirst({
       where: {
         userId: t.assignedToId,
+        leadId: t.leadId,
         type: 'TASK_DUE',
         createdAt: { gte: start },
-        message: { contains: `[task:${t.id}]` },
+        eventAt: dueAt,
       },
       select: { id: true },
     });
     if (already) continue;
 
-    await createNotification(t.assignedToId, 'TASK_DUE', message, t.leadId, t.dueDate);
+    await createNotification(t.assignedToId, 'TASK_DUE', message, t.leadId, dueAt);
     sent++;
   }
   if (sent > 0) console.log(`[task-reminders] sent ${sent} reminder(s)`);

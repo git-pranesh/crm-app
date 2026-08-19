@@ -89,7 +89,9 @@ leadOfferRouter.post('/', verifyToken, async (req, res) => {
   if (!offer) { res.status(404).json({ error: 'Offer not found' }); return; }
 
   await prisma.$transaction([
-    prisma.lead.update({ where: { id: leadId }, data: { currentOfferId: offerId } }),
+    // offer1 is kept in sync for legacy exports/reports that still read the
+    // free-text column, but currentOfferId is the authoritative link.
+    prisma.lead.update({ where: { id: leadId }, data: { currentOfferId: offerId, offer1: offer.name } }),
     prisma.leadOffer.create({ data: { leadId, offerId } }),
   ]);
 

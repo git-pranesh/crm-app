@@ -471,17 +471,19 @@ export default function LeadDetail() {
       scope: lead.scope ?? '',
       location: lead.location ?? '',
       builder: lead.builder ?? '',
-      source: lead.source ?? '',
-      sourceOther: lead.source && !SOURCE_OPTIONS.includes(lead.source)
-        ? lead.source
-        : '',
+      source: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? 'Other' : (lead.source ?? ''),
+      sourceOther: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? lead.source : '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
       expectedMoveIn: lead.expectedMoveIn ? lead.expectedMoveIn.slice(0, 10) : '',
       expectedObDate: lead.expectedObDate ? lead.expectedObDate.slice(0, 10) : '',
       offer1: lead.offer1 ?? '',
       offer2: lead.offer2 ?? '',
       offer3: lead.offer3 ?? '',
-      offerProposed: lead.currentOffer?.name ?? lead.offer1 ?? '',
+      // Holds a real Offer.id when the lead has a linked currentOffer; falls back
+      // to a "__legacy__:<text>" sentinel for pre-existing free-text offer1 values
+      // that don't correspond to any offer record (kept so it still displays,
+      // but treated as "unchanged" unless the user actively picks something else).
+      offerProposed: lead.currentOffer?.id ?? (lead.offer1 ? `__legacy__:${lead.offer1}` : ''),
       notes: lead.notes ?? '',
       possessionTimeline: lead.possessionTimeline ?? '',
       nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
@@ -511,6 +513,9 @@ export default function LeadDetail() {
         if (err) errors[key] = err;
       }
     }
+    if ((changedKeys.includes('source') || changedKeys.includes('sourceOther')) && editDetails.source === 'Other' && !editDetails.sourceOther.trim()) {
+      errors.sourceOther = 'Enter a lead source';
+    }
     if (Object.keys(errors).length > 0) {
       setEditDetailsErrors(errors);
       toast.error(Object.values(errors)[0]);
@@ -534,28 +539,42 @@ export default function LeadDetail() {
         scope: editDetails.scope.trim() || null,
         location: editDetails.location.trim() || null,
         builder: editDetails.builder.trim() || null,
-         source: editDetails.source === '__OTHER__'
-           ? editDetails.sourceOther.trim() || null
-           : editDetails.source.trim() || null,
+        source: editDetails.source === 'Other'
+          ? editDetails.sourceOther.trim() || null
+          : editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
         expectedMoveIn: editDetails.expectedMoveIn ? new Date(editDetails.expectedMoveIn).toISOString() : null,
         expectedObDate: editDetails.expectedObDate ? new Date(editDetails.expectedObDate).toISOString() : null,
-         // Keep the legacy columns populated for backwards compatibility,
-         // while the editor exposes only the single proposed offer.
-         offer1: editDetails.offerProposed.trim() || null,
-         offer2: null,
-         offer3: null,
         notes: editDetails.notes.trim() || null,
         possessionTimeline: editDetails.possessionTimeline.trim() || null,
         nextMeetingDate: editDetails.nextMeetingDate
           ? new Date(editDetails.nextMeetingDate).toISOString()
           : null,
       };
+      // "Offer proposed" is handled separately below (via the dedicated offer
+      // endpoint) so it must not fall through the generic key->field mapping —
+      // fullPayload has no "offerProposed" property, and offer1/2/3 are no
+      // longer independently editable.
+      const genericKeys = changedKeys.filter((k) => k !== 'offerProposed');
       // Only send fields the user actually changed, so unrelated saves never trip
       // required-field checks on legacy data left blank before this field was required.
       const payload: Record<string, any> = {};
-      for (const key of changedKeys) payload[key] = fullPayload[key];
-      await api.patch(`/leads/${leadId}`, payload);
+      for (const key of genericKeys) payload[key] = fullPayload[key];
+      if (Object.keys(payload).length > 0) {
+        await api.patch(`/leads/${leadId}`, payload);
+      }
+      if (changedKeys.includes('offerProposed')) {
+        const val = editDetails.offerProposed;
+        if (val && !val.startsWith('__legacy__:')) {
+          // Real offer selected — go through the dedicated endpoint so
+          // currentOfferId, the LeadOffer audit trail, and the OFFER_APPLIED
+          // activity log all stay in sync (not just the legacy offer1 text).
+          await api.post(`/leads/${leadId}/offer`, { offerId: val });
+        } else {
+          // Cleared back to "No offer".
+          await api.patch(`/leads/${leadId}`, { currentOfferId: null, offer1: null });
+        }
+      }
       toast.success('Lead details updated');
       setEditDetailsModal(false);
       loadLead(); loadActivities();
@@ -1019,14 +1038,30 @@ export default function LeadDetail() {
                       {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     {editDetails.source === 'Other' && (
-                      <input
-                        type="text"
-                        value={editDetails.sourceOther}
-                        onChange={(e) => setEditDetails({ ...editDetails, sourceOther: e.target.value })}
-                        placeholder="Enter lead source"
-                        className="w-full rounded-xl px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
-                      />
+                      <>
+                        <input
+                          type="text"
+                          value={editDetails.sourceOther}
+                          onChange={(e) => setEditDetails({ ...editDetails, sourceOther: e.target.value })}
+                          onBlur={(e) => {
+                            setEditDetailsErrors((prev) => {
+                              const next = { ...prev };
+                              if (!e.target.value.trim()) next.sourceOther = 'Enter a lead source';
+                              else delete next.sourceOther;
+                              return next;
+                            });
+                          }}
+                          placeholder="Enter lead source"
+                          className="w-full rounded-xl px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                          style={{
+                            border: editDetailsErrors.sourceOther ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                            background: '#FDFAF7',
+                          }}
+                        />
+                        {editDetailsErrors.sourceOther && (
+                          <p className="text-[11px] text-red-500 mt-1">{editDetailsErrors.sourceOther}</p>
+                        )}
+                      </>
                     )}
                   </div>
                   {/* Possession — preset timeframe dropdown, or a custom date */}
@@ -1097,10 +1132,12 @@ export default function LeadDetail() {
                           style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                         >
                           <option value="">No offer</option>
-                          {editDetails[f.key] && !offerOptions.some((o) => o.label === editDetails[f.key]) && (
-                            <option value={editDetails[f.key]}>{editDetails[f.key]} (no longer active)</option>
+                          {editDetails[f.key].startsWith('__legacy__:') && (
+                            <option value={editDetails[f.key]}>
+                              {editDetails[f.key].slice('__legacy__:'.length)} (no longer active)
+                            </option>
                           )}
-                          {offerOptions.map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
+                          {offerOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
                       ) : (
                         <input

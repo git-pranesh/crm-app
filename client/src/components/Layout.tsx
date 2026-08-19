@@ -99,7 +99,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const [showNewLead, setShowNewLead] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
+  const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
   // Everything is mandatory to create a lead except Estimated/Client Budget and Email.
   const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location', 'possessionTimeline', 'source'];
@@ -178,6 +178,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     if (!newLead.name || !newLead.phone || !newLead.projectType || !newLead.scope || !newLead.location || !newLead.possessionTimeline || !newLead.source) {
       toast.error('All fields except email and client budget are required'); return;
     }
+    if (newLead.source === 'OTHER' && !newLead.sourceOther.trim()) {
+      setNewLeadErrors((prev) => ({ ...prev, sourceOther: 'Enter a lead source' }));
+      toast.error('Enter a lead source');
+      return;
+    }
     const phoneError = validatePhone(newLead.phone);
     const emailError = validateEmail(newLead.email);
     if (phoneError || emailError) {
@@ -187,9 +192,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
     setCreating(true);
     try {
-      const data = await api.post<{ lead: { leadId: string } }>('/leads', newLead);
+      const { sourceOther, ...rest } = newLead;
+      const payload = { ...rest, source: newLead.source === 'OTHER' ? sourceOther.trim() : newLead.source };
+      const data = await api.post<{ lead: { leadId: string } }>('/leads', payload);
       toast.success(`Lead ${data.lead.leadId} created`);
-      setNewLead({ name: '', phone: '', email: '', source: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
+      setNewLead({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
       setNewLeadErrors({});
       setShowNewLead(false);
     } catch (e: any) {
@@ -432,7 +439,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 { key: 'phone', label: 'Phone', required: true, placeholder: '+91 98765 43210' },
                 { key: 'email', label: 'Email', required: false, placeholder: 'priya@example.com' },
                 { key: 'projectType', label: 'Project Type', required: true, placeholder: '2BHK / Villa' },
-                { key: 'scope', label: 'Scope of Work', required: true, placeholder: '2-bedroom / Full home' },
+                { key: 'scope', label: 'Scope of Work', required: true, placeholder: 'FHD / Modulars / Kitchen' },
                 { key: 'location', label: 'Location', required: true, placeholder: 'Whitefield, Bangalore' },
               ].map((f) => (
                 <div key={f.key} className={(f as any).span === 2 ? 'col-span-2' : ''}>
@@ -500,6 +507,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </select>
                 {newLeadErrors.source && (
                   <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.source}</p>
+                )}
+                {newLead.source === 'OTHER' && (
+                  <>
+                    <input
+                      type="text"
+                      value={newLead.sourceOther}
+                      onChange={(e) => setNewLead({ ...newLead, sourceOther: e.target.value })}
+                      onBlur={(e) => {
+                        setNewLeadErrors((prev) => {
+                          const next = { ...prev };
+                          if (!e.target.value.trim()) next.sourceOther = 'Enter a lead source';
+                          else delete next.sourceOther;
+                          return next;
+                        });
+                      }}
+                      placeholder="Enter lead source"
+                      className="w-full rounded-xl px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{
+                        border: newLeadErrors.sourceOther ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                        background: '#FDFAF7',
+                      }}
+                    />
+                    {newLeadErrors.sourceOther && (
+                      <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.sourceOther}</p>
+                    )}
+                  </>
                 )}
               </div>
               <div className="col-span-2 flex justify-end gap-2 pt-1">

@@ -809,7 +809,7 @@ export default function Admin() {
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <h2 className="font-semibold text-gray-900 mb-1">Offer Options</h2>
               <p className="text-xs text-gray-500 mb-4">
-                Manage the offers designers/BLs can pick from in a lead's Offer 1/2/3 fields.
+                Manage the offers designers/BLs can pick from in a lead's Offer proposed field.
                 Deactivating an offer hides it from new selections but keeps it on leads that already used it.
               </p>
               <div className="flex gap-2 mb-4">
