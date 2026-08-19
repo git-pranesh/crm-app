@@ -554,6 +554,10 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       stage, source, designerId, blId, search,
       projectType, location, dateRange, intent,
       status, format,
+      originDateFrom, originDateTo,
+      budgetMin, budgetMax,
+      possessionDateFrom, possessionDateTo,
+      projectedObFrom, projectedObTo,
     } = req.query as Record<string, string>;
 
     const user = req.user!;
@@ -606,6 +610,44 @@ leadsRouter.get('/export', verifyToken, async (req, res) => {
       else if (dateRange === 'thisMonth') {
         where.createdAt = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
       }
+    }
+    if (originDateFrom || originDateTo) {
+      const createdAt: any = {};
+      if (originDateFrom) createdAt.gte = new Date(originDateFrom);
+      if (originDateTo) {
+        const end = new Date(originDateTo);
+        end.setHours(23, 59, 59, 999);
+        createdAt.lte = end;
+      }
+      where.createdAt = createdAt;
+    }
+    if (budgetMin || budgetMax) {
+      const estimatedValue: any = {};
+      const min = budgetMin ? parseFloat(budgetMin) : NaN;
+      const max = budgetMax ? parseFloat(budgetMax) : NaN;
+      if (!isNaN(min)) estimatedValue.gte = min;
+      if (!isNaN(max)) estimatedValue.lte = max;
+      where.estimatedValue = estimatedValue;
+    }
+    if (possessionDateFrom || possessionDateTo) {
+      const expectedMoveIn: any = {};
+      if (possessionDateFrom) expectedMoveIn.gte = new Date(possessionDateFrom);
+      if (possessionDateTo) {
+        const end = new Date(possessionDateTo);
+        end.setHours(23, 59, 59, 999);
+        expectedMoveIn.lte = end;
+      }
+      where.expectedMoveIn = expectedMoveIn;
+    }
+    if (projectedObFrom || projectedObTo) {
+      const expectedObDate: any = {};
+      if (projectedObFrom) expectedObDate.gte = new Date(projectedObFrom);
+      if (projectedObTo) {
+        const end = new Date(projectedObTo);
+        end.setHours(23, 59, 59, 999);
+        expectedObDate.lte = end;
+      }
+      where.expectedObDate = expectedObDate;
     }
 
     const leads = await prisma.lead.findMany({

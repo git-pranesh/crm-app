@@ -147,23 +147,25 @@ export default function LeadList() {
     stage: searchParams.get('stage') ?? '',
     source: searchParams.get('source') ?? '',
     status: searchParams.get('status') ?? '',
-    designerId: '',
+    projectType: '',
+    location: '',
+    originDateFrom: '',
+    originDateTo: '',
+    budgetMin: '',
+    budgetMax: '',
+    possessionDateFrom: '',
+    possessionDateTo: '',
+    intent: '',
+    projectedObFrom: '',
+    projectedObTo: '',
     slaBreached: searchParams.get('slaBreached') ?? '',
     excludeStages: searchParams.get('excludeStages') ?? '',
     hasUnresolvedSlaBreach: searchParams.get('hasUnresolvedSlaBreach') ?? '',
   });
-  const [designers, setDesigners] = useState<{ id: string; name: string }[]>([]);
   const [statusSummary, setStatusSummary] = useState<Record<string, { count: number; value: number }> | null>(null);
 
   const userRole = getCurrentUserRole();
   const STAGE_OPTIONS = userRole === 'DESIGNER' ? STAGE_OPTIONS_DESIGNER : STAGE_OPTIONS_ALL;
-
-  useEffect(() => {
-    if (userRole !== 'BL') return;
-    api.get<{ designers: { id: string; name: string }[] }>('/leads/meta/designers')
-      .then((data) => setDesigners(data.designers))
-      .catch(() => {});
-  }, [userRole]);
 
   // Task #88 — overall Active / On Hold / Inactive counts + value, independent of the current filters.
   useEffect(() => {
@@ -180,7 +182,17 @@ export default function LeadList() {
       if (filters.stage) params.set('stage', filters.stage);
       if (filters.source) params.set('source', filters.source);
       if (filters.status) params.set('status', filters.status);
-      if (filters.designerId) params.set('designerId', filters.designerId);
+      if (filters.projectType) params.set('projectType', filters.projectType);
+      if (filters.location) params.set('location', filters.location);
+      if (filters.originDateFrom) params.set('originDateFrom', filters.originDateFrom);
+      if (filters.originDateTo) params.set('originDateTo', filters.originDateTo);
+      if (filters.budgetMin) params.set('budgetMin', filters.budgetMin);
+      if (filters.budgetMax) params.set('budgetMax', filters.budgetMax);
+      if (filters.possessionDateFrom) params.set('possessionDateFrom', filters.possessionDateFrom);
+      if (filters.possessionDateTo) params.set('possessionDateTo', filters.possessionDateTo);
+      if (filters.intent) params.set('intent', filters.intent);
+      if (filters.projectedObFrom) params.set('projectedObFrom', filters.projectedObFrom);
+      if (filters.projectedObTo) params.set('projectedObTo', filters.projectedObTo);
       if (filters.slaBreached) params.set('isSLABreached', filters.slaBreached);
       if (filters.excludeStages) params.set('excludeStages', filters.excludeStages);
       if (filters.hasUnresolvedSlaBreach) params.set('hasUnresolvedSlaBreach', filters.hasUnresolvedSlaBreach);
@@ -193,7 +205,7 @@ export default function LeadList() {
     } finally {
       setLoading(false);
     }
-  }, [page, filters.search, filters.stage, filters.source, filters.status, filters.designerId, filters.slaBreached, filters.excludeStages, filters.hasUnresolvedSlaBreach]);
+  }, [page, filters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -209,7 +221,18 @@ export default function LeadList() {
       if (filters.search) exportParams.set('search', filters.search);
       if (filters.stage) exportParams.set('stage', filters.stage);
       if (filters.source) exportParams.set('source', filters.source);
-      if (filters.status) exportParams.set('status', filters.status);
+       if (filters.status) exportParams.set('status', filters.status);
+       if (filters.projectType) exportParams.set('projectType', filters.projectType);
+       if (filters.location) exportParams.set('location', filters.location);
+       if (filters.originDateFrom) exportParams.set('originDateFrom', filters.originDateFrom);
+       if (filters.originDateTo) exportParams.set('originDateTo', filters.originDateTo);
+       if (filters.budgetMin) exportParams.set('budgetMin', filters.budgetMin);
+       if (filters.budgetMax) exportParams.set('budgetMax', filters.budgetMax);
+       if (filters.possessionDateFrom) exportParams.set('possessionDateFrom', filters.possessionDateFrom);
+       if (filters.possessionDateTo) exportParams.set('possessionDateTo', filters.possessionDateTo);
+       if (filters.intent) exportParams.set('intent', filters.intent);
+       if (filters.projectedObFrom) exportParams.set('projectedObFrom', filters.projectedObFrom);
+       if (filters.projectedObTo) exportParams.set('projectedObTo', filters.projectedObTo);
       if (fmt === 'xlsx') exportParams.set('format', 'xlsx');
       const resp = await fetch(`/api/leads/export?${exportParams}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('crm_token')}` },
@@ -237,7 +260,16 @@ export default function LeadList() {
     setPage(1);
   };
 
-  const clearFilters = () => { setFilters({ search: '', stage: '', source: '', status: '', designerId: '', slaBreached: '', excludeStages: '', hasUnresolvedSlaBreach: '' }); setPage(1); };
+  const clearFilters = () => {
+    setFilters({
+      search: '', stage: '', source: '', status: '', projectType: '', location: '',
+      originDateFrom: '', originDateTo: '', budgetMin: '', budgetMax: '',
+      possessionDateFrom: '', possessionDateTo: '', intent: '',
+      projectedObFrom: '', projectedObTo: '', slaBreached: '', excludeStages: '',
+      hasUnresolvedSlaBreach: '',
+    });
+    setPage(1);
+  };
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
@@ -329,14 +361,45 @@ export default function LeadList() {
             <option value="">All sources</option>
             {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
           </select>
-          {userRole === 'BL' && (
-            <select value={filters.designerId} onChange={(e) => setFilter('designerId', e.target.value)}
-              className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-              style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
-              <option value="">All designers</option>
-              {designers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )}
+          <input value={filters.projectType} onChange={(e) => setFilter('projectType', e.target.value)}
+            placeholder="Project type"
+            className="rounded-xl px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input value={filters.location} onChange={(e) => setFilter('location', e.target.value)}
+            placeholder="Location"
+            className="rounded-xl px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="date" value={filters.originDateFrom} onChange={(e) => setFilter('originDateFrom', e.target.value)}
+            title="Lead origin date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="date" value={filters.originDateTo} onChange={(e) => setFilter('originDateTo', e.target.value)}
+            title="Lead origin date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="number" value={filters.budgetMin} onChange={(e) => setFilter('budgetMin', e.target.value)}
+            placeholder="Budget min ₹" className="rounded-xl px-3 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="number" value={filters.budgetMax} onChange={(e) => setFilter('budgetMax', e.target.value)}
+            placeholder="Budget max ₹" className="rounded-xl px-3 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="date" value={filters.possessionDateFrom} onChange={(e) => setFilter('possessionDateFrom', e.target.value)}
+            title="Possession date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="date" value={filters.possessionDateTo} onChange={(e) => setFilter('possessionDateTo', e.target.value)}
+            title="Possession date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <select value={filters.intent} onChange={(e) => setFilter('intent', e.target.value)}
+            title="Intent rating" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+            <option value="">Any intent</option>
+            <option value="1">1 star</option><option value="2">2 stars</option>
+            <option value="3">3 stars</option><option value="4">4 stars</option><option value="5">5 stars</option>
+          </select>
+          <input type="date" value={filters.projectedObFrom} onChange={(e) => setFilter('projectedObFrom', e.target.value)}
+            title="Expected OB date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <input type="date" value={filters.projectedObTo} onChange={(e) => setFilter('projectedObTo', e.target.value)}
+            title="Expected OB date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
           {hasFilters && (
             <button onClick={clearFilters} className="text-xs text-stone-400 hover:text-stone-600 underline">
               Clear
