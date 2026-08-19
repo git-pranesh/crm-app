@@ -61,7 +61,7 @@ export type StageRequirement =
    * either fixes the reported bug where uploading "the generated quotation"
    * as a file didn't satisfy a gate that only checked for a Quote db row.
    */
-  | { type: 'quote'; stages: string[]; label: string }
+  | { type: 'quote'; stages: string[]; fileTypes?: string[]; label: string }
   | { type: 'dip'; label: string }
   | { type: 'pdObChecklist'; label: string }
   | { type: 'obObmChecklist'; label: string }
@@ -93,9 +93,13 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
     { type: 'file', fileType: 'LIFESTYLE_CAPTURE', stages: ['MQL'], label: 'Lifestyle capture sheet (Files → MQL)' },
     { type: 'field', field: 'estimatedValue', label: 'Tentative project value' },
   ],
-  /** Task #83 spec item 3 — DQL → Proposal Ready: pitch-ready file + project value. */
+  /** DQL → Proposal Ready: pitch-ready file, PR quotation, and project value. */
   'DQL->PROPOSAL_READY': [
     { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['DQL'], label: 'Pitch-ready file uploaded (Files → DQL)' },
+    {
+      type: 'quote', stages: ['PROPOSAL_READY'], fileTypes: ['QUOTATION', 'GENERATED_QUOTE', 'PR_QUOTATION'],
+      label: 'PR quotation file (generated quote or Files → PR)',
+    },
     { type: 'field', field: 'estimatedValue', label: 'Project value' },
   ],
   /**
@@ -108,6 +112,10 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   'PROPOSAL_READY->PROPOSAL_PRESENTED': [
     { type: 'meeting', meetingType: 'PP', status: 'completed', label: 'PP meeting completed' },
     { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_READY'], label: 'PP presentation attached (Files → PR)' },
+    {
+      type: 'quote', stages: ['PROPOSAL_READY'], fileTypes: ['QUOTATION', 'GENERATED_QUOTE', 'PP_QUOTATION'],
+      label: 'PP quotation file (generated quote or Files → PR)',
+    },
     { type: 'field', field: 'estimatedValue', label: 'Project value' },
     { type: 'field', field: 'expectedObDate', label: 'Expected OB date' },
   ],
@@ -251,9 +259,13 @@ function isExcludedWhenSkipping(req: StageRequirement, skippedStage: string): bo
     return req.type === 'meeting' && req.meetingType === 'DQL';
   }
   if (skippedStage === 'PROPOSAL_READY') {
-    // "the PR file" (pitch-ready file, uploaded during Proposal Ready)
-    // becomes optional when Proposal Ready is skipped over.
-    return req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL');
+    // Requirements for entering PR (the DQL pitch-ready file and PR-specific
+    // quotation) become optional when PR itself is skipped. The PR→PP edge
+    // still contributes its own PP presentation and PP quotation requirements.
+    return (
+      (req.type === 'file' && req.fileType === 'PITCH_PRESENTATION' && req.stages.includes('DQL'))
+      || (req.type === 'quote' && !!req.fileTypes?.includes('PR_QUOTATION'))
+    );
   }
   if (skippedStage === 'PROPOSAL_DISCUSSION') {
     // Per spec, skipping Proposal Discussion drops that leg's requirements
@@ -376,7 +388,7 @@ export async function checkStageRequirements(
           prisma.leadFile.findFirst({
             where: {
               leadId: lead.id,
-              fileType: { in: ['QUOTATION', 'GENERATED_QUOTE'] as any },
+              fileType: { in: (r.fileTypes ?? ['QUOTATION', 'GENERATED_QUOTE']) as any },
               ...(r.stages?.length ? { stage: { in: r.stages as any } } : {}),
             },
             select: { id: true },

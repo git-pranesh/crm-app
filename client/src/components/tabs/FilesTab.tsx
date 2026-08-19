@@ -72,8 +72,11 @@ const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
   MQL: [{ types: ['FLOOR_PLAN', 'LIFESTYLE_CAPTURE'], mode: 'all' }],
   // "Pitch-ready" file — DQL→Proposal Ready gate.
   DQL: [{ types: ['PITCH_PRESENTATION'], mode: 'all' }],
-  // PP presentation attached — Proposal Ready→Proposal Presented gate.
-  PROPOSAL_READY: [{ types: ['PITCH_PRESENTATION'], mode: 'all' }],
+  // PR/PP skip gates use this folder for the presentation and quotation.
+  PROPOSAL_READY: [
+    { types: ['PITCH_PRESENTATION'], mode: 'all' },
+    { types: ['QUOTATION', 'GENERATED_QUOTE', 'PR_QUOTATION', 'PP_QUOTATION'], mode: 'any' },
+  ],
   // Final pitch presentation OR PD file — Proposal Discussion→Onboarding gate,
   // AND (independently) the welcome-mail approval screenshot required by the
   // PD→OB checklist's "Share welcome mail" action (Task #84 — moved here
@@ -211,7 +214,20 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
     }
   };
 
-  // Build stage folders for stages up to and including the current one, plus any with files
+  // Stage skips are gated by files in folders the lead has not technically
+  // entered yet. Make those folders reachable before the move: MQL→PP needs
+  // both PR and PP folders, and DQL→PP needs PR. Other folders stay unchanged.
+  const skipUploadTarget: Record<string, string> = {
+    MQL: 'PROPOSAL_PRESENTED',
+    DQL: 'PROPOSAL_PRESENTED',
+  };
+  const currentOrSkipTargetIdx = Math.max(
+    currentIdx,
+    STAGE_ORDER.indexOf(skipUploadTarget[currentStage] ?? currentStage),
+  );
+
+  // Build stage folders through the current stage (or reachable skip target),
+  // plus any with files.
   const stagesWithContent = new Set<string>([currentStage, ...files.map((f) => f.stage)]);
   const hasAnyFloorPlanFile = files.some((f) => f.fileType === 'FLOOR_PLAN');
   // Floor plans can be attached at any of EL/MQL/DQL — a legacy floorPlanUrl
@@ -223,7 +239,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
   let legacyFloorPlanApplied = false;
   const folders: StageFolder[] = STAGE_ORDER.filter((stage) => {
     const idx = STAGE_ORDER.indexOf(stage);
-    return stagesWithContent.has(stage) || idx <= currentIdx;
+    return stagesWithContent.has(stage) || idx <= currentOrSkipTargetIdx;
   }).map((stage) => {
     const stageFiles = files.filter((f) => f.stage === stage);
     const groups = REQUIRED_FILES[stage] ?? [];

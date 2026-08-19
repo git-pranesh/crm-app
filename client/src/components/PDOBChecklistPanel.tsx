@@ -108,6 +108,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         welcomeMailApprovedByClient: form.welcomeMailApprovedByClient,
       });
       setChecklist(data.checklist);
+      await load();
+      onComplete?.();
       toast.success('Details saved');
     } catch (e: any) {
       toast.error(e.message);

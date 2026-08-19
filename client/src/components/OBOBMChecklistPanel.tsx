@@ -94,6 +94,8 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         [key]: value || null,
       });
       setChecklist(data.checklist);
+      await load();
+      onComplete?.();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -108,6 +110,8 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         [key]: value,
       });
       setChecklist(data.checklist);
+      await load();
+      onComplete?.();
     } catch (e: any) {
       toast.error(e.message);
     } finally {
