@@ -54,6 +54,12 @@ const app = express();
 const PORT = process.env.PORT ?? 3001;
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
+// Deployed app runs behind Replit's reverse proxy, which sets X-Forwarded-For.
+// Without this, express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// on every request (it can't safely resolve the real client IP), which was
+// crashing login and other rate-limited routes with 500s in production.
+app.set('trust proxy', 1);
+
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false })); // CSP disabled for iframe support
 
