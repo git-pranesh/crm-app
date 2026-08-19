@@ -1,0 +1,71 @@
+Here is the developer-friendly task breakdown of the bugs and feature requests from the CRM development document, optimized for input into Replit AI or immediate implementation.
+------------------------------
+## Task 1: Authentication & Branding Updates (Sign-In Page)
+
+* 
+* Add Password Visibility Toggle: Implement an eye icon toggle (show/hide password) on the password input field.
+* Update Login Text: Change the text heading from "CRM platform - Sign in" to "Sign in to FYX".
+* Replace Logo Assets: Swap out the existing incorrect logo asset with the new X logo.
+* Update Sub-Branding Text: Modify the label directly underneath the logo from "CRM" to "FYX".
+* 
+
+## Task 2: Global Possession Date Standardization
+
+* 
+* Remove Outdated Selectors: Remove the hardcoded relative time options: Immediate, 3 months, 6 months, and 1 year +.
+* Implement New Selectors: Add the following options:
+* Custom date (triggers a standard date picker).
+   * Possession Received (disables/hides the date picker input entirely if selected).
+* Unify Date Formats: Standardize the possession date format across all tabs to match the red-highlighted reference format universally.
+* 
+
+## Task 3: Lead Input Fields & Internationalization
+
+* 
+* Dynamic Phone Field: Implement a country code dropdown picker (+ Country Code + Phone Digits) to support international/overseas leads properly.
+* Streamline Offers Form:
+* Rename Offer 1 field to Offer proposed.
+   * Completely remove fields Offer 2 and Offer 3.
+   * Convert Offer proposed into a dynamic dropdown menu where users select the specific proposed offer.
+* Conditional 'Others' Input: For any dynamic dropdowns containing an "Others" option, render a manual text input field only when "Others" is selected.
+* 
+
+## Task 4: Lead Overview Label Mapping
+
+* 
+* Update Home Type Dropdown: Replace the text option "3 bed full home" with "FHD / Modulars / Kitchen".
+* Update Builder Mapping: Map the placeholder label "NA" to display as "Independent builder".
+* Clean UI Text: In the Designer Lead views or components, remove the URL display property.
+* 
+
+## Task 5: Filter Synchronization (Leads vs. Sales Pipeline)
+
+* 
+* Add Filter Option: Integrate an Expected OB date selector to the search/filter panel.
+* Swap Filter Fields: Remove Designer Name from filters and replace it with Lead origin date.
+* Standardize Filter UI: The current Lead tab and Sales Pipeline tab filters diverge. Overwrite the Lead tab filter component to perfectly match the filter structure, inputs, and layout used in the Sales Pipeline tab.
+* 
+
+## Task 6: Lead Pipeline Workflow & File Access Controls (Core Logic)
+
+* 
+* MQL to PP Direct Transition Bug: Fix the system block preventing leads from transitioning straight from Marketing Qualified Lead (MQL) to Pitch Presentation (PP) by skipping DQL and PR.
+* Ensure the system dynamically opens and renders the required sub-folders (PR and PP) inside the Files tab even when stages are skipped.
+   * Validate that the system registers the complete mandatory gate criteria from MQL to PP: Floor plan + Lifestyle capture sheet + PP meeting completed + Pitch presentation file + Pitch Quotation file (Note: Ensure the backend handles the missing Pitch Quotation file parameter).
+* DQL to PP Direct Transition Bug: Enable leads to jump straight from DQL to PP while skipping PR.
+* Fix the file access permissions. Currently, folders lock at DQL, blocking the upload of the mandatory Pitch Presentation into the PR folder.
+   * Mandatory gate logic: PP meeting completed + Pitch presentation file + Pitch Presentation (PP) Quotation file.
+* DQL to PR Transition Gate: Ensure the file directory locks/validates against a mandatory gate requiring both Proposal ready presentation + PR quotation files.
+* PP to OB Direct Transition: Enable bypassing PD to go directly from PP to OB, enforcing the identical document checklist criteria mapped for PD to OB.
+* PD to OB Files Check: Enforce the uploading of PD presentation + PD quotation inside the file tab before moving to PD.
+* 
+
+## Task 7: UI Reactivity / State Refresh Bug
+
+* 
+* Fix OB Checklist State: Correct a state management issue on the OB (Order Booked) stage where the checklist fails to update in real-time. The component currently requires a hard browser page refresh to load updates. Implement a state observer, webhook listener, or reactive re-render to update the checklist instantly upon item submission.
+* 
+
+------------------------------
+Next Steps: Let me know if you would like me to generate specific React/Vue frontend components or Node.js/Python backend route definitions for any of these workflows to import directly into your Replit environment!
+
