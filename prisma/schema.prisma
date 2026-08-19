@@ -728,11 +728,15 @@ model NotificationLog {
   /// is about — distinct from createdAt (when the notification fired). Null
   /// for notification types with no inherent due/event date.
   eventAt   DateTime?
+  /// Follow-up task this reminder belongs to. Kept separate from the visible
+  /// message so reminder deduplication never exposes internal identifiers.
+  taskId    String?
 
   user User  @relation(fields: [userId], references: [id])
   lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([userId, isRead])
+  @@index([taskId])
   @@map("notification_logs")
 }
 

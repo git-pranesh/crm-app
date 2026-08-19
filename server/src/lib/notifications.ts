@@ -38,9 +38,13 @@ export async function createNotification(
   // createdAt, which is when the notification itself was generated. Left
   // undefined for notification types with no inherent due/event date.
   eventAt?: Date,
+  // Set only for follow-up task reminders. This is intentionally stored
+  // separately from the user-visible message so callers can dedupe reliably
+  // without leaking an internal task identifier into notification text.
+  taskId?: string,
 ) {
   return prisma.notificationLog.create({
-    data: { userId, type, message, leadId, eventAt },
+    data: { userId, type, message, leadId, eventAt, taskId },
   });
 }
 
