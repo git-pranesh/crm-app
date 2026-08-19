@@ -213,6 +213,8 @@ const EMPTY_EDIT = {
   projectType: '', scope: '', location: '', builder: '', source: '',
   estimatedValue: '', expectedMoveIn: '', expectedObDate: '',
   offer1: '', offer2: '', offer3: '',
+  offerProposed: '',
+  sourceOther: '',
   notes: '',
   // Legacy
   possessionTimeline: '', nextMeetingDate: '',
@@ -470,12 +472,16 @@ export default function LeadDetail() {
       location: lead.location ?? '',
       builder: lead.builder ?? '',
       source: lead.source ?? '',
+      sourceOther: lead.source && !SOURCE_OPTIONS.includes(lead.source)
+        ? lead.source
+        : '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
       expectedMoveIn: lead.expectedMoveIn ? lead.expectedMoveIn.slice(0, 10) : '',
       expectedObDate: lead.expectedObDate ? lead.expectedObDate.slice(0, 10) : '',
       offer1: lead.offer1 ?? '',
       offer2: lead.offer2 ?? '',
       offer3: lead.offer3 ?? '',
+      offerProposed: lead.currentOffer?.name ?? lead.offer1 ?? '',
       notes: lead.notes ?? '',
       possessionTimeline: lead.possessionTimeline ?? '',
       nextMeetingDate: lead.nextMeetingDate ? toLocalDatetimeInput(lead.nextMeetingDate) : '',
@@ -528,13 +534,17 @@ export default function LeadDetail() {
         scope: editDetails.scope.trim() || null,
         location: editDetails.location.trim() || null,
         builder: editDetails.builder.trim() || null,
-        source: editDetails.source.trim() || null,
+         source: editDetails.source === '__OTHER__'
+           ? editDetails.sourceOther.trim() || null
+           : editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
         expectedMoveIn: editDetails.expectedMoveIn ? new Date(editDetails.expectedMoveIn).toISOString() : null,
         expectedObDate: editDetails.expectedObDate ? new Date(editDetails.expectedObDate).toISOString() : null,
-        offer1: editDetails.offer1.trim() || null,
-        offer2: editDetails.offer2.trim() || null,
-        offer3: editDetails.offer3.trim() || null,
+         // Keep the legacy columns populated for backwards compatibility,
+         // while the editor exposes only the single proposed offer.
+         offer1: editDetails.offerProposed.trim() || null,
+         offer2: null,
+         offer3: null,
         notes: editDetails.notes.trim() || null,
         possessionTimeline: editDetails.possessionTimeline.trim() || null,
         nextMeetingDate: editDetails.nextMeetingDate
@@ -971,9 +981,9 @@ export default function LeadDetail() {
                 <div className="grid grid-cols-2 gap-3">
                   {([
                     { key: 'projectType', label: 'Project Type', placeholder: '2BHK / Villa / Office', required: true },
-                    { key: 'scope', label: 'Scope of Work', placeholder: '3-bed full home', required: true },
+                    { key: 'scope', label: 'Scope of Work', placeholder: 'FHD / Modulars / Kitchen', required: true },
                     { key: 'location', label: 'Location', placeholder: 'Whitefield, Bangalore', required: true },
-                    { key: 'builder', label: 'Builder (or N/A)', placeholder: 'Sobha / Godrej / N/A' },
+                    { key: 'builder', label: 'Builder', placeholder: 'Sobha / Godrej / Independent builder' },
                   ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean; required?: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
                       <label className="block text-xs font-semibold text-stone-600 mb-1">
@@ -1008,6 +1018,16 @@ export default function LeadDetail() {
                       <option value="">Select source…</option>
                       {SOURCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
+                    {editDetails.source === 'Other' && (
+                      <input
+                        type="text"
+                        value={editDetails.sourceOther}
+                        onChange={(e) => setEditDetails({ ...editDetails, sourceOther: e.target.value })}
+                        placeholder="Enter lead source"
+                        className="w-full rounded-xl px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                        style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                      />
+                    )}
                   </div>
                   {/* Possession — preset timeframe dropdown, or a custom date */}
                   <div>
@@ -1055,9 +1075,7 @@ export default function LeadDetail() {
                     { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
                     { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
                     { key: 'expectedObDate', label: 'Expected OB Date', type: 'date' },
-                    { key: 'offer1', label: 'Offer 1', type: 'offer' },
-                    { key: 'offer2', label: 'Offer 2', type: 'offer' },
-                    { key: 'offer3', label: 'Offer 3', type: 'offer' },
+                    { key: 'offerProposed', label: 'Offer proposed', type: 'offer' },
                     { key: 'notes', label: 'Notes', placeholder: 'Any additional context…', colSpan: 2, multiline: true },
                   ] as { key: keyof typeof EMPTY_EDIT; label: string; placeholder?: string; type?: string; colSpan?: number; multiline?: boolean }[]).map((f) => (
                     <div key={f.key} className={f.colSpan === 2 ? 'col-span-2' : ''}>
@@ -1626,11 +1644,9 @@ export default function LeadDetail() {
                   </div>
 
                   {/* Offers */}
-                  {(lead.offer1 || lead.offer2 || lead.offer3) && (
+                  {(lead.currentOffer?.name || lead.offer1) && (
                     <div className="mt-2 space-y-0.5">
-                      {[lead.offer1, lead.offer2, lead.offer3].filter(Boolean).map((o, i) => (
-                        <FactRow key={i} label={`Offer ${i + 1}`} value={o} />
-                      ))}
+                      <FactRow label="Offer proposed" value={lead.currentOffer?.name ?? lead.offer1} />
                     </div>
                   )}
 

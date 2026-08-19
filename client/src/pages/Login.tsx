@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -63,16 +65,24 @@ export default function Login() {
           <div>
             <label className="block text-sm font-semibold text-stone-700 mb-1.5">Password</label>
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+              className="w-full rounded-xl pl-4 pr-11 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
               style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
               onFocus={(e) => e.currentTarget.style.background = '#fff'}
               onBlur={(e) => e.currentTarget.style.background = '#FDFAF7'}
             />
+            <button
+              type="button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              onClick={() => setShowPassword((visible) => !visible)}
+              className="relative float-right -mt-9 mr-3 text-stone-400 hover:text-stone-600"
+            >
+              {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
           </div>
           <button
             type="submit"
