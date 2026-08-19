@@ -12,6 +12,7 @@ import NotificationList from './NotificationList';
 import { getStoredUser, logout } from '../lib/auth';
 import { validateEmail, validatePhone } from '../lib/validation';
 import { SOURCE_OPTIONS } from '../lib/leadSources';
+import { todayISTDateString } from '../lib/dateFormat';
 
 interface SearchLead {
   id: string;
@@ -101,6 +102,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [creating, setCreating] = useState(false);
   const [newLead, setNewLead] = useState({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
   const [newLeadErrors, setNewLeadErrors] = useState<Record<string, string>>({});
+  const [newLeadPossessionMode, setNewLeadPossessionMode] = useState<'custom' | 'received'>('custom');
   // Everything is mandatory to create a lead except Estimated/Client Budget and Email.
   const NEW_LEAD_REQUIRED = ['name', 'phone', 'projectType', 'scope', 'location', 'possessionTimeline', 'source'];
 
@@ -197,6 +199,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       const data = await api.post<{ lead: { leadId: string } }>('/leads', payload);
       toast.success(`Lead ${data.lead.leadId} created`);
       setNewLead({ name: '', phone: '', email: '', source: '', sourceOther: '', projectType: '', location: '', scope: '', possessionTimeline: '', estimatedValue: '' });
+      setNewLeadPossessionMode('custom');
       setNewLeadErrors({});
       setShowNewLead(false);
     } catch (e: any) {
@@ -465,16 +468,34 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <label className="block text-xs font-semibold text-stone-600 mb-1.5">
                   Possession<span className="text-brand-500 ml-0.5">*</span>
                 </label>
-                <input
+                <select
+                  value={newLeadPossessionMode === 'received' ? 'Possession Received' : 'Custom date'}
+                  onChange={(e) => {
+                    if (e.target.value === 'Possession Received') {
+                      setNewLeadPossessionMode('received');
+                      setNewLead({ ...newLead, possessionTimeline: 'Possession Received' });
+                    } else {
+                      setNewLeadPossessionMode('custom');
+                      setNewLead({ ...newLead, possessionTimeline: '' });
+                    }
+                  }}
+                  required
+                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                >
+                  <option>Custom date</option>
+                  <option>Possession Received</option>
+                </select>
+                {newLeadPossessionMode === 'custom' && <input
                   type="date"
                   value={newLead.possessionTimeline}
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={todayISTDateString()}
                   onChange={(e) => setNewLead({ ...newLead, possessionTimeline: e.target.value })}
                   onBlur={(e) => validateNewLeadField('possessionTimeline', e.target.value)}
                   required
-                  className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 transition-all"
                   style={{ border: newLeadErrors.possessionTimeline ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
-                />
+                />}
                 {newLeadErrors.possessionTimeline && (
                   <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.possessionTimeline}</p>
                 )}

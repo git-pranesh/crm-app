@@ -31,6 +31,13 @@ export function formatISTDate(iso: string | Date, opts?: Intl.DateTimeFormatOpti
   });
 }
 
+/** Standard possession display. Legacy text values remain readable unchanged. */
+export function formatPossession(value?: string | null): string {
+  if (!value) return '—';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return formatISTDate(`${value}T00:00:00+05:30`, { year: 'numeric' });
+}
+
 /** e.g. "12 Aug, 2:45 PM" */
 export function formatISTDateTime(iso: string | Date, opts?: Intl.DateTimeFormatOptions): string {
   return new Date(iso).toLocaleString('en-IN', {

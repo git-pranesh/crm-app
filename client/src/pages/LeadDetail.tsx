@@ -8,7 +8,7 @@ import {
 import { api } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhone } from '../lib/validation';
-import { formatISTDate } from '../lib/dateFormat';
+import { formatISTDate, formatPossession } from '../lib/dateFormat';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -220,8 +220,7 @@ const EMPTY_EDIT = {
   possessionTimeline: '', nextMeetingDate: '',
 };
 
-/** Preset possession timeframes; anything else stored is treated as a custom date. */
-const POSSESSION_PRESETS = ['Immediate', '3 months', '6 months', '1 year+'];
+const POSSESSION_RECEIVED = 'Possession Received';
 
 /** true if `v` looks like a YYYY-MM-DD date (what the custom date input produces). */
 function isIsoDateString(v: string): boolean {
@@ -318,7 +317,7 @@ export default function LeadDetail() {
   const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
   const [originalEditDetails, setOriginalEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
   const [editDetailsErrors, setEditDetailsErrors] = useState<Record<string, string>>({});
-  const [possessionMode, setPossessionMode] = useState<'preset' | 'custom'>('preset');
+  const [possessionMode, setPossessionMode] = useState<'custom' | 'received' | 'legacy'>('custom');
   const [savingDetails, setSavingDetails] = useState(false);
 
   const REQUIRED_EDIT_FIELDS = ['name', 'phone', 'projectType', 'scope', 'location', 'expectedMoveIn', 'possessionTimeline'] as const;
@@ -491,9 +490,8 @@ export default function LeadDetail() {
     setEditDetails(snapshot);
     setOriginalEditDetails(snapshot);
     const savedPossession = lead.possessionTimeline ?? '';
-    setPossessionMode(
-      savedPossession && !POSSESSION_PRESETS.includes(savedPossession) ? 'custom' : 'preset',
-    );
+    setPossessionMode(savedPossession === POSSESSION_RECEIVED ? 'received' :
+      (savedPossession && !isIsoDateString(savedPossession) ? 'legacy' : 'custom'));
     setEditDetailsErrors({});
     setEditDetailsModal(true);
   };
@@ -1064,29 +1062,26 @@ export default function LeadDetail() {
                       </>
                     )}
                   </div>
-                  {/* Possession — preset timeframe dropdown, or a custom date */}
+                  {/* Possession — custom date or received (legacy text remains readable). */}
                   <div>
                     <label className="block text-xs font-semibold text-stone-600 mb-1">Possession</label>
                     <select
-                      value={possessionMode === 'preset' ? editDetails.possessionTimeline : '__custom__'}
+                      value={possessionMode === 'received' ? POSSESSION_RECEIVED : possessionMode === 'legacy' ? '__legacy__' : '__custom__'}
                       onChange={(e) => {
-                        if (e.target.value === '__custom__') {
+                        if (e.target.value === POSSESSION_RECEIVED) {
+                          setPossessionMode('received');
+                          setEditDetails({ ...editDetails, possessionTimeline: POSSESSION_RECEIVED });
+                        } else if (e.target.value === '__custom__') {
                           setPossessionMode('custom');
-                          setEditDetails({
-                            ...editDetails,
-                            possessionTimeline: isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : '',
-                          });
-                        } else {
-                          setPossessionMode('preset');
-                          setEditDetails({ ...editDetails, possessionTimeline: e.target.value });
+                          setEditDetails({ ...editDetails, possessionTimeline: isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : '' });
                         }
                       }}
                       className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
                     >
-                      <option value="">Select timeframe…</option>
-                      {POSSESSION_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
-                      <option value="__custom__">Custom date…</option>
+                      <option value="__custom__">Custom date</option>
+                      <option value={POSSESSION_RECEIVED}>{POSSESSION_RECEIVED}</option>
+                      {possessionMode === 'legacy' && <option value="__legacy__">{editDetails.possessionTimeline} (legacy)</option>}
                     </select>
                     {possessionMode === 'custom' && (
                       <>
@@ -1676,7 +1671,7 @@ export default function LeadDetail() {
                     <FactRow label="Expected OB Date" value={lead.expectedObDate
                       ? formatISTDate(lead.expectedObDate, { year: 'numeric' })
                       : undefined} />
-                    <FactRow label="Possession" value={lead.possessionTimeline} />
+                    <FactRow label="Possession" value={formatPossession(lead.possessionTimeline)} />
                     <FactRow label="Source" value={lead.source?.replace(/_/g, ' ')} />
                   </div>
 
