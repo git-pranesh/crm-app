@@ -11,16 +11,21 @@ import { getEffectiveStageSla } from '../lib/stageSla.js';
 export const configRouter = Router();
 
 // ── GET /api/config/offers — active offer options for lead offer dropdowns ────
-// Task #75: replaces the old free-text Offer 1/2/3 lead fields with an
-// admin-managed list (see /api/admin/offer-options for CRUD).
+// Bug fix (found in e2e testing after task #133): this used to read from the
+// legacy OfferOption table (Task #75's simple admin-managed label list), but
+// POST /leads/:leadId/offer — which actually applies the selection — looks up
+// the id against the real `Offer` table (managed on the Settings page,
+// server/src/routes/offers.ts). The two tables have disjoint id spaces, so
+// every selection failed with "Offer not found". Source the dropdown from the
+// same `Offer` table the apply endpoint validates against.
 configRouter.get('/offers', verifyToken, async (_req, res) => {
   try {
-    const offers = await prisma.offerOption.findMany({
+    const offers = await prisma.offer.findMany({
       where: { isActive: true },
-      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
-      select: { id: true, label: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
     });
-    res.json({ offers });
+    res.json({ offers: offers.map((o) => ({ id: o.id, label: o.name })) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
