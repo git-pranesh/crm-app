@@ -1,7 +1,3 @@
-import { ReplitConnectors } from '@replit/connectors-sdk';
-
-const connectors = new ReplitConnectors();
-
 export interface ResendEmailPayload {
   to: string;
   subject: string;
@@ -10,14 +6,22 @@ export interface ResendEmailPayload {
 }
 
 /**
- * Send through the Replit-managed Resend connection.
- * The connector SDK supplies the authenticated Resend request; no API key
- * is read from application code or exposed to the client.
+ * Send through the Dex Resend account using the server-side API key.
+ * The key is supplied through Replit Secrets and is never exposed to the
+ * browser or included in an invite response.
  */
 export async function sendViaResend(payload: ResendEmailPayload): Promise<void> {
-  const response = await connectors.proxy('resend', '/emails', {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify(payload),
   });
 
