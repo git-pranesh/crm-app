@@ -87,6 +87,7 @@ SUPABASE_URL = "https://xtsgbuirhwwpxhzjshho.supabase.co"
 
 [userenv.production]
 BASE_URL = "https://fyx.interiorsbydex.com"
+FROM_EMAIL = "noreply@interiorsbydex.com"
 
 [nix]
 channel = "stable-25_05"
