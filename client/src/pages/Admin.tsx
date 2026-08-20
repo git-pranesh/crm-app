@@ -267,7 +267,7 @@ export default function Admin() {
           blId: inviteForm.blId || undefined, designation: inviteForm.designation || undefined,
         },
       );
-      if (note && note.includes('SMTP not configured')) {
+      if (note && (note.includes('manual sharing') || note.includes('delivery unavailable'))) {
         toast.success(`Invite created for ${inviteForm.name}. Email isn't configured yet — share this link with them: ${inviteLink}`, { duration: 12000 });
       } else {
         toast.success(`Invite email sent to ${inviteForm.email}`);

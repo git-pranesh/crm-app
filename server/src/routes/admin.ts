@@ -465,7 +465,7 @@ adminRouter.post('/users/send-invite', async (req, res) => {
         ? 'Invite email sent through Resend'
         : delivery === 'smtp'
           ? 'Invite email sent through SMTP'
-          : 'No email provider configured — invite link returned for manual sharing',
+          : 'Invite email delivery unavailable — invite link returned for manual sharing',
     });
   } catch (err: any) {
     if (err.code === 'P2002') {
