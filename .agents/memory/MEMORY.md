@@ -39,3 +39,4 @@
 - [Meeting location vs mode fields](meeting-location-vs-mode.md) — Meeting.mode and Meeting.location/replanLocation/PDOBChecklist.obMeetingLocation are separate fields sharing similar value vocab; don't conflate
 - [Discount-requests list scoping](discount-requests-scoping.md) — unscoped "list all" endpoints reachable by broad roles are a recurring over-exposure pattern here; check server-side `where` filtering, not just UI role gates
 - [Public base URL resolution](base-url-resolution.md) — shared `resolveBaseUrl()` helper (BASE_URL → REPLIT_DEV_DOMAIN) prevents localhost links leaking into invites/emails; prod needs BASE_URL set explicitly, dev doesn't
+- [Client complaint scope audit](client-complaint-scope-audit.md) — use the client PDF as primary evidence, compare with the XLSX scope, and separate defects from approved scope changes
