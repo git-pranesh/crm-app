@@ -1,0 +1,233 @@
+Here is a 100% factual summary of the requested changes, structured specifically to instruct Replit to validate them against the originally agreed-upon scope. You can copy and paste this directly into your Replit environment or prompt.
+
+---
+
+### Scope Validation Request
+
+**Instruction for Replit / Development Team:**
+Please run a rigorous validation check on the following list of requested changes extracted from the reference file **_CRM devolopment - Final  (2).pdf**. Cross-reference each item against the originally agreed Scope of Work (SOW) to categorize them cleanly into either **Genuine Bug Fixes** (failed original requirements) or **New Feature Requests** (scope creep).
+
+### 1. System Stability & Session Management
+
+* The CRM logs out unexpectedly every 15 to 20 minutes while actively using the software.
+
+
+
+### 2. Branding & UI Copy Updates
+
+* Replace the current incorrect logo with the "X" logo.
+
+
+* Replace the "CRM" text under the logo with "FYX".
+
+
+* Change the login screen text from "CRM platform - Sign in" to "Sign in to FYX".
+
+
+* Rename the stage advancement prompt from "The server will verify all gate requirements..." to "FYX will verify the gate requirement".
+
+
+* Rename the filter bar placeholder from "Filter this board..." to "search".
+
+
+* Rename the lead field "Move in date" to "Expected - Interiors handover date".
+
+
+* Rename the meeting type "PD (Post-Design)" to "PD (Pitch Discussion)".
+
+
+
+### 3. Pipeline, Filters & Views
+
+* The "On hold" and "inactive" portal views must match the UI format of the "active" portal views under each stage.
+
+
+* The filter options in the "Leads" tab must be made identical to the filters in the "Sales Pipeline" tab.
+
+
+* Replace "Designer name" in the filter with "Lead origin date".
+
+
+* Add "Expected OB date" to the filter criteria.
+
+
+* Update search flow: Users should be able to apply Search + All Stages + All Status + Source, and subsequently open the rest of the advanced filters.
+
+
+* Filter headings are currently not displaying on the UI.
+
+
+* New leads should explicitly display a counter for "new leads" unless they are actively opened.
+
+
+* Provide a country code and phone digit validation specific to the country to accommodate overseas leads.
+
+
+
+### 4. Stage Gates, Workflows & Checklists
+
+* **Stage Skipping Logic:** Allow skipping the DQL, PR, and PD stages (e.g., moving from PP directly to OB).
+
+
+* **Mandatory File Roll-up:** If a stage is skipped, the mandatory file requirements from the skipped stages must still be uploaded prior to moving the stage forward.
+
+
+* **Bug in Lead Creation:** Leads currently advance to the MQL stage even if mandatory project details are missing upon creation.
+
+
+* **Bug in OB Checklist:** The OB checklist is currently only updating after a full page refresh.
+
+
+* **Bug in DIP Movement:** The system currently prevents moving a lead to "Design in Progress" (DIP) even after all mandatory gates (meeting completion and DIP checklist) are fulfilled.
+
+
+* **OB Gate Update:** The gate to Onboarding (OB) must enforce the OB checklist, final PP, generated quote, payment screenshot, and welcome mail approval.
+
+
+* **OBM Gate Update:** Remove "Generated quote" as a gate requirement to move from OB to OBM. Add a mandatory "client confirmation" checkbox to move from OB to OBM.
+
+
+* **DIP Gate Update:** Moving from OBM to DIP requires the completed checklist plus an OBM mail approval screenshot in the files tab.
+
+
+
+### 5. Activity Log & Task Management
+
+* **Consolidated Activity Feed:** Do not split meetings, intent, etc. Keep the latest activity at the top, followed by older activities in a single stream.
+
+
+* **Task UI Adjustments:** Rename the "Follow-up Task" component to "Follow up / Task" and add a tracker for the number of follow-ups added.
+
+
+* **Task Attachments:** File attachment should not be required when creating a task; it should only be requested when marking the task as complete.
+
+
+* **Task Status Enforcement:** If a task is not completed on its scheduled date, the system must force the user to reschedule or cancel it before any other activity can be logged on that lead.
+
+
+* **Bug in Task Creation:** Newly created tasks are currently not reflecting in the activity feed.
+
+
+* **Bug in Task Counter:** The UI shows "5 follow up task scheduled" when only 4 are actually scheduled.
+
+
+* **Meeting Agenda & MOM:** Internal notes must not reflect in the Client Minutes of Meeting (MOM); MOM will be automatically emailed to the client.
+
+
+
+### 6. Leads & Project Management Details
+
+* Remove the "Intent Rating" section and replace it with a table detailing "EACH STAGE STATIONED DAYS WITH BUDGET UPDATE".
+
+
+* This new table must track Stage, Date, TAT, and Budget; TAT is marked Green if matched, or Red if breached.
+
+
+* Intent rating currently only changes the first time; it should update automatically upon every stage movement based on preset criteria.
+
+
+* The latest attached quote is currently not reflecting in the lead details.
+
+
+* Designers need the ability to add new team members with Business Lead (BL) approval; if two designers are on a project, one must be marked Primary.
+
+
+* Add a chat box for typing internal notes.
+
+
+* **Bug in Roadmap:** The stage roadmap text is currently cut off and only half visible on the screen.
+
+
+
+### 7. File Management & Quotes
+
+* Floor plans attached in the MQL or EL stages (as well as DQL) are not automatically syncing/reflecting in the main "Files" tab.
+
+
+* Expand attachment limits: allow multiple file attachments inside all tabs, not just the dedicated files folder.
+
+
+* Designer representative logins should restrict quote builder access strictly to their specific representative PID quotation.
+
+
+* Basic CRM details (PID, name, project details) must auto-fill when creating a new quote.
+
+
+
+### 8. Automations, Notifications & Emails
+
+* Add an "External notification" tick-box globally wherever client communication occurs; Internal mail triggers are mandatory, but external sharing must be optional.
+
+
+* Designers must have the ability to read and edit the body of all automated emails before they are sent to the client (excluding pre-filled date/time/attachments).
+
+
+* Management CRM needs the capability to edit all mail templates.
+
+
+* Implement task/meeting reminder alerts sent at the start of the week (Tuesday), start of the day, and 1 hour prior to the event.
+
+
+* "Expected OB Date" requires automated reminder messages and emails.
+
+
+* **Bug in Emails:** The "Welcome mail" attachment is currently missing from the email body, and the "Proposal Ready" mail is sending without its attachment.
+
+
+
+### 9. Lead Status Controls (Hold / Inactive / Reactivate)
+
+* Add a direct "MARK INACTIVE" button next to "Reactivate" so users do not have to reactivate a lead just to mark it inactive.
+
+
+* Overhaul the "Mark Inactive" reasons dropdown (add: Ring No Response, Budget constraint, Quality constraint, Timeline Constraint, etc.) and add a typeable notes field.
+
+
+* Mandate client notification (email/SMS checkbox) when a lead is marked Inactive or is Reactivated.
+
+
+* Change the reactivate reason "Placed on hold in error" to "Inactivated by Mistake".
+
+
+* When a lead is marked inactive, all pending tasks for that project should automatically be nullified/canceled.
+
+
+
+### 10. Dashboard & Analytics Refinements
+
+* The Sales incentive should only calculate and reflect on the dashboard *after* a project is moved to the DIP stage.
+
+
+* Update dashboard card titles and logic parameters (e.g., Active projects, OB progress, PO progress, etc.).
+
+
+* Clicking a dashboard metric (like SLA breach or OB progress) must route the user to a filtered view of those specific projects.
+
+
+* Remove "NPS Forecast" from the dashboard projections (as it cannot be forecasted), and base the "Booking Forecast" on the Expected OB date.
+
+
+* Split the "Performance Score" into two separate entities: Sales Performance and Design Performance.
+
+
+* Sales Performance criteria to include: Conversion Ratio, TAT, Target Achieved, and Average Booking Value.
+
+
+* Add visual medals (Gold, Silver, Bronze) to the Team Leaderboard based on target over-achievement.
+
+
+* Allow Business Leads (BL) and Business Heads (BH) to explicitly "flag" a project in the lead stage.
+
+
+* **Funnel Calculation Update:** Update the Sales Funnel conversion percentage logic. Add "Total Leads Received" as the base count. The conversion formula must be:
+
+$$\frac{\text{Current Leads in Stage}}{\text{Total Leads Received}} \times 100$$
+
+
+.
+
+
+
+---
+
+**Next Step for Replit Validation:** Please analyze the above extraction and output a table mapping each point against the original scope document to flag feature creep versus active developmental bugs.
