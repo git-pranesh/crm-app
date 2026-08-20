@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@replit/connectors-sdk": "^0.4.2",
     "@supabase/supabase-js": "^2.45.4",
     "@types/multer": "^2.1.0",
     "bullmq": "^5.13.2",

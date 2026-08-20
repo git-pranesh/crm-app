@@ -11,6 +11,7 @@ import { getEffectiveMailTemplates, setMailTemplateOverride, resetMailTemplateOv
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { resolveBaseUrl } from '../lib/baseUrl.js';
+import { sendViaResend } from '../lib/resendEmail.js';
 
 export const adminRouter = Router();
 
@@ -427,28 +428,44 @@ adminRouter.post('/users/send-invite', async (req, res) => {
     }
     const inviteLink = `${baseUrl}/accept-invite/${invite.token}`;
 
-    // Send invite email (via email service if configured, else log)
-    if (!process.env.SMTP_HOST) {
-      console.log(`[admin:invite] INVITE LINK for ${email}: ${inviteLink}`);
-    } else {
-      const nodemailer = await import('nodemailer');
-      const transporter = nodemailer.default.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT ?? 587),
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      });
-      await transporter.sendMail({
-        from: process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com',
-        to: email,
-        subject: "You've been invited to Interiors by DeX CRM",
-        html: `<p>Hi ${name},</p><p>You've been invited to join Interiors by DeX CRM as <strong>${role}</strong>.</p><p>Click the link below to set up your account (expires in 48 hours):</p><p><a href="${inviteLink}">${inviteLink}</a></p>`,
-      }).catch((e: any) => console.warn('[admin:invite] Email send failed:', e.message));
+    const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
+    const subject = "You've been invited to Interiors by DeX CRM";
+    const html = `<p>Hi ${name},</p><p>You've been invited to join Interiors by DeX CRM as <strong>${role}</strong>.</p><p>Click the link below to set up your account (expires in 48 hours):</p><p><a href="${inviteLink}">${inviteLink}</a></p>`;
+    let delivery: 'resend' | 'smtp' | 'manual' = 'manual';
+
+    // Prefer the managed Resend connection. SMTP remains a compatibility
+    // fallback for environments that have not connected Resend yet.
+    try {
+      await sendViaResend({ from, to: email, subject, html });
+      delivery = 'resend';
+      console.log(`[admin:invite] Resend sent invite to ${email}`);
+    } catch (resendError: any) {
+      console.warn('[admin:invite] Resend delivery failed:', resendError.message);
+
+      if (process.env.SMTP_HOST) {
+        const nodemailer = await import('nodemailer');
+        const transporter = nodemailer.default.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT ?? 587),
+          secure: Number(process.env.SMTP_PORT ?? 587) === 465,
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        });
+        await transporter.sendMail({ from, to: email, subject, html });
+        delivery = 'smtp';
+        console.log(`[admin:invite] SMTP sent invite to ${email}`);
+      } else {
+        console.log(`[admin:invite] No email provider available. INVITE LINK for ${email}: ${inviteLink}`);
+      }
     }
 
     res.status(201).json({
       invite: { id: invite.id, email: invite.email, role: invite.role, expiresAt: invite.expiresAt },
       inviteLink,
-      note: process.env.SMTP_HOST ? 'Invite email sent' : 'SMTP not configured — invite link logged to console',
+      note: delivery === 'resend'
+        ? 'Invite email sent through Resend'
+        : delivery === 'smtp'
+          ? 'Invite email sent through SMTP'
+          : 'No email provider configured — invite link returned for manual sharing',
     });
   } catch (err: any) {
     if (err.code === 'P2002') {
