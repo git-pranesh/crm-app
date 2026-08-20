@@ -1,0 +1,556 @@
+                                        Wrong logo is displayed to be replaced with X
+                                        logo
+
+                                        Replace CRM under the logo to FYX
+
+
+
+
+Wrong logo is displayed to be replaced with X
+logo
+
+
+
+
+                                        Change “CRM platform - Sign in” to - “Sign in to
+                                        FYX”
+
+
+
+
+                                        Note - CRM is getting logged out for every 15 to 20 min even while using the software.
+Rename the underlined to - FYX will verify the gate
+requirement
+The on hold and inactive portal should be same as the active portal under each stages
+        Designer Pipeline
+
+
+
+
+Sales
+        Rename to Filter this board
+        to search
+Each time new leads are received it should show   Designer Lead
+the number of new leads unless the leads are
+open
+
+
+
+                       3
+Remove designer name and replace it with “Lead origin date”
+
+Right now filter different in lead tab and sales pipeline tab - both should be same. Follow the filter in sales pipeline and implement the same in lead tab as well.
+
+
+
+
+                                                                                                                                                                       Reflect the same format in lead
+                                                                                                                                                                       filter
+
+
+
+
+                                        Expected OB date                   Add Expected ob date to filter
+You can have search + all stages + all status +source - post that have a Have a filter option like how it is pipeline - then the rest of the filter can open
+
+Pls note the above given filters headings are not displayed .
+
+
+
+
+       Right now filter different in lead tab and sales pipeline tab - both should be same. Follow the filter in sales pipeline and implement the same in lead tab as well.
+
+
+
+
+                                                                                                                                                                              Reflect the same format in lead
+                                                                                                                                                                              filter
+
+
+
+
+                                                Expected OB date                   Add Expected ob date to filter
+Designer Lead
+                                                               To Do
+
+                                                               Mention all the notification related to this project in same notification format
+                                                               ( date wise split ) like meeting scheduled , call scheduled , task scheduled -
+                                                               pending - SLA breach
+
+
+
+
+                REMOVE INTENT RATING AND REPLACE WITH EACH     Stage      Date           TAT                           Budget
+                                                               MQL      stage         From Lead Received date         As per the entry in each stage
+                STAGE STATIONED DAYS WITH BUDGET UPDATE OF     DQL     Movement
+                EACH STAGE                                     PR       Date
+                                                               PD                       If the TAT is matched
+                                                               PP                       as per the given
+                                                               OB                       standards then TAT
+                                                               OBM                      can be in green
+
+                                                                                        Beyond standard -
+                                                                                        RED
+
+
+
+                                                               Latest quote
+
+
+
+
+                   Latest quote attached - is not reflected.
+
+                                                               Source & campaign
+
+
+
+
+                                                               Assignment
+Designer Lead
+
+
+
+                Add - country code + Ph digits as per the country - How will we add leads that are from overseas?
+Possession date is mandatory
+
+
+
+
+       Rename move in date to Expected - Interiors
+       handover date
+When Lead is moved from PP to OB by skipping PD - Right now it cant be moved - cause
+in file tab PD folder is not visible and OB checklist as well not visible.
+
+Note one should be able to skip PD and can move from PP to OB.
+
+Gate - OB checklist + Final PP + Generated quote + payment screenshot + Welcome mail
+approval.
+                                                                               When OB meeting is scheduled in checklist - Meeting is not reflected in the
+                                                                               meeting tab.
+
+
+
+
+Note OB - Checklist is getting updated only after refreshing the entire page
+                                                                                                                                         Right now without the client confirmation check box
+                                                                                                                                         ticked lead is moving from OB to OBM - Tick box is
+                                                                                                                                         mandatory
+
+
+
+
+How does the Welcome mail document attached to the mail ? Right now mail body doesnt have any attachments.
+
+OB to OBM - When the lead is moved from OB to OBM - Gate - Pls remove Generated quote - Cause generated quote is the gate to OB stage.
+
+Gate for OBM to DIP should be - Client OBM mail approval screenshot in file tab
+DIP Check list.
+
+   1)      OBM mail approved
+   2)      NPS received
+   3)      Internal Mail thread created and their link
+   4)      Credit system Activated
+
+Gate fromm OBM to DIP
+Checklist completed + OBM mail approval screenshot in file tab
+Right now stage cant be moved to DIP even after completing the mandatory gate that is meeting completion and Dip checklist
+Designer should be able to add new team member with BL
+approval in lead stage. - Team member details will be given in
+the admin portal.
+
+If two designers are added in same project then Only one
+designer should be primary
+
+Designer BL and BH should be able to add team member
+to the project - Add team member
+Designer Lead
+
+                Client NPS   Client NPS to be added next to the name -
+                             FYI nps is different from intent - NPS is not
+                             yet reflected
+Only half of the text is visible
+                                      Latest activity should be on the top followed by
+                                      the oldest - No need to split meetings intent etc..
+                                      Format eg below for your reference
+
+
+                                      Activity format
+
+                                      Activity logged date and time
+
+                                      Activity ( Eg - PP meeting scheduled on date time
+                                      - Activity done by name ( Eg Karthik)
+
+                                      PP meeting completed on Date and time - Priya
+
+                                      call scheduled - Agenda - Date +time - From Next
+                                      plan of action - PP meeting completed
+
+
+
+
+                       Type here…..
+
+
+Add a chat box here.
+Designer Lead
+                                                                                                                Add schedule a call
+
+
+
+
+                                                                                                                                                  Schedule a call
+
+
+
+
+    Call Schedule
+
+    Date + Time                              Once the call is scheduled auto mail trigger as per the option chosen either external or internal.
+
+    Type - ( MQL , DQL , PP, PD, OB, OBM )
+
+    Agenda of a call - typable
+
+       External mail
+Rename Notes to Internal notes
+
+Add - External Notes with attachment option
+
+Add - Msg /Mail to cx tickbox option - its not mandatory.
+
+Note - Only the notes in External notes + Attachment should be sent to cx along with the msg template.
+Remove the follow up task completely
+Rename what to discuss to “Agenda”
+Rename agenda to Internal notes
+
+Email mandatory to cx
+
+internal notes should not be reflected in Client
+MOM , should be reflected in Internal notes
+
+Internal notes should come after attachment
+
+
+
+
+               Move down
+
+               Internal notes should come
+               after attachment
+                                                   Internal notes
+
+
+
+
+Call
+
+Rename - what to discus to agenda -
+
+Notify cx by email -Not mandatory
+
+Meeting
+
+Notify cx by email - Not mandatory
+Add - Meeting Agenda
+
+Task - If external
+
+Notify cx by email - mandatory
+It shows 5 Follow up task scheduled but scheduled is
+only 4 - It represents the entire task list.
+                  Attachment is not required here - attachment is
+                  required when the task is marked completed.
+
+
+
+
+How to assign this task to other team member ?
+This gate is not required - task can be completed
+without any activity like call or meeting
+       Same like creating a new task - Reschedule task should also reflect - Time from and to , Time .
+       Agenda can be reflected here what is been recorded while creating the task
+
+
+
+
+Rename - Outcome to “Reason”
+
+In the typable format - remove “result of this task”
+                           2
+
+
+Rename follow-up task to
+Follow up / Task               Number of follow up to be added
+Move Agenda (Agenda is mandatory and to be reflected
+in mail) before Due date and type
+
+
+
+
+            Add internal notes here - Typable format - and
+            internal notes should not be attached to client email
+            or msg - internal notes should be reflected internal
+            notes tab
+
+            And external notes - external notes has to be
+            attached to cx mail or msg
+If task is not completed on the given particular date
+system should ask them to reschedule or canceled
+the task - unless or until it's done any activity can’t
+be done in that lead.
+Note - Created task is not reflected in the activity
+Replace 5 scheduled to - Total Meetings =Number of completed + Num of
+Scheduled + Number of rescheduled +Number of NO show . Eg - Total Meetings
+- 10 = 5 completed + 1 Scheduled + 4 rescheduled +0 NO show
+
+This applies for Task and call as well
+Rename to “PD (Pitch Discussion)”
+
+This is been corrected in previous correction but im not sure why its changed again
+Remove - Agenda
+
+
+
+
+ Retain - FP , Proposal , life style sheet - others ( typable
+ heading ) - remove dd contract From attachment
+
+
+
+
+The email should also have the attachment attached.
+                                                                                        Add - Mode - drop down as in other areas
+
+
+
+
+                                            Mode
+
+
+
+
+                                                                                                                                   Mode   Location
+Meeting Mode is Missing
+
+Location should be as a drop down like how its in the rest of the area
+
+
+
+
+                                      Meeting mode and location is missing
+
+                                      Location should be as a drop down like how its in the rest of the area
+Floor plan attached in MQL or EL stage is not reflected in the files it should auto reflect in the files
+                            Change - Reason drop
+                            down
+
+                            Client requested
+
+
+                            Budget Issue
+
+                            Site Not Ready
+
+
+
+
+                            Add - Notes - typeable
+                            format
+
+
+
+
+Client Email is mandatory
+                                                    MARK INACTIVE
+
+
+
+
+Right now when the project is on hold and i
+wanted to inactivate the project - i have to make
+the project active from on hold and then
+inactivate.
+
+Add MARK INACTIVE - next to the on hold
+reactivate
+Replace the Drop down
+
+Ring No Response
+Budget constraint
+Quality constraint
+Timeline Constraint
+Client won't move out during execution
+UPVC Material Required
+SS Material Required
+Stone material Required
+Aluminium material required
+No Scope for interiors
+Onboarded with other interior
+Onboarded with other vendor
+Window Shopping
+Service out of location
+Project value below 5L
+Repeated lead
+Invalid Number
+Has not brought property yet
+Others - When clicked typable format.
+
+notes - notes is only for internal purpose - should not be
+attached to mail .
+Notify cx via mail and sms should be -
+mandatory
+CX email mandatory to reactivate the lead
+
+
+
+
+                                   In Reactivate reason drop down
+                                   Change Placed on hold in error to Inactivated
+                                   by Mistake
+Designer representative log in should only open
+Representative pid quotation should only open
+If new quote is created from the system - basic details which crm already knows like PID , name & projects details should
+automatically reflect in the quote software.
+Where ever the mail or notification to be sent to the client have a mandatory tick box external notification , designer can choose if they would want to share the notification.
+
+Any auto mail trigger point in the system should ask internal or external mail once the checkbox is clicked the mail should go accordingly - But internal mail trigger is mandatory only external is
+optional.
+
+Pls note that - any mail before sharing it with cx mail should open and designer will read and edit before sharing it to cx - content already pre filled cannot be edited eg meeting date and time
+attachments etc.
+
+All Mail template to be editable form the management crm
+
+
+Any follow up task and meeting reminder alert Start of the week - Every Tuesday - start of the day + 1 hr before the meeting or task
+
+
+Stages that should send mail without attachment is proposal ready mail.
+
+Where ever the date and time needs to be logged - no manual entry calendar and clock stamp option should be given
+
+All the attachment should have multiple attachment right now attachment is limited to one except if we go in to file folder and attach but multiple attachment should also be available inside the
+other tabs as well.
+
+Floor plan attached in DQL stage is not automatically reflected in the file folder
+
+Only after project is moved to DIP stage only after that sale incentive is calculated and reflected in incentive calculation dashboard and sale done reflected in dashboard
+
+Stages that can be skipped is DQL , PR , PD - rest of all the stages cannot be skipped but the require document and mandatory things has to be updated when the stage is moving forward - eg
+when the stage is updated from MQL to PP directly then (All the mandatory req in dql +pr+pp must be updated ) - eg - floor plan + lifestyle capture +PP file has to be updated in the system to
+move the stage.
+
+
+
+
+When leads is created by designer from their portal - if required mandatory field to move to mql are not filled then stage can be in MQL - right now even without filling project details which is
+mandatory field for MQL stage is automatically reflected in the MQL stage
+
+
+
+Expected OB date - remainder msg and mail
+
+PR stage can be skipped but required mandatory field in PR should be done in DQL - Files attachment under dql , ob date ,pp meeting schedule completed
+Intent rating is auto changing only the first time but it should be updated when each stage movement as per the given criteria
+Dashboard flow
+Dashboard flow
+                                                              Change in grey and say coming soon
+
+
+
+
+                               OB progress (
+                                                                                  Po progress
+                              Total number of          Active projects(                                          Revenue
+  Active Leads(                                                                   (Total num of                                           Estimated                                          SLA breaches (
+                              projects crossed         Total Number of                                       generated (Total
+ Total Number of                                                                projects moved to                                      incentive ( As per                                     Total num of sla
+                              OBM - moved to           active projects in                                   payment collected                                       Over all NPS
+  active Leads +                                                                   EIP +Value                                              the given                                           breach in both
+                             DIP + value With          DIP STAGES +                                          in both sale and
+      value )                                                                    +percentage of                                           calculation)                                      leads and project )
+                             target percentage              value )                                           design stage )
+                                                                                 target achieved
+                                 achieved )
+                                                    Replace
+
+
+
+
+                                                                   When any of these tabs are clicked it should take to back tracking eg - when SLA breach is clicked it should automatically show the list
+When its 0 project why does it say its on track ?                  of SLA breached and when clicked in OB progress its show the list of projects that been crossed to DIP or completed OBM stage.
+Dashboard flow
+Dashboard flow
+Dashboard flow
+Dashboard flow
+
+
+
+
+   Performance score should have a separate sales performance score and design
+   performance score.
+
+
+   Sales performance score - criteria calculated is
+
+   Conversion ratio ( Percentage of conversion from MQL to DIP )
+   TAT
+   Target Achieved
+   Average Booking Value (If 10 project is moved to DIP add all the project value / 10)
+BL and BH can flag the project
+
+At the moment - flagging the lead option is not available in the lead stage
+
+
+
+
+ Add silver gold bronze medal - if the person have achieved their target then they get a medal, gold
+ silver bronze is decided as per the over achievement - tat ,nps etc.
+                                                                              Remove Nps forecast - it cant be forecasted
+
+
+
+Booking forecast is calculated from Expected OB date in project details tab
+                                         Rename this to
+
+                                         Task
+                                         Calls
+                                         Meetings
+
+
+                                         Have a calendar option to
+                                         view tomorrow this week and
+                                         next week - should be able to
+                                         select the week
+
+
+
+
+When the lead is inactive task also automatically becomes null in that
+project
+
+
+
+Task details is missing
+
+PP meeting scheduled - date time
+
+Agenda - internal task - PP stage
+
+
+
+
+Date and time are reflected wrongly
+Conversion / Pipeline Calculation:
+Add Total Leads Received as the base count.
+Show the current number of unique leads in each stage separately.
+Stage % = Current Leads in Stage ÷ Total Leads Received × 100.
+
+Example: Total Leads Received = 10
+MQL = 8 → 80%
+DQL = 5 → 50%
+Proposal = 2 → 20%
+Booking = 1 → 10%
+
