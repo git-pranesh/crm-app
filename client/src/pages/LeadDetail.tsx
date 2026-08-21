@@ -283,7 +283,7 @@ export default function LeadDetail() {
   const [inactivationReason, setInactivationReason] = useState('');
   const [inactiveReasonChoice, setInactiveReasonChoice] = useState('');
   const [inactiveNotes, setInactiveNotes] = useState('');
-  const [inactiveNotifyClient] = useState(true);
+  const [inactiveNotifyClient, setInactiveNotifyClient] = useState(true);
   const [onHoldReason, setOnHoldReason] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
   const [changingStatus, setChangingStatus] = useState(false);

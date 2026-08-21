@@ -9,6 +9,20 @@ import { supabaseAdmin } from '../lib/supabase.js';
 export const quotesRouter = Router();
 export const usersDiscountRouter = Router({ mergeParams: true });
 
+// The 'system' placeholder isn't a real user row (no SYSTEM_USER_ID env var is
+// configured), so logActivity(SYSTEM_USER_ID, ...) would otherwise fail its FK
+// constraint. Resolve to an active Branch Head instead of skipping the log
+// entirely, matching the pattern used in leadWebhooks.ts/slaCheck.ts.
+const RAW_SYSTEM_USER_ID = process.env.SYSTEM_USER_ID ?? 'system';
+let cachedSystemUserId: string | null = null;
+async function resolveSystemUserId(): Promise<string | null> {
+  if (RAW_SYSTEM_USER_ID !== 'system') return RAW_SYSTEM_USER_ID;
+  if (cachedSystemUserId) return cachedSystemUserId;
+  const bh = await prisma.user.findFirst({ where: { role: 'BRANCH_HEAD', isActive: true }, select: { id: true } });
+  cachedSystemUserId = bh?.id ?? null;
+  return cachedSystemUserId;
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 const QUOTE_FILES_BUCKET = 'crm-quote-files'; // private bucket — task #89
 const ALLOWED_QUOTE_MIMES = new Set([
@@ -76,9 +90,9 @@ quotesRouter.post('/callback', async (req, res) => {
       data: { estimatedValue: amount },
     });
 
-    const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID;
-    if (SYSTEM_USER_ID) {
-      await logActivity(SYSTEM_USER_ID, 'QUOTE_RECEIVED', lead.id, {
+    const systemUserId = await resolveSystemUserId();
+    if (systemUserId) {
+      await logActivity(systemUserId, 'QUOTE_RECEIVED', lead.id, {
         quoteRef, amount, discountPct,
       }).catch((e) => console.warn('[quotes:callback:activity]', e.message));
     }
