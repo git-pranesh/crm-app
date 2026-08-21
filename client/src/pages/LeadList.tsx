@@ -43,13 +43,13 @@ const STAGE_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
-// NOTE: these abbreviations pre-date the funnel restructure and don't match
-// the new PD/PP naming used elsewhere (PROPOSAL_READY→"PP" here is actually
-// Proposal Ready, not Proposal Presented) — kept as-is to avoid an unrelated
-// relabel; only new stages are added below with their real names.
+// Kept in lockstep with Pipeline.tsx's STAGE_LABELS — the abbreviations that
+// used to live here (PP/PD/EL) disagreed with the Sales Pipeline's full-name
+// labels for the exact same enum values, which was confusing when comparing
+// the two views of the same leads.
 const STAGE_LABELS: Record<string, string> = {
-  EFFECTIVE_LEAD: 'EL', MQL: 'MQL', DQL: 'DQL',
-  PROPOSAL_READY: 'PP', PROPOSAL_PRESENTED: 'PD',
+  EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
+  PROPOSAL_READY: 'Proposal Ready', PROPOSAL_PRESENTED: 'Proposal Presented',
   PROPOSAL_DISCUSSION: 'Proposal Discussion',
   ONBOARDING: 'Onboarding', ONBOARDING_MEETING: 'Onboarding Meeting',
   DESIGN_IN_PROGRESS: 'Design in Progress', HANDED_OVER: 'Handed Over',

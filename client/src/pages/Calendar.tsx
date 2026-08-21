@@ -36,13 +36,34 @@ const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8..20
 
+const IST_TZ = 'Asia/Kolkata';
+
 function fmtTime(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return d.toLocaleTimeString('en-IN', { timeZone: IST_TZ, hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
+// Grid cursor/day cells are plain local JS Dates (no timezone attached), so
+// their key must be built from local fields (not toISOString, which is UTC
+// and can land on the wrong day depending on the browser's timezone).
 function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Server event timestamps are real UTC instants — their calendar day/hour
+// must be read in IST, not via raw UTC slicing (previous behaviour) or the
+// browser's local timezone (whatever that happens to be in prod/dev).
+function istDateKey(iso: string) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+}
+
+function istHour(iso: string) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: IST_TZ, hour: 'numeric', hour12: false }).formatToParts(new Date(iso));
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  return h === 24 ? 0 : h;
 }
 
 function startOfMonth(y: number, m: number) { return new Date(y, m, 1); }
@@ -145,16 +166,12 @@ export default function Calendar() {
 
   const eventsOnDate = (d: Date) => {
     const key = isoDate(d);
-    return events.filter((e) => e.scheduledAt.slice(0, 10) === key);
+    return events.filter((e) => istDateKey(e.scheduledAt) === key);
   };
 
   const eventsInHour = (d: Date, hour: number) => {
     const key = isoDate(d);
-    return events.filter((e) => {
-      if (e.scheduledAt.slice(0, 10) !== key) return false;
-      const h = new Date(e.scheduledAt).getHours();
-      return h === hour;
-    });
+    return events.filter((e) => istDateKey(e.scheduledAt) === key && istHour(e.scheduledAt) === hour);
   };
 
   const periodLabel = () => {

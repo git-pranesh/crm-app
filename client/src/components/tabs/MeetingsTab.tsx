@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mail, ChevronDown, ChevronUp, Paperclip, X } from 'lucide-react';
 import { api, type Meeting, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
+import { istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 
 const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Design Draft', 'Contract', 'Other'] as const;
 
@@ -17,20 +18,18 @@ const MODES = [
   { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
 // Task #115 — Meeting Location is a fixed dropdown, not free text.
+// Label text kept identical to MODES above ("Public Place") so the same enum
+// value doesn't read differently depending on which dropdown it's picked from.
 const LOCATION_OPTIONS = [
   { value: 'EC_VISIT', label: 'EC Visit' },
   { value: 'SITE_VISIT', label: 'Site Visit' },
   { value: 'VIRTUAL', label: 'Virtual' },
-  { value: 'PUBLIC_PLACE', label: 'Public place' },
+  { value: 'PUBLIC_PLACE', label: 'Public Place' },
 ];
 
-/** Earliest allowed datetime-local value: tomorrow at 00:00 (blocks same-day-or-earlier). */
+/** Earliest allowed datetime-local value: tomorrow at 00:00 IST (blocks same-day-or-earlier). */
 function minRescheduleDateTime() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(0, 0, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00`;
+  return `${istDatetimeLocalValue(new Date(Date.now() + 86400000)).slice(0, 10)}T00:00`;
 }
 
 const TYPES = [
@@ -199,10 +198,10 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
         rescheduledReason: statusForm.rescheduledReason || undefined,
         noShowReason: statusForm.noShowReason || undefined,
         newScheduledAt: statusForm.newScheduledAt
-          ? new Date(statusForm.newScheduledAt).toISOString()
+          ? istInputToISO(statusForm.newScheduledAt)
           : undefined,
         replanScheduledAt: statusForm.replanScheduledAt
-          ? new Date(statusForm.replanScheduledAt).toISOString()
+          ? istInputToISO(statusForm.replanScheduledAt)
           : undefined,
         replanLocation: statusForm.replanLocation || undefined,
       });
@@ -551,6 +550,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                   </div>
                   <p className="text-xs text-gray-500">
                     {new Date(meeting.scheduledAt).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
                       weekday: 'short', day: 'numeric', month: 'short',
                       hour: '2-digit', minute: '2-digit',
                     })}
@@ -591,6 +591,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                     <div key={i} className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
                       <span className="font-medium">Reschedule {i + 1}:</span>{' '}
                       was {new Date(h.scheduledAt).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
                         day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
                       })} — {h.reason}
                     </div>
@@ -633,7 +634,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                   {showQuestionnaire && (
                     <div className="mt-2 bg-fuchsia-50 border border-fuchsia-100 rounded-lg p-3 space-y-2">
                       <p className="text-xs text-fuchsia-600 font-medium mb-1">
-                        Submitted: {new Date(questionnaire.submittedAt).toLocaleDateString('en-IN')}
+                        Submitted: {new Date(questionnaire.submittedAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </p>
                       {Object.entries(questionnaire.responses).map(([q, a]) => (
                         <div key={q}>

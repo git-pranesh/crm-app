@@ -55,6 +55,11 @@ export type StageRequirement =
    * Call for the lead (calls have no separate "scheduled" state — they are
    * logged after the fact, so any Call row counts as "completed"). */
   | { type: 'meetingOrCall'; meetingType: 'DQL' | 'PP' | 'ONBOARDING'; label: string }
+  /** Satisfied by a meeting matching ANY of the given meetingType values —
+   * for gates where the same real-world meeting has been created under more
+   * than one meetingType value over time (e.g. Onboarding Meeting rows use
+   * 'OBM', but an earlier 'ONBOARDING' type also exists historically). */
+  | { type: 'meetingAnyOf'; meetingTypes: string[]; status?: 'scheduled' | 'completed'; label: string }
   /**
    * A generated Quote (Quote Builder callback row) or an uploaded
    * QUOTATION/GENERATED_QUOTE file in one of the given stages. Accepting
@@ -166,7 +171,11 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
    * approval received, internal mail thread completed) must be completed.
    */
   'ONBOARDING_MEETING->DESIGN_IN_PROGRESS': [
-    { type: 'meeting', meetingType: 'ONBOARDING', status: 'completed', label: 'OBM meeting completed' },
+    // Onboarding Meeting records are created with meetingType 'OBM' (see
+    // CREATABLE_MEETING_TYPES in routes/meetings.ts); 'ONBOARDING' is the
+    // earlier Onboarding-stage meeting type. Checking only 'ONBOARDING' here
+    // meant a genuinely completed OBM meeting could never satisfy this gate.
+    { type: 'meetingAnyOf', meetingTypes: ['OBM', 'ONBOARDING'], status: 'completed', label: 'OBM meeting completed' },
     { type: 'dip', label: 'OBM checklist completed' },
   ],
 };
@@ -360,6 +369,19 @@ export async function checkStageRequirements(
           where: {
             leadId: lead.id,
             type: r.meetingType as any,
+            status: { in: statuses as any },
+          },
+          select: { id: true },
+        });
+        satisfied = !!m;
+        break;
+      }
+      case 'meetingAnyOf': {
+        const statuses = r.status === 'completed' ? ['COMPLETED'] : ACTIVE_MEETING_STATUSES;
+        const m = await prisma.meeting.findFirst({
+          where: {
+            leadId: lead.id,
+            type: { in: r.meetingTypes as any },
             status: { in: statuses as any },
           },
           select: { id: true },

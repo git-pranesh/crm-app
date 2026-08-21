@@ -102,8 +102,8 @@ googleFormWebhookRouter.post('/', async (req, res) => {
 // ── GET /api/leads/:id/questionnaire ──────────────────────────────────────────
 questionnaireRouter.get('/', verifyToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const q = await prisma.dQLQuestionnaire.findUnique({ where: { leadId: id } });
+    const { leadId } = req.params;
+    const q = await prisma.dQLQuestionnaire.findUnique({ where: { leadId } });
     if (!q) {
       res.json({ questionnaire: null });
       return;

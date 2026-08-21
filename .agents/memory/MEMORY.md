@@ -42,3 +42,5 @@
 - [Client complaint scope audit](client-complaint-scope-audit.md) — use the client PDF as primary evidence, compare with the XLSX scope, and separate defects from approved scope changes
 - [Deployment uv lock](deployment-uv-lock.md) — stale generated `.pythonlibs` can stop publish before the CRM build begins
 - [Direct Resend API delivery](resend-direct-api.md) — Dex email must use its project Resend key, not the shared managed connector
+- [IST datetime-local conversion pattern](ist-datetime-conversion.md) — shared dateFormat.ts helpers (istDateOnly/istDatetimeLocalValue/istInputToISO/todayISTDateString) for all date/datetime-local inputs; never round-trip via browser-local toISOString
+- [mergeParams route param naming](merge-params-naming.md) — Express router mounted with `{ mergeParams: true }` under `/:leadId` must destructure `req.params.leadId`, not `req.params.id` — silent Prisma `undefined` bugs otherwise

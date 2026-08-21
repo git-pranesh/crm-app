@@ -1,4 +1,5 @@
 import type { NextPlanItem } from '../lib/api';
+import { todayISTDateString, istDatetimeLocalValue } from '../lib/dateFormat';
 
 /**
  * Shared "next plan of action" multi-select (Task #86) — used by both the
@@ -76,7 +77,7 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
               <input
                 type="date"
                 required
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayISTDateString()}
                 value={item.dueDate ?? ''}
                 onChange={(e) => updateItem(idx, { dueDate: e.target.value })}
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
@@ -143,7 +144,7 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
               <input
                 type="datetime-local"
                 required
-                min={new Date().toISOString().slice(0, 16)}
+                min={istDatetimeLocalValue(new Date())}
                 value={item.scheduledAt ?? ''}
                 onChange={(e) => updateItem(idx, { scheduledAt: e.target.value })}
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"

@@ -73,3 +73,42 @@ export function istDateGroupLabel(iso: string): string {
   if (target === dayKey(yesterday)) return 'Yesterday';
   return formatISTDate(iso, { year: 'numeric' });
 }
+
+/**
+ * "YYYY-MM-DD" — the calendar date of a timestamp *in IST*, for populating
+ * `<input type="date">` from a stored ISO timestamp. Using `.slice(0, 10)`
+ * or `toISOString()` on the raw value reads the UTC calendar date instead,
+ * which is the previous day for any time before 5:30am IST.
+ */
+export function istDateOnly(iso: string | Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: IST_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+}
+
+/**
+ * "YYYY-MM-DDTHH:mm" — the IST wall-clock value of a timestamp, for
+ * populating `<input type="datetime-local">`. This app is India-only, so the
+ * datetime-local input is treated as "IST wall time", not the browser's
+ * local timezone — using browser-local (via getFullYear/getHours etc.) shows
+ * the wrong time for any non-IST browser/OS.
+ */
+export function istDatetimeLocalValue(iso: string | Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: IST_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+/**
+ * Inverse of `istDatetimeLocalValue`/date-only inputs: treats a
+ * "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm" string as IST wall-clock time and
+ * returns the corresponding UTC ISO instant, by appending the fixed +05:30
+ * offset instead of letting `new Date(...)` interpret it as UTC (date-only)
+ * or the browser's local timezone (datetime-local).
+ */
+export function istInputToISO(value: string): string {
+  const withTime = value.length === 10 ? `${value}T00:00:00` : `${value}:00`;
+  return new Date(`${withTime}+05:30`).toISOString();
+}

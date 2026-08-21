@@ -8,7 +8,7 @@ import {
 import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhone } from '../lib/validation';
-import { formatISTDate, formatPossession } from '../lib/dateFormat';
+import { formatISTDate, formatPossession, istDateOnly, istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -250,7 +250,7 @@ const FUNNEL_ABBREV: Record<string, string> = {
 
 function fmtDate(iso?: string) {
   if (!iso) return '—';
-  return formatISTDate(iso);
+  return formatISTDate(iso, { year: 'numeric' });
 }
 
 function fmtDateTime(iso?: string) {
@@ -441,11 +441,9 @@ export default function LeadDetail() {
     setStatusModal(status);
   };
 
-  const toLocalDatetimeInput = (iso: string) => {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
+  // This app is India-only, so datetime-local inputs are treated as IST wall
+  // time (not the browser's local timezone) — see istDatetimeLocalValue.
+  const toLocalDatetimeInput = (iso: string) => istDatetimeLocalValue(iso);
 
   const openEditDetails = () => {
     if (!lead) return;
@@ -464,8 +462,8 @@ export default function LeadDetail() {
       source: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? 'Other' : (lead.source ?? ''),
       sourceOther: lead.source && !SOURCE_OPTIONS.includes(lead.source) ? lead.source : '',
       estimatedValue: lead.estimatedValue != null ? String(lead.estimatedValue) : '',
-      expectedMoveIn: lead.expectedMoveIn ? lead.expectedMoveIn.slice(0, 10) : '',
-      expectedObDate: lead.expectedObDate ? lead.expectedObDate.slice(0, 10) : '',
+      expectedMoveIn: lead.expectedMoveIn ? istDateOnly(lead.expectedMoveIn) : '',
+      expectedObDate: lead.expectedObDate ? istDateOnly(lead.expectedObDate) : '',
       offer1: lead.offer1 ?? '',
       offer2: lead.offer2 ?? '',
       offer3: lead.offer3 ?? '',
@@ -532,12 +530,12 @@ export default function LeadDetail() {
           ? editDetails.sourceOther.trim() || null
           : editDetails.source.trim() || null,
         estimatedValue: editDetails.estimatedValue.trim() || null,
-        expectedMoveIn: editDetails.expectedMoveIn ? new Date(editDetails.expectedMoveIn).toISOString() : null,
-        expectedObDate: editDetails.expectedObDate ? new Date(editDetails.expectedObDate).toISOString() : null,
+        expectedMoveIn: editDetails.expectedMoveIn ? istInputToISO(editDetails.expectedMoveIn) : null,
+        expectedObDate: editDetails.expectedObDate ? istInputToISO(editDetails.expectedObDate) : null,
         notes: editDetails.notes.trim() || null,
         possessionTimeline: editDetails.possessionTimeline.trim() || null,
         nextMeetingDate: editDetails.nextMeetingDate
-          ? new Date(editDetails.nextMeetingDate).toISOString()
+          ? istInputToISO(editDetails.nextMeetingDate)
           : null,
       };
       // "Offer proposed" is handled separately below (via the dedicated offer
@@ -641,7 +639,7 @@ export default function LeadDetail() {
     // ON_HOLD
     if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
     if (!onHoldReopenDate) { toast.error('Please select a reopen date'); return; }
-    if (new Date(onHoldReopenDate) <= new Date()) { toast.error('Reopen date must be in the future'); return; }
+    if (onHoldReopenDate <= istDateOnly(new Date())) { toast.error('Reopen date must be in the future'); return; }
     setChangingStatus(true);
     try {
       await api.patch(`/leads/${leadId}/status`, {
@@ -894,7 +892,7 @@ export default function LeadDetail() {
                       Reopen date <span className="text-brand-500">*</span>
                     </label>
                     <input type="date" value={onHoldReopenDate} onChange={(e) => setOnHoldReopenDate(e.target.value)}
-                      required min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                      required min={istDateOnly(new Date(Date.now() + 86400000))}
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                     <p className="text-xs text-stone-400 mt-1">Client + internal team notified now. Lead auto-reactivates (and client is notified again) when this date arrives.</p>
@@ -1060,7 +1058,7 @@ export default function LeadDetail() {
                         <input
                           type="date"
                           value={isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : ''}
-                          min={new Date().toISOString().slice(0, 10)}
+                          min={istDateOnly(new Date())}
                           onChange={(e) => setEditDetails({ ...editDetails, possessionTimeline: e.target.value })}
                           className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all mt-2"
                           style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
@@ -1492,9 +1490,11 @@ export default function LeadDetail() {
                                 )}
                               </button>
 
-                              {/* Entry date */}
+                              {/* Entry date — w-20 + whitespace-nowrap so a
+                                  4-digit-year date ("21 Aug 2026") never
+                                  wraps/clips inside the narrow w-16 box. */}
                               {(wasVisited || isCurrent) && visit?.enteredAt && (
-                                <span className="text-[9px] text-gray-400 mt-1 text-center w-16 leading-tight">
+                                <span className="text-[9px] text-gray-400 mt-1 text-center w-20 leading-tight whitespace-nowrap">
                                   {fmtDate(visit.enteredAt)}
                                 </span>
                               )}

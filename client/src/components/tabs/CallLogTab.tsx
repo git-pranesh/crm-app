@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import { api, type CallRecord, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
-import { formatISTDate, formatISTDateTime } from '../../lib/dateFormat';
+import { formatISTDate, formatISTDateTime, istInputToISO } from '../../lib/dateFormat';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
@@ -21,11 +21,14 @@ const MEETING_MODES = [
   { value: 'CLIENT_PLACE', label: "Client's Place" },
 ];
 // Task #115 — Meeting Location is a fixed dropdown, not free text.
+// Label text kept identical to MEETING_MODES above ("Public Place") so the
+// same enum value doesn't read differently depending on which dropdown it's
+// picked from.
 const MEETING_LOCATION_OPTIONS = [
   { value: 'EC_VISIT', label: 'EC Visit' },
   { value: 'SITE_VISIT', label: 'Site Visit' },
   { value: 'VIRTUAL', label: 'Virtual' },
-  { value: 'PUBLIC_PLACE', label: 'Public place' },
+  { value: 'PUBLIC_PLACE', label: 'Public Place' },
 ];
 
 function getApiBase() {
@@ -305,7 +308,7 @@ export default function CallLogTab({ leadId }: Props) {
         outcome: form.outcome,
         duration: form.duration ? Number(form.duration) * 60 : undefined,
         notes: form.notes.trim(),
-        calledAt: form.calledAt ? new Date(form.calledAt).toISOString() : undefined,
+        calledAt: form.calledAt ? istInputToISO(form.calledAt) : undefined,
         location: form.location.trim() || undefined,
         attachments,
         followUpTask: !['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome)
@@ -315,7 +318,7 @@ export default function CallLogTab({ leadId }: Props) {
           ? { dueDate: form.callbackDueDate, dueTime: form.callbackDueTime, agenda: form.callbackAgenda.trim() || undefined }
           : undefined,
         meetingDetails: form.outcome === 'MEETING_SCHEDULED'
-          ? { type: form.meetingType, mode: form.meetingMode, scheduledAt: new Date(form.meetingScheduledAt).toISOString(), location: form.meetingLocation.trim() || undefined }
+          ? { type: form.meetingType, mode: form.meetingMode, scheduledAt: istInputToISO(form.meetingScheduledAt), location: form.meetingLocation.trim() || undefined }
           : undefined,
         nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
       });

@@ -83,9 +83,26 @@ export async function runMidnightCheck(): Promise<{ markedOverdue: number; reope
 
   const details: string[] = [];
   for (const task of overdueTasks) {
+    // Guard against orphaned/malformed tasks (assignedTo relation missing) —
+    // dereferencing .name unconditionally used to throw and abort the whole
+    // scan before any later task's notification was sent.
+    if (!task.assignedTo) {
+      console.warn(`[jobs] midnight-overdue: task ${task.id} has no assignedTo user, skipping notification`);
+      details.push(`task:${task.id} lead:${task.lead.leadId} assignee:MISSING`);
+      continue;
+    }
     const message = `Task for lead ${task.lead.leadId} (${task.lead.name}) assigned to ${task.assignedTo.name} is overdue.`;
     if (task.assignedTo.blId) {
-      await createNotification(task.assignedTo.blId, 'OVERDUE_TASK', message, task.lead.id, task.dueDate);
+      // Dedupe: a retried/concurrent run could re-notify the same task if it
+      // hasn't been flipped to isOverdue yet by the updateMany above (unlike
+      // the 15-min task reminder loop, this job had no notificationLog check).
+      const alreadyNotified = await prisma.notificationLog.findFirst({
+        where: { userId: task.assignedTo.blId, type: 'OVERDUE_TASK', leadId: task.lead.id, eventAt: task.dueDate, taskId: task.id },
+        select: { id: true },
+      });
+      if (!alreadyNotified) {
+        await createNotification(task.assignedTo.blId, 'OVERDUE_TASK', message, task.lead.id, task.dueDate);
+      }
     }
     details.push(`task:${task.id} lead:${task.lead.leadId} assignee:${task.assignedTo.name}`);
   }
