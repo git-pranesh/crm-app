@@ -69,6 +69,10 @@ export function describeActivity(action: string, meta?: Record<string, any>): st
       return 'Qualification questionnaire received';
     case 'DIP_CHECKLIST_UPDATED':
       return 'Updated the DIP checklist';
+    case 'PD_OB_CHECKLIST_UPDATED':
+      return 'Updated the PD to OB checklist';
+    case 'OB_OBM_CHECKLIST_UPDATED':
+      return 'Updated the OB to OBM checklist';
     case 'LEAD_CREATED':
     case 'LEAD_CREATED_MANUAL':
       return 'Created this lead';

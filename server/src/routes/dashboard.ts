@@ -179,24 +179,25 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     .sort((a, b) => b.count - a.count);
 
   // ── Conversion rates ──────────────────────────────────────────────────────────
-  // Each rate is "% of leads currently at stage X or later that have already
-  // progressed to stage Y or later" — an occupancy-based progression proxy
-  // (same approach as before), recomputed for the new 8-stage funnel.
-  const rateBetween = (fromStage: string, toStage: string) => {
-    const fromIdx = PIPELINE_STAGES.indexOf(fromStage as any);
-    const toIdx = PIPELINE_STAGES.indexOf(toStage as any);
-    const denom = PIPELINE_STAGES.slice(fromIdx).reduce((a, s) => a + (stageMap[s] ?? 0), 0);
-    const numer = PIPELINE_STAGES.slice(toIdx).reduce((a, s) => a + (stageMap[s] ?? 0), 0);
-    return denom > 0 ? Math.round((numer / denom) * 100) : 0;
+  // The agreed dashboard denominator is total leads received in the selected
+  // period, not a count of current occupants at a previous stage. The latter
+  // mixed cohorts and could produce impossible percentages when records moved
+  // backward or stage data was incomplete.
+  const rateReached = (stage: string) => {
+    const stageIndex = PIPELINE_STAGES.indexOf(stage as any);
+    const reached = PIPELINE_STAGES
+      .slice(stageIndex)
+      .reduce((sum, funnelStage) => sum + (stageMap[funnelStage] ?? 0), 0);
+    return totalLeads > 0 ? Math.min(100, Math.round((reached / totalLeads) * 100)) : 0;
   };
   const conversionRates = {
-    mqlToDql: rateBetween('MQL', 'DQL'),
-    dqlToPr: rateBetween('DQL', 'PROPOSAL_READY'),
-    prToPp: rateBetween('PROPOSAL_READY', 'PROPOSAL_PRESENTED'),
-    ppToPd: rateBetween('PROPOSAL_PRESENTED', 'PROPOSAL_DISCUSSION'),
-    pdToOb: rateBetween('PROPOSAL_DISCUSSION', 'ONBOARDING'),
-    obToObm: rateBetween('ONBOARDING', 'ONBOARDING_MEETING'),
-    obmToDip: rateBetween('ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS'),
+    mqlToDql: rateReached('DQL'),
+    dqlToPr: rateReached('PROPOSAL_READY'),
+    prToPp: rateReached('PROPOSAL_PRESENTED'),
+    ppToPd: rateReached('PROPOSAL_DISCUSSION'),
+    pdToOb: rateReached('ONBOARDING'),
+    obToObm: rateReached('ONBOARDING_MEETING'),
+    obmToDip: rateReached('DESIGN_IN_PROGRESS'),
   };
 
   // ── avgNPS: average of per-stage averages ────────────────────────────────────

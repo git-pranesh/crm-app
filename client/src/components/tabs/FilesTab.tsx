@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, FileText, Download, ChevronDown, ChevronRight, Loader2, Paperclip } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, uploadFile } from '../../lib/api';
 import toast from 'react-hot-toast';
 
 interface LeadFile {
@@ -187,21 +187,12 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
     }
     setUploadState((s) => ({ ...s, [stage]: true }));
     try {
-      const token = localStorage.getItem('crm_token') ?? '';
       const fd = new FormData();
       fd.append('file', selectedFile);
       fd.append('stage', stage);
       fd.append('fileType', uploadFileType);
 
-      const resp = await fetch(`${getApiBase()}/api/leads/${leadId}/files`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Upload failed');
-      }
+      await uploadFile(`/leads/${leadId}/files`, fd);
       toast.success('File uploaded');
       setShowUploadForm(null);
       setSelectedFile(null);

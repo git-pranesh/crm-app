@@ -1390,9 +1390,18 @@ leadsRouter.patch('/:id/status', verifyToken, async (req, res) => {
 leadsRouter.get('/:id/activity', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, assignedDesignerId: true, assignedBLId: true },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, req.user!))) {
+      res.status(403).json({ error: 'Not authorised to view this lead activity' });
+      return;
+    }
     const activities = await prisma.activityLog.findMany({
       where: { leadId: id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       include: {
         user: { select: { id: true, name: true, role: true } },
       },

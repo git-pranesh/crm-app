@@ -5,7 +5,7 @@ import {
   Phone, CalendarPlus, Tag, MessageCircle, AlertTriangle, Gift,
   ChevronDown, Upload, ExternalLink, Pencil, Info, Check, X, RefreshCw,
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhone } from '../lib/validation';
 import { formatISTDate, formatPossession } from '../lib/dateFormat';
@@ -248,18 +248,6 @@ const FUNNEL_ABBREV: Record<string, string> = {
   ONBOARDING_MEETING: 'OBM', DESIGN_IN_PROGRESS: 'DIP', HANDED_OVER: 'HO',
 };
 
-/** Priority bucket for activity log grouping (lower = shown first) */
-const ACTIVITY_BUCKET: Record<string, number> = {
-  CALL_LOGGED: 0,
-  MEETING_SCHEDULED: 1,
-  STAGE_CHANGED: 2,
-  INTENT_RATING_UPDATED: 3,
-  MEETING_COMPLETED: 4,
-  MEETING_RESCHEDULED: 5,
-  MEETING_CANCELLED: 6,
-  MEETING_NO_SHOW: 6,
-};
-
 function fmtDate(iso?: string) {
   if (!iso) return '—';
   return formatISTDate(iso);
@@ -267,7 +255,7 @@ function fmtDate(iso?: string) {
 
 function fmtDateTime(iso?: string) {
   if (!iso) return '—';
-  return formatISTDate(iso, { year: '2-digit' });
+  return formatISTDate(iso, { year: 'numeric' });
 }
 
 export default function LeadDetail() {
@@ -295,7 +283,7 @@ export default function LeadDetail() {
   const [inactivationReason, setInactivationReason] = useState('');
   const [inactiveReasonChoice, setInactiveReasonChoice] = useState('');
   const [inactiveNotes, setInactiveNotes] = useState('');
-  const [inactiveNotifyClient, setInactiveNotifyClient] = useState(false);
+  const [inactiveNotifyClient] = useState(true);
   const [onHoldReason, setOnHoldReason] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
   const [changingStatus, setChangingStatus] = useState(false);
@@ -305,7 +293,7 @@ export default function LeadDetail() {
   const [reactivateReason, setReactivateReason] = useState('');
   const [reactivateReasonOther, setReactivateReasonOther] = useState('');
   const [reactivateNotes, setReactivateNotes] = useState('');
-  const [reactivateNotifyClient, setReactivateNotifyClient] = useState(false);
+  const [reactivateNotifyClient] = useState(true);
   const [reactivating, setReactivating] = useState(false);
 
   const [intentModal, setIntentModal] = useState(false);
@@ -376,7 +364,10 @@ export default function LeadDetail() {
   const loadSidebarData = useCallback(() => {
     if (!leadId) return;
     api.get<{ quotes: Quote[] }>(`/quotes/lead/${leadId}`)
-      .then((d) => setQuotes(d.quotes ?? []))
+      .then((d) => setQuotes([...(d.quotes ?? [])].sort((a, b) => {
+        const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return timeDiff || b.id.localeCompare(a.id);
+      })))
       .catch(() => {});
     api.get<{ users: AppUser[] }>('/admin/users')
       .then((d) => setUsers(d.users ?? []))
@@ -723,22 +714,7 @@ export default function LeadDetail() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const token = localStorage.getItem('crm_token') ?? '';
-      const baseUrl = (import.meta as any).env?.VITE_API_URL ?? '';
-      const res = await fetch(`${baseUrl}/api/leads/${leadId}/floor-plan`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      // Safely parse JSON — the server may return HTML on unhandled multer errors
-      let data: { error?: string; url?: string } = {};
-      try {
-        data = await res.json();
-      } catch {
-        // Non-JSON body (e.g. HTML error page from Express default handler)
-        if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
-      }
-      if (!res.ok) throw new Error(data.error ?? 'Upload failed');
+      await uploadFile(`/leads/${leadId}/floor-plan`, formData);
       toast.success('Floor plan uploaded');
       loadLead();
     } catch (e: any) {
@@ -899,11 +875,7 @@ export default function LeadDetail() {
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   </div>
-                  <label className="flex items-center gap-2 text-sm text-stone-600">
-                    <input type="checkbox" checked={inactiveNotifyClient} onChange={(e) => setInactiveNotifyClient(e.target.checked)} />
-                    Notify client (sends a feedback-request email + SMS)
-                  </label>
-                  <p className="text-xs text-stone-400 mt-1">Internal team is always notified.</p>
+                  <p className="text-xs text-stone-500 mt-1">The client is notified by email and SMS when contact details are available. The internal team is also notified.</p>
                 </>
               )}
               {statusModal === 'ON_HOLD' && (
@@ -1197,11 +1169,7 @@ export default function LeadDetail() {
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
               </div>
-              <label className="flex items-center gap-2 text-sm text-stone-600">
-                <input type="checkbox" checked={reactivateNotifyClient} onChange={(e) => setReactivateNotifyClient(e.target.checked)} />
-                Also email the client
-              </label>
-              <p className="text-xs text-stone-400">The internal team is always notified automatically.</p>
+              <p className="text-xs text-stone-500">The client is notified by email when an address is available. The internal team is also notified automatically.</p>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setReactivateModal(false)}
                   className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
@@ -1730,7 +1698,9 @@ export default function LeadDetail() {
                       >
                         <ExternalLink size={11} strokeWidth={2} />
                         {latestQuote.quoteNumber ?? `#${latestQuote.id.slice(-6)}`}
-                        {latestQuote.totalAmount ? ` — ${fmtVal(latestQuote.totalAmount)}` : ''}
+                        {latestQuote.totalAmount !== null && latestQuote.totalAmount !== undefined
+                          ? ` — ${fmtVal(latestQuote.totalAmount)}`
+                          : ''}
                         <span className="ml-1 text-gray-400 font-normal">({latestQuote.status ?? 'Draft'})</span>
                       </button>
                     </div>
@@ -1740,39 +1710,21 @@ export default function LeadDetail() {
             )}
 
             {activeTab === 'activity' && (() => {
-              // Group activities by type bucket, preserving chronological order within each group
-              const BUCKET_LABELS: Record<number, string> = {
-                0: 'Calls',
-                1: 'Meetings Scheduled',
-                2: 'Stage Movements',
-                3: 'Intent Rating',
-                4: 'Meeting Completions',
-                5: 'Meetings Rescheduled',
-                6: 'Meetings No-Show / Cancelled',
-              };
-              const OTHER_BUCKET = 99;
-              const getBucket = (action: string) => ACTIVITY_BUCKET[action] ?? OTHER_BUCKET;
-              const grouped = new Map<number, ActivityEntry[]>();
-              for (const a of [...activities].sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime())) {
-                const b = getBucket(a.action);
-                if (!grouped.has(b)) grouped.set(b, []);
-                grouped.get(b)!.push(a);
-              }
-              const sortedBuckets = [...grouped.entries()].sort(([a], [b]) => a - b);
+              // A timeline must be chronologically true across every activity
+              // type. Grouping by category made an older call appear above a
+              // newer meeting or checklist update.
+              const timeline = [...activities].sort((x, y) => {
+                const timeDiff = new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime();
+                return timeDiff || y.id.localeCompare(x.id);
+              });
               return (
                 <div className="space-y-5">
                   <h3 className="text-sm font-semibold text-gray-700">Full Activity Log</h3>
                   {activities.length === 0 ? (
                     <p className="text-xs text-gray-400 py-8 text-center">No activity yet</p>
-                  ) : sortedBuckets.map(([bucket, entries]) => (
-                    <div key={bucket}>
-                      {bucket !== OTHER_BUCKET && (
-                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">
-                          {BUCKET_LABELS[bucket] ?? 'Other'}
-                        </p>
-                      )}
-                      <div className="space-y-0">
-                        {entries.map((a) => {
+                  ) : (
+                    <div className="space-y-0">
+                      {timeline.map((a) => {
                           const isBackward = a.action === 'STAGE_CHANGED' && a.meta?.isBackward;
                           const direction = a.action === 'INTENT_RATING_UPDATED' ? a.meta?.direction : null;
                           const rowColor = isBackward
@@ -1782,25 +1734,24 @@ export default function LeadDetail() {
                             : direction === 'decrease'
                             ? 'bg-red-50 border-red-100'
                             : '';
-                          return (
-                            <div key={a.id} className={`flex items-start gap-3 py-2.5 border-b last:border-0 rounded-lg px-1 ${rowColor || 'border-gray-50'}`}>
-                              <span className="text-base mt-0.5 shrink-0">
-                                {isBackward ? '↩' : direction === 'increase' ? '▲' : direction === 'decrease' ? '▼' : (ACTION_ICONS[a.action] ?? '•')}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-700">
-                                  <span className="font-medium">{a.user?.name ?? 'System'}</span>
-                                  {' — '}
-                                  {describeActivity(a.action, a.meta)}
-                                </p>
-                              </div>
-                              <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
+                        return (
+                          <div key={a.id} className={`flex items-start gap-3 py-2.5 border-b last:border-0 rounded-lg px-1 ${rowColor || 'border-gray-50'}`}>
+                            <span className="text-base mt-0.5 shrink-0">
+                              {isBackward ? '↩' : direction === 'increase' ? '▲' : direction === 'decrease' ? '▼' : (ACTION_ICONS[a.action] ?? '•')}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-gray-700">
+                                <span className="font-medium">{a.user?.name ?? 'System'}</span>
+                                {' — '}
+                                {describeActivity(a.action, a.meta)}
+                              </p>
                             </div>
-                          );
-                        })}
-                      </div>
+                            <span className="text-xs text-gray-300 shrink-0">{relTime(a.createdAt)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  )}
                 </div>
               );
             })()}

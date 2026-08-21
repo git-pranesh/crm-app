@@ -205,12 +205,16 @@ export default function DesignerDashboard() {
   const funnelRows = FUNNEL_STAGES.map((s, i) => {
     const count = data?.stageFunnel.find((r) => r.stage === s.key)?.count ?? 0;
     const value = dd?.stageFunnelValues?.[s.key] ?? 0;
-    const prevCount = i > 0 ? (data?.stageFunnel.find((r) => r.stage === FUNNEL_STAGES[i - 1].key)?.count ?? 0) : count;
-    const convPct = prevCount > 0 ? pct(count, prevCount) : (count > 0 ? 100 : 0);
+    const totalLeads = data?.totalLeads ?? 0;
+    const reachedCount = FUNNEL_STAGES.slice(i).reduce(
+      (sum, funnelStage) => sum + (data?.stageFunnel.find((r) => r.stage === funnelStage.key)?.count ?? 0),
+      0,
+    );
+    const convPct = totalLeads > 0 ? Math.min(100, pct(reachedCount, totalLeads)) : 0;
     return { ...s, count, value, convPct };
   });
-  const totalLeadToBooking = funnelRows[0]?.count > 0
-    ? pct(funnelRows[funnelRows.length - 1].count, funnelRows[0].count)
+  const totalLeadToBooking = (data?.totalLeads ?? 0) > 0
+    ? Math.min(100, pct(funnelRows[funnelRows.length - 1].count, data!.totalLeads))
     : 0;
 
   return (

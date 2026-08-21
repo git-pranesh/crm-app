@@ -111,7 +111,10 @@ export async function markLeadInactive(opts: {
   notes?: string;
   notifyClient: boolean;
 }) {
-  const { leadId, actorId, actorName, reason, notes, notifyClient } = opts;
+  const { leadId, actorId, actorName, reason, notes } = opts;
+  // Client notification is an agreed inactive-lead workflow, not an optional
+  // UI preference. Deliver through every available client channel.
+  const notifyClient = true;
   const existing = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!existing) throw new Error('Lead not found');
 
@@ -185,7 +188,8 @@ export async function reactivateLead(opts: {
   notes?: string;
   notifyClient: boolean;
 }) {
-  const { leadId, actorId, actorName, reason, notes, notifyClient } = opts;
+  const { leadId, actorId, actorName, reason, notes } = opts;
+  const notifyClient = true;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) throw new Error('Lead not found');
   if (lead.status !== 'ON_HOLD' && lead.status !== 'INACTIVE') {

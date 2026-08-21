@@ -18,7 +18,7 @@ import { prisma } from '../lib/prisma.js';
  *                          furniture) + furniture value (itemised via the
  *                          PD→OB checklist, whose completion performs the
  *                          transition — see routes/pdObChecklist.ts).
- *   7. OB→OBM           — OBM meeting scheduled.
+ *   7. OB→OBM           — completed OB→OBM checklist and welcome mail.
  *   8. OBM→DIP          — OBM meeting completed + OBM checklist completed.
  *
  * Key format: `${fromStage}->${toStage}` for adjacent funnel steps. Forward
@@ -151,17 +151,13 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
     { type: 'pdObChecklist', label: 'Completed PD→OB checklist (welcome mail sent)' },
   ],
   /**
-   * Task #83 spec item 7 — Onboarding → Onboarding Meeting: the OBM meeting
-   * must be scheduled. This is intentionally lighter than before — it used
-   * to require the entire OB→OBM checklist (7 welcome-document items + NPS
-   * trigger) just to enter the Onboarding Meeting stage, which is what item
-   * 8 actually asks for on the *next* transition. In practice the guided
-   * "Send OBM mail" action (routes/obObmChecklist.ts) still enforces its own,
-   * stricter checklist before it will fire — this is only the generic
-   * baseline gate used by direct stage changes and the can-advance precheck.
+   * Onboarding → Onboarding Meeting must follow the same gate as the guided
+   * checklist flow. A scheduled meeting alone used to let a direct stage
+   * change bypass the documents, timeline, NPS, client email and welcome-mail
+   * checks enforced by send-obm-mail.
    */
   'ONBOARDING->ONBOARDING_MEETING': [
-    { type: 'meeting', meetingType: 'ONBOARDING', status: 'scheduled', label: 'OBM meeting scheduled' },
+    { type: 'obObmChecklist', label: 'Completed OB→OBM checklist (welcome mail sent)' },
   ],
   /**
    * Task #83 spec item 8 — Onboarding Meeting → Design in Progress: the OBM
