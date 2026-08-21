@@ -433,12 +433,12 @@ adminRouter.post('/users/send-invite', async (req, res) => {
     const html = `<p>Hi ${name},</p><p>You've been invited to join Interiors by DeX CRM as <strong>${role}</strong>.</p><p>Click the link below to set up your account (expires in 48 hours):</p><p><a href="${inviteLink}">${inviteLink}</a></p>`;
     let delivery: 'resend' | 'smtp' | 'manual' = 'manual';
 
-    // Prefer the managed Resend connection. SMTP remains a compatibility
-    // fallback for environments that have not connected Resend yet.
+    // Send through the project's direct Resend API key. SMTP remains a
+    // compatibility fallback if the Resend key is unavailable or rejected.
     try {
-      await sendViaResend({ from, to: email, subject, html });
+      const resendResult = await sendViaResend({ from, to: email, subject, html });
       delivery = 'resend';
-      console.log(`[admin:invite] Resend sent invite to ${email}`);
+      console.log(`[admin:invite] Resend accepted invite email (message ID: ${resendResult.id})`);
     } catch (resendError: any) {
       console.warn('[admin:invite] Resend delivery failed:', resendError.message);
 
