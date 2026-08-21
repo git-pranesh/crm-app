@@ -41,3 +41,4 @@
 - [Public base URL resolution](base-url-resolution.md) — shared `resolveBaseUrl()` helper (BASE_URL → REPLIT_DEV_DOMAIN) prevents localhost links leaking into invites/emails; prod needs BASE_URL set explicitly, dev doesn't
 - [Client complaint scope audit](client-complaint-scope-audit.md) — use the client PDF as primary evidence, compare with the XLSX scope, and separate defects from approved scope changes
 - [Deployment uv lock](deployment-uv-lock.md) — stale generated `.pythonlibs` can stop publish before the CRM build begins
+- [Direct Resend API delivery](resend-direct-api.md) — Dex email must use its project Resend key, not the shared managed connector
