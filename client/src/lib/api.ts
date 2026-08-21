@@ -4,24 +4,70 @@ function getToken() {
   return localStorage.getItem('crm_token');
 }
 
+function getRefreshToken() {
+  return localStorage.getItem('crm_refresh_token');
+}
+
+function clearSession() {
+  localStorage.removeItem('crm_token');
+  localStorage.removeItem('crm_refresh_token');
+  localStorage.removeItem('crm_user');
+}
+
+let refreshInFlight: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = await res.json() as { accessToken?: string; refreshToken?: string };
+        if (!data.accessToken) return null;
+        localStorage.setItem('crm_token', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('crm_refresh_token', data.refreshToken);
+        return data.accessToken;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+
+  return refreshInFlight;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  let token = getToken();
+  let res: Response;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+
+    if (res.status !== 401 || attempt > 0 || path === '/auth/refresh') break;
+    token = await refreshAccessToken();
+    if (!token) break;
+  }
 
   if (!res.ok) {
     if (res.status === 401) {
-      localStorage.removeItem('crm_token');
-      localStorage.removeItem('crm_user');
+      clearSession();
       window.location.href = '/login';
       throw new Error('Session expired — please sign in again');
     }
@@ -50,13 +96,26 @@ export const api = {
 
 // ── File upload helper ─────────────────────────────────────────────────────────
 export async function uploadFile<T>(path: string, formData: FormData): Promise<T> {
-  const token = getToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
-  });
+  let token = getToken();
+  let res: Response;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (res.status !== 401 || attempt > 0) break;
+    token = await refreshAccessToken();
+    if (!token) break;
+  }
+
   if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      window.location.href = '/login';
+      throw new Error('Session expired — please sign in again');
+    }
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `HTTP ${res.status}`);
   }

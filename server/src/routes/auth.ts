@@ -72,7 +72,7 @@ authRouter.post('/login', async (req, res) => {
 /**
  * POST /api/auth/refresh
  * Body: { refreshToken }
- * Returns: { accessToken }
+ * Returns: { accessToken, refreshToken }
  */
 authRouter.post('/refresh', async (req, res) => {
   const { refreshToken } = req.body as { refreshToken?: string };
@@ -91,7 +91,10 @@ authRouter.post('/refresh', async (req, res) => {
     return;
   }
 
-  res.json({ accessToken: data.session.access_token });
+  res.json({
+    accessToken: data.session.access_token,
+    refreshToken: data.session.refresh_token,
+  });
 });
 
 /**

@@ -9,6 +9,7 @@ export function getStoredUser(): { id: string; name: string; email: string; role
 
 export function logout() {
   localStorage.removeItem('crm_token');
+  localStorage.removeItem('crm_refresh_token');
   localStorage.removeItem('crm_user');
   window.location.href = '/login';
 }

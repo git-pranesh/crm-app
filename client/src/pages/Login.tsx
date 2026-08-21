@@ -26,6 +26,7 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Login failed');
       localStorage.setItem('crm_token', data.accessToken);
+      if (data.refreshToken) localStorage.setItem('crm_refresh_token', data.refreshToken);
       localStorage.setItem('crm_user', JSON.stringify(data.user));
       navigate('/leads', { replace: true });
     } catch (err: any) {
