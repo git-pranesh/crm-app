@@ -1363,6 +1363,13 @@ export default function LeadDetail() {
                   >Mark Inactive</button>
                 </>
               )}
+              {lead.status === 'ON_HOLD' && (
+                <button
+                  onClick={() => openStatusModal('INACTIVE')}
+                  className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
+                  style={{ border: '1px solid #EDE8E3' }}
+                >Mark Inactive</button>
+              )}
               {(lead.status === 'ON_HOLD' || lead.status === 'INACTIVE') && (
                 <button
                   onClick={openReactivateModal}
