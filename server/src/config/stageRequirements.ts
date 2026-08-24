@@ -136,6 +136,7 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
   'PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION': [
     { type: 'meetingOrCall', meetingType: 'PP', label: 'Meeting or call scheduled & completed' },
     { type: 'quote', stages: ['PROPOSAL_PRESENTED'], label: 'PD quotation (generated quote or uploaded quotation file)' },
+    { type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_PRESENTED'], label: 'PD Pitch Presentation file (Files → PP)' },
   ],
   /**
    * Task #83 spec item 6 — Proposal Discussion → Onboarding: generated OB

@@ -64,9 +64,9 @@ interface RequiredFileGroup { types: string[]; mode: 'all' | 'any' }
  * independent groups (all groups must be satisfied); within a group,
  * `mode: 'all'` means every listed type must be present, `mode: 'any'` means
  * at least one of them satisfies it.
- * PROPOSAL_PRESENTED has no required file here: advancing to Proposal
- * Discussion is gated on a generated Quote (or an uploaded quotation file —
- * shown informally under Files → PP), not a specific required upload here.
+ * PROPOSAL_PRESENTED requires both a quotation (generated Quote or an
+ * uploaded quotation file) AND the PD Pitch Presentation file before
+ * advancing to Proposal Discussion — mirrors the PP→PD gate.
  */
 const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
   // Floor plan + lifestyle capture sheet, per the MQL→DQL gate.
@@ -77,6 +77,11 @@ const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
   PROPOSAL_READY: [
     { types: ['PITCH_PRESENTATION'], mode: 'all' },
     { types: ['QUOTATION', 'GENERATED_QUOTE', 'PR_QUOTATION', 'PP_QUOTATION'], mode: 'any' },
+  ],
+  // PP→PD gate: both the quotation and the PD Pitch Presentation file are required.
+  PROPOSAL_PRESENTED: [
+    { types: ['QUOTATION', 'GENERATED_QUOTE', 'PP_QUOTATION'], mode: 'any' },
+    { types: ['PITCH_PRESENTATION'], mode: 'all' },
   ],
   // Final pitch presentation OR PD file — Proposal Discussion→Onboarding gate,
   // AND (independently) the welcome-mail approval screenshot required by the
