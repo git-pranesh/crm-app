@@ -915,7 +915,20 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
     }
   };
 
-  const showKanban = activeTab === 'all' || activeTab === 'active';
+  // Checklist item #1: On Hold / Inactive must render the exact same
+  // stage-column kanban layout Active already uses, not a separate stacked
+  // list. The primary columns stay identical to Active's KANBAN_STAGES;
+  // legacy off-funnel stages (EFFECTIVE_LEAD, HANDED_OVER) get an extra
+  // column appended only when a lead in this tab actually sits there, so
+  // On Hold/Inactive leads on those stages don't silently disappear.
+  const showKanban = true;
+  const legacyStagesInView =
+    (activeTab === 'onhold' || activeTab === 'inactive')
+      ? STAGE_GROUPING_ORDER.filter(
+          (s) => !(KANBAN_STAGES as readonly string[]).includes(s) && byStage(s).length > 0,
+        )
+      : [];
+  const kanbanColumns = [...KANBAN_STAGES, ...legacyStagesInView];
   const TABS: { key: FilterTab; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'active', label: 'Active' },
@@ -1178,7 +1191,7 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
       {!loading && showKanban && (
         <div className="flex-1 overflow-x-auto overflow-y-hidden">
           <div className="flex gap-3 h-full p-4 min-w-max">
-            {KANBAN_STAGES.map((stage) => {
+            {kanbanColumns.map((stage) => {
               const cards = byStage(stage);
               const colVal = colValue(stage);
               const isDragTarget = dragOverStage === stage;
@@ -1234,78 +1247,6 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
         </div>
       )}
 
-      {/* List view for On Hold / Inactive — grouped by stage, same grouping the
-          live kanban board uses, so it reads the same way (Task #111 item 5). */}
-      {!loading && !showKanban && (
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-2xl mx-auto space-y-5">
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <Search size={28} strokeWidth={1.5} className="text-gray-300 mb-2" />
-                <p className="text-sm font-medium">No leads in this view</p>
-              </div>
-            ) : [...STAGE_GROUPING_ORDER, ...Array.from(new Set(filtered.map((l) => l.stage))).filter((s) => !(STAGE_GROUPING_ORDER as readonly string[]).includes(s))].map((stage) => {
-              const stageLeads = filtered.filter((l) => l.stage === stage);
-              if (stageLeads.length === 0) return null;
-              return (
-                <div key={stage}>
-                  <div className="flex items-center gap-2 mb-2 px-0.5">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${STAGE_ACCENT[stage]}`} />
-                    <p className="text-xs font-semibold text-gray-700">{STAGE_LABELS[stage]}</p>
-                    <span className="text-[10px] font-bold text-gray-500 bg-gray-100 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{stageLeads.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {stageLeads.map((lead) => (
-                      <Link
-                        key={lead.id}
-                        to={`/leads/${lead.id}`}
-                        className="flex items-center gap-4 bg-white rounded-xl p-4 hover:border-gray-300 hover:shadow-sm transition-all"
-                        style={{ border: '1px solid #EDE8E3' }}
-                      >
-                        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                          <span className="text-gray-600 text-sm font-bold">{lead.name[0]?.toUpperCase()}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-gray-900 truncate">{lead.name}</p>
-                            <span className="text-[10px] font-mono text-gray-400">{lead.leadId}</span>
-                          </div>
-                          <p className="text-xs text-gray-500">{lead.phone}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-semibold text-gray-700">{fmt(lead.estimatedValue) ?? '—'}</p>
-                          <p className="text-[10px] text-gray-400">{relTime(lead.createdAt)} ago</p>
-                        </div>
-                        {lead.isSLABreached && (
-                          <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0">
-                            SLA
-                          </span>
-                        )}
-                        {lead.slaStatus === 'breach' && (
-                          <span
-                            className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full shrink-0"
-                            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
-                          >
-                            Stage overdue
-                          </span>
-                        )}
-                        {lead.slaStatus === 'warning' && (
-                          <span
-                            className="text-[10px] font-bold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full shrink-0"
-                            title={`${lead.daysInCurrentStage}d in ${lead.stage}`}
-                          >
-                            Stage due soon
-                          </span>
-                        )}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Stage-change capture step (task #114) — confirm intent rating + project
           value before a drag-drop stage move is committed. */}

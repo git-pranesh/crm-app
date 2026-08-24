@@ -44,3 +44,5 @@
 - [Direct Resend API delivery](resend-direct-api.md) — Dex email must use its project Resend key, not the shared managed connector
 - [IST datetime-local conversion pattern](ist-datetime-conversion.md) — shared dateFormat.ts helpers (istDateOnly/istDatetimeLocalValue/istInputToISO/todayISTDateString) for all date/datetime-local inputs; never round-trip via browser-local toISOString
 - [mergeParams route param naming](merge-params-naming.md) — Express router mounted with `{ mergeParams: true }` under `/:leadId` must destructure `req.params.leadId`, not `req.params.id` — silent Prisma `undefined` bugs otherwise
+- [Mail delivery path](mail-delivery-path.md) — mail triggers use Nodemailer/SMTP with a silent console-only fallback, not the installed Resend integration; "sendEmail resolved" ≠ "client received it"
+- [Client checklist audit pattern](checklist-audit-pattern.md) — verify every row of a client bug-list against live code before building; a meaningful fraction is usually already fixed or misdescribed
