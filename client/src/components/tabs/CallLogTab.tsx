@@ -202,6 +202,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
     calledAt: '',
     location: '',
     notes: '',
+    externalNotes: '',
     dueDate: '',
     dueTime: '',
     // Callback sub-form
@@ -222,6 +223,10 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
   // Task #115 — the mandatory follow-up task sub-form also supports multiple attachments.
   const [taskAttachmentFiles, setTaskAttachmentFiles] = useState<File[]>([]);
   const taskAttachmentFileRef = useRef<HTMLInputElement>(null);
+  // External Notes — a single optional attachment, deliberately separate from
+  // the categorized attachment selector above (Lifestyle Capture/Proposal/Pitch).
+  const [externalNotesFile, setExternalNotesFile] = useState<File | null>(null);
+  const externalNotesFileRef = useRef<HTMLInputElement>(null);
 
   const loadCalls = async () => {
     try {
@@ -278,13 +283,14 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
 
   const resetForm = () => {
     setForm({
-      outcome: '', duration: '', calledAt: '', location: '', notes: '', dueDate: '', dueTime: '',
+      outcome: '', duration: '', calledAt: '', location: '', notes: '', externalNotes: '', dueDate: '', dueTime: '',
       callbackDueDate: '', callbackDueTime: '', callbackAgenda: '',
       meetingType: '', meetingMode: '', meetingScheduledAt: '', meetingLocation: '',
     });
     setNextPlanItems([]);
     setSelectedAttachmentTypes([]);
     setAttachmentFiles([]);
+    setExternalNotesFile(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -353,10 +359,34 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
         setUploadingAttachment(false);
       }
 
+      // Upload the External Notes attachment, if provided — a single file,
+      // deliberately independent of the categorized `attachments` upload above.
+      let externalNotesAttachment: { fileName: string; storagePath: string } | undefined;
+      if (externalNotesFile) {
+        setUploadingAttachment(true);
+        const token = localStorage.getItem('crm_token') ?? '';
+        const fd = new FormData();
+        fd.append('file', externalNotesFile);
+        const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!uploadResp.ok) {
+          const err = await uploadResp.json().catch(() => ({}));
+          throw new Error(err.error ?? 'External notes attachment upload failed');
+        }
+        const uploadData = await uploadResp.json();
+        externalNotesAttachment = { fileName: externalNotesFile.name, storagePath: uploadData.storagePath };
+        setUploadingAttachment(false);
+      }
+
       await api.post(`/leads/${leadId}/calls`, {
         outcome: form.outcome,
         duration: form.duration ? Number(form.duration) * 60 : undefined,
         notes: form.notes.trim(),
+        externalNotes: form.externalNotes.trim() || undefined,
+        externalNotesAttachment,
         calledAt: form.calledAt ? istInputToISO(form.calledAt) : undefined,
         location: form.location.trim() || undefined,
         attachments,
@@ -634,10 +664,10 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
             )}
           </div>
 
-          {/* Notes */}
+          {/* Internal Notes — staff-only, never sent to the client */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-red-500">*</span>
+              Internal Notes <span className="text-red-500">*</span>
             </label>
             <textarea
               rows={2}
@@ -645,8 +675,46 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              placeholder="What was discussed on the call…"
+              placeholder="What was discussed on the call… (internal only, never emailed to the client)"
             />
+          </div>
+
+          {/* External Notes — the only content that reaches the client's auto-mail on an Answered call */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">External Notes</label>
+            <textarea
+              rows={2}
+              value={form.externalNotes}
+              onChange={(e) => setForm({ ...form, externalNotes: e.target.value })}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              placeholder="What the client should see in the call summary email…"
+            />
+            <div className="mt-1.5">
+              {externalNotesFile ? (
+                <span className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg">
+                  <Paperclip size={11} strokeWidth={2} />
+                  {externalNotesFile.name}
+                  <button type="button" onClick={() => setExternalNotesFile(null)} className="text-gray-400 hover:text-gray-600">
+                    <X size={11} strokeWidth={2} />
+                  </button>
+                </span>
+              ) : (
+                <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400 w-fit">
+                  <Paperclip size={11} strokeWidth={2} />
+                  Add attachment
+                  <input
+                    ref={externalNotesFileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0];
+                      if (picked) setExternalNotesFile(picked);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              )}
+            </div>
           </div>
 
           {/* Outcome-specific sub-forms */}

@@ -75,12 +75,13 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
   {
     code: 'CALL_LOG_SUMMARY',
     label: 'Call summary (sent when a call is logged as answered)',
-    description: 'Sent automatically to the client, CC\u2019d to the designer/BL/management, once a call outcome is logged as Answered.',
-    placeholders: ['clientName', 'notes', 'followUpDate'],
+    description: 'Sent automatically to the client, CC\u2019d to the designer/BL/management, once a call outcome is logged as Answered. Uses ONLY External Notes — Internal Notes are staff-only and never appear here.',
+    placeholders: ['clientName', 'externalNotes', 'attachmentsHtml', 'followUpDate'],
     defaultSubject: 'Call Summary — Interiors by DeX',
     defaultHtml: `<p>Dear {{clientName}},</p>
 <p>Thank you for speaking with us today. Here's a quick summary of what we discussed:</p>
-<p>{{notes}}</p>
+<p>{{externalNotes}}</p>
+{{attachmentsHtml}}
 <p>Next follow-up: <strong>{{followUpDate}}</strong></p>
 <p>Team Interiors by DeX</p>`,
   },

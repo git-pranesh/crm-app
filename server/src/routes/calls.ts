@@ -39,6 +39,8 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     outcome,
     duration,
     notes,
+    externalNotes,
+    externalNotesAttachment,
     recordingUrl,
     location,
     calledAt,
@@ -50,7 +52,12 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   } = req.body as {
     outcome: string;
     duration?: number;
+    // "Internal Notes" — staff-only, never sent to the client.
     notes?: string;
+    // "External Notes" (+ optional single attachment) — the ONLY notes content
+    // allowed into the ANSWERED-call auto-mail below.
+    externalNotes?: string;
+    externalNotesAttachment?: { fileName?: string; fileUrl?: string; storagePath?: string };
     recordingUrl?: string;
     location?: string;
     calledAt?: string;
@@ -74,10 +81,25 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // Call notes are mandatory
+  // Call notes are mandatory (Internal Notes)
   if (!notes?.trim()) {
     res.status(400).json({ error: 'Call notes are required' });
     return;
+  }
+
+  // External Notes attachment is optional, but if present must be a real
+  // uploaded file — same "type is a fixed label, file must exist" shape as
+  // the other single/generic attachment fields on this route.
+  if (externalNotesAttachment) {
+    try {
+      validateGenericAttachments(
+        [{ type: 'External Notes', ...externalNotesAttachment }],
+        'externalNotesAttachment',
+      );
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
   }
 
   if (outcome === 'CALLBACK') {
@@ -211,6 +233,8 @@ callsRouter.post('/', verifyToken, async (req, res) => {
         outcome: outcome as any,
         duration,
         notes,
+        externalNotes: externalNotes?.trim() || undefined,
+        externalNotesAttachment: externalNotesAttachment ?? undefined,
         recordingUrl,
         location: location?.trim() || undefined,
         calledAt: calledAt ? new Date(calledAt) : undefined,
@@ -347,7 +371,9 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   }
 
   // Once a call is logged as successfully answered, auto-mail the client with
-  // the notes + follow-up plan, CC'ing the designer, BL, and management.
+  // the External Notes + follow-up plan, CC'ing the designer, BL, and
+  // management. Internal Notes (`notes`) must NEVER be read in this block —
+  // that is the enforcement point that keeps internal content off client mail.
   if (outcome === 'ANSWERED' && lead.email) {
     const followUpDate = task
       ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${task.dueTime}` : '')
@@ -362,9 +388,14 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     const managers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
     const cc = [...ccUsers, ...managers].map((u) => u.email).filter((e): e is string => !!e);
 
+    const attachmentsHtml = externalNotesAttachment?.fileUrl
+      ? `<p><a href="${externalNotesAttachment.fileUrl}">${externalNotesAttachment.fileName ?? 'View attachment'}</a></p>`
+      : '';
+
     const { subject, html } = await renderMailTemplate('CALL_LOG_SUMMARY', {
       clientName: lead.name,
-      notes: notes.trim(),
+      externalNotes: externalNotes?.trim() || 'No additional notes shared.',
+      attachmentsHtml,
       followUpDate,
     });
     await sendEmail({ to: lead.email, cc, subject, html }).catch(() => {});
