@@ -1,0 +1,129 @@
+#152 — PP→PD both docs mandatory
+
+Create/find a test lead at PP stage.
+
+Attach only the PD Quotation (no Pitch Presentation). Try to move to PD — should BLOCK with a clear message.
+
+Add the Pitch Presentation file too. Try again — should succeed.
+Client's actual ask: both documents mandatory together, not either/or. Confirm the block message names both missing docs, not just one.
+
+#153 — OB gate both docs + checklist tickbox swap
+
+At PP or PD stage, attach only Final Pitch Presentation (no Generated Quotation). Try to move to OB — should BLOCK.
+
+Add Generated Quotation too — should succeed.
+
+Open the OB Checklist (PDOB checklist). Confirm "Welcome Mail Approved by Client" is GONE and a "Final Pitch Presentation" tickbox exists instead.
+
+Try completing the checklist without ticking it — should block.
+Watch for: if "Welcome Mail Approved" was used elsewhere (e.g. to gate a mail send), check that mail-sending still works — Replit was told to flag this, not silently break it.
+
+#154 — OBM Checklist "Client Confirmed" gate
+
+Open OBM Checklist on a test lead. Try to complete it / trigger OBM mail WITHOUT ticking "Client Confirmed" — should block immediately (not just later at stage-move).
+
+Tick it — checklist should complete and OBM mail should trigger.
+
+#157 — Client mail delivery fix
+
+Trigger a real Welcome Mail on a test lead using your own personal email as the "client" email.
+
+Check that email inbox — the mail must actually arrive, not just show a "sent" status in the CRM.
+
+Repeat with an MOM mail or another trigger type, using a second email address (the client tested with 2 addresses and got nothing — replicate that exact test).
+
+Confirm each trigger opens as an editable draft you click Send on, not an auto-send.
+This is the highest-risk item — verify with a real inbox, not just Replit's word.
+
+#150 — Mark Inactive from On Hold
+
+Put a test lead On Hold.
+
+Confirm a "Mark Inactive" button appears next to Reactivate — click it directly (no forced reactivate step).
+
+Confirm Reactivate option still exists alongside it.
+Also ask: did the "lock inactive leads from edits" dependency get built? Test it: mark a lead inactive, then try to edit any field — it should be blocked. If this doesn't block edits, the dependency task was never done.
+
+#151 — Reactivate flow rename + mandatory email
+
+Open the reactivate reason dropdown — confirm it says "Inactivated by Mistake," not "Placed on hold in error."
+
+Try to reactivate a lead with no client email — should block.
+
+Add an email — should succeed.
+
+#155 — Schedule Call feature
+
+Open the Call tab on a test lead. Confirm "Schedule Call" exists as a separate button from "Log Call."
+
+Schedule a call with date/time, stage type, agenda, and internal/external choice.
+
+Confirm the scheduled call shows up somewhere visible (call list, Meetings/Tasks) and isn't lost.
+
+#156 — Internal/External Notes split
+
+Log a call. Confirm the notes field is now "Internal Notes," and a separate "External Notes" field with attachment exists.
+
+Fill both, attach a file to External Notes.
+
+Check the auto-email sent to the client (answered call) — confirm ONLY External Notes + its attachment appear, and Internal Notes are nowhere in that email.
+
+#158 — Agenda placement + rename
+
+Create a new task — confirm Agenda field appears BEFORE Due Date/Type.
+
+Check the Next Plan of Action picker — same order.
+
+Confirm "Follow-up Task" now reads "Follow-up / Task" everywhere.
+
+#159 — Counters show full breakdown
+
+On a lead with a mix of completed/scheduled/rescheduled/no-show meetings, open its Meetings tab — confirm it shows "Total X = completed + scheduled + rescheduled + no-show," not a flat number.
+
+Check Calls and Tasks counters on the same lead for the same breakdown pattern.
+
+#160 — Block premature MQL auto-move
+
+Create a new lead deliberately missing a mandatory field — confirm it does NOT land at MQL.
+
+Create a complete lead — confirm it still reaches MQL normally.
+
+#161 — Intent Rating recalculates every stage move
+
+Move a test lead through two different stage transitions (e.g. MQL→DQL, then DQL→PP).
+
+Confirm Intent Rating updates and logs after each move, not just once.
+
+If you'd manually overridden the rating, confirm the automatic recalculation didn't silently wipe your manual entry without asking.
+
+#163 — NPS Forecast removed, Booking Forecast reworked
+
+Check the dashboard — confirm NPS Forecast is completely gone.
+
+Change the Expected OB Date on a couple of test leads — confirm Booking Forecast numbers shift accordingly.
+
+Confirm the real (non-forecast) NPS score is still showing normally.
+
+#164 — Task/Meeting rename + calendar + inactive auto-clear
+
+Confirm navigation now reads "Task, Calls, Meetings" (grouped/relabeled).
+
+Use the new calendar view — check Tomorrow / This Week / Next Week filters work.
+
+Mark a lead inactive — confirm its open tasks auto-clear/cancel.
+
+#165 — Reschedule shows original fields; Outcome→Reason
+
+Reschedule a task — confirm original Time From/To and Agenda are visible alongside the new date/time.
+
+Complete a task — confirm the field is labeled "Reason," not "Outcome."
+
+Check any reports/exports that might still say "Outcome."
+
+#162 — BL/BH flagging (medal system on hold)
+
+Log in as BL, flag a test lead — should succeed.
+
+Log in as BH, flag a different test lead — should succeed.
+
+Confirm NO medal system (Gold/Silver/Bronze) has been built yet — if it has, Replit built it without the thresholds you never gave them, which needs to be flagged and likely redone once real thresholds are set.
