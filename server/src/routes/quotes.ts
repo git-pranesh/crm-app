@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const quotesRouter = Router();
 export const usersDiscountRouter = Router({ mergeParams: true });
@@ -73,6 +74,7 @@ quotesRouter.post('/callback', async (req, res) => {
       where: { OR: [{ leadId: leadRef }, { id: leadRef }] },
     });
     if (!lead) { res.status(404).json({ error: `Lead not found: ${leadRef}` }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     const quote = await prisma.quote.create({
       data: {
@@ -160,13 +162,14 @@ quotesRouter.post('/:id/files', verifyToken, upload.single('file') as any, async
     const user = req.user!;
     const quote = await prisma.quote.findUnique({
       where: { id: req.params.id },
-      include: { lead: { select: { id: true, assignedDesignerId: true, assignedBLId: true } } },
+      include: { lead: { select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true } } },
     });
     if (!quote) { res.status(404).json({ error: 'Quote not found' }); return; }
     if (!(await isAuthorizedForLead(quote.lead, user))) {
       res.status(403).json({ error: 'Not authorised to attach files to this quote' });
       return;
     }
+    if (isLeadLocked(quote.lead.status)) { sendLeadLockedError(res); return; }
 
     const file = req.file;
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }

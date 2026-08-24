@@ -23,6 +23,7 @@ interface Props {
    * exists yet, the relevant EL/MQL/DQL folder shows it as satisfied instead
    * of falsely flagging it as missing (task #39). */
   floorPlanUrl?: string | null;
+  isLocked?: boolean;
 }
 
 // EFFECTIVE_LEAD/HANDED_OVER kept as legacy bookends so currentIdx math still
@@ -143,7 +144,7 @@ function requiredBadgeLabel(types: string[], mode: 'all' | 'any'): string {
   return mode === 'any' ? labels.join(' or ') : labels.join(' + ');
 }
 
-export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) {
+export default function FilesTab({ leadId, currentStage, floorPlanUrl, isLocked }: Props) {
   const [files, setFiles] = useState<LeadFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
@@ -344,7 +345,7 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
                 ))}
 
                 {/* Upload form toggle */}
-                {!isUploadOpen && (
+                {!isUploadOpen && !isLocked && (
                   <button
                     onClick={() => {
                       setShowUploadForm(stage);
@@ -357,9 +358,14 @@ export default function FilesTab({ leadId, currentStage, floorPlanUrl }: Props) 
                     Upload file
                   </button>
                 )}
+                {!isUploadOpen && isLocked && (
+                  <p className="text-[10px] text-amber-600 mt-1 pt-1 border-t border-gray-50">
+                    Lead is Inactive — reactivate to upload files.
+                  </p>
+                )}
 
                 {/* Upload form */}
-                {isUploadOpen && (
+                {isUploadOpen && !isLocked && (
                   <div className="border-t border-gray-100 pt-3 space-y-2">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">File type</label>

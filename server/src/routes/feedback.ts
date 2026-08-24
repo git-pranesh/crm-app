@@ -4,6 +4,13 @@ import { createNotification } from '../lib/notifications.js';
 
 export const feedbackRouter = Router();
 
+// NOTE on task #149 (lock inactive leads from all edits): the NPS and
+// inactivation-feedback flows below are deliberately NOT gated by
+// isLeadLocked. Both are public, token-based forms sent to the *client*,
+// and inactivation-feedback in particular only ever fires once a lead is
+// already INACTIVE — locking it would make the flow it exists for
+// impossible to complete. This is an intentional exception, not a bypass.
+
 // ── GET /api/feedback/nps/:token — public: NPS form (must come before /:token) ─
 feedbackRouter.get('/nps/:token', async (req, res) => {
   try {

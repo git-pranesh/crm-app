@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const dipChecklistRouter = Router({ mergeParams: true });
 
@@ -56,6 +57,10 @@ dipChecklistRouter.patch('/', verifyToken, requireRole('BL'), async (req, res) =
       internalMailThreadCompleted?: boolean;
       internalMailThreadUrl?: string;
     };
+
+    const leadForLock = await prisma.lead.findUnique({ where: { id }, select: { status: true } });
+    if (!leadForLock) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (isLeadLocked(leadForLock.status)) { sendLeadLockedError(res); return; }
 
     const current = await prisma.dIPChecklist.findUnique({ where: { leadId: id } });
     if (!current) {

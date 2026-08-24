@@ -9,6 +9,7 @@ import { isAuthorizedForLead, isAuthorizedToAssignTask } from '../lib/leadAuth.j
 import { istDayBounds } from '../lib/istTime.js';
 import { validateGenericAttachments, type AttachmentEntry } from '../lib/attachmentValidation.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 type TaskAttachmentInput = AttachmentEntry;
 
@@ -146,7 +147,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, leadId: true, name: true, email: true, phone: true, assignedDesignerId: true, assignedBLId: true },
+    select: { id: true, leadId: true, name: true, email: true, phone: true, assignedDesignerId: true, assignedBLId: true, status: true },
   });
   if (!lead) {
     res.status(404).json({ error: 'Lead not found' });
@@ -156,6 +157,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
     res.status(403).json({ error: 'Not authorised to create tasks for this lead' });
     return;
   }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   const resolvedAssigneeId = assignedToId ?? user.id;
   if (!(await isAuthorizedToAssignTask(resolvedAssigneeId, user))) {
@@ -281,6 +283,8 @@ myTasksRouter.patch('/:id/complete', verifyToken, async (req, res) => {
     res.status(400).json({ error: `Cannot complete a task that is already ${task.status}` });
     return;
   }
+  const taskLead = await prisma.lead.findUnique({ where: { id: task.leadId }, select: { status: true } });
+  if (isLeadLocked(taskLead?.status)) { sendLeadLockedError(res); return; }
   if (!outcome?.trim()) {
     res.status(400).json({ error: 'An outcome note is required to complete this task' });
     return;
@@ -355,6 +359,8 @@ myTasksRouter.patch('/:id/not-done', verifyToken, async (req, res) => {
     res.status(400).json({ error: `Cannot mark not-done a task that is already ${task.status}` });
     return;
   }
+  const notDoneLead = await prisma.lead.findUnique({ where: { id: task.leadId }, select: { status: true } });
+  if (isLeadLocked(notDoneLead?.status)) { sendLeadLockedError(res); return; }
   if (!outcome?.trim()) {
     res.status(400).json({ error: 'An outcome note is required to mark this task not done' });
     return;
@@ -396,6 +402,8 @@ myTasksRouter.patch('/:id/reschedule', verifyToken, async (req, res) => {
     res.status(400).json({ error: `Cannot reschedule a task that is already ${task.status}` });
     return;
   }
+  const rescheduleLead = await prisma.lead.findUnique({ where: { id: task.leadId }, select: { status: true } });
+  if (isLeadLocked(rescheduleLead?.status)) { sendLeadLockedError(res); return; }
   if (!dueDate || !reason?.trim()) {
     res.status(400).json({ error: 'dueDate and reason are required to reschedule' });
     return;

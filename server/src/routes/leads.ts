@@ -15,6 +15,7 @@ import { isValidEmail, isValidPhone, isValidPhoneStrict } from '../lib/leadValid
 import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
 import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -829,6 +830,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     const existing = await prisma.lead.findUnique({ where: { id } });
     if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
 
+    // Task #149 — an Inactive lead is fully locked from edits until it's
+    // reactivated (POST /:id/reactivate). This never touches the reactivate
+    // flow or PATCH /:id/status (which is how a lead gets marked Inactive in
+    // the first place, and used elsewhere to move it back to On Hold).
+    if (existing.status === 'INACTIVE') {
+      res.status(423).json({ error: 'This lead is Inactive and locked from edits. Reactivate it first.' });
+      return;
+    }
+
     const prevStage = existing.stage;
 
     // Task #88: ON_HOLD/INACTIVE are no longer valid `stage` values — they're
@@ -1234,12 +1244,17 @@ leadsRouter.patch('/:id/assign-direct', verifyToken, requireRole('BL'), async (r
     }
 
     const [lead, designer] = await Promise.all([
-      prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true } }),
+      prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, status: true } }),
       prisma.user.findUnique({ where: { id: designerId }, select: { id: true, name: true, blId: true } }),
     ]);
 
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!designer) { res.status(404).json({ error: 'Designer not found' }); return; }
+    // Task #149 — Inactive leads are locked from edits, including reassignment.
+    if (lead.status === 'INACTIVE') {
+      res.status(423).json({ error: 'This lead is Inactive and locked from edits. Reactivate it first.' });
+      return;
+    }
 
     // Verify designer is on this BL's team
     if (designer.blId !== user.id) {
@@ -1433,6 +1448,11 @@ leadsRouter.patch('/:id/intent-rating', verifyToken, async (req, res) => {
       },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    // Task #149 — Inactive leads are locked from edits, including intent-rating overrides.
+    if (lead.status === 'INACTIVE') {
+      res.status(423).json({ error: 'This lead is Inactive and locked from edits. Reactivate it first.' });
+      return;
+    }
 
     const oldRating = lead.intentRating;
     const systemRating = computeSystemRating(lead);
@@ -1593,13 +1613,14 @@ leadsRouter.post('/:id/nps-trigger', verifyToken, async (req, res) => {
 
     const lead = await prisma.lead.findUnique({
       where: { id },
-      select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true },
+      select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true, status: true },
     });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!(await isAuthorizedForLead(lead, user))) {
       res.status(403).json({ error: 'Not authorised for this lead' });
       return;
     }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     await createAndSendNps(id, resolvedStage);
     await logActivity(user.id, 'NPS_TRIGGERED', id, { stage: resolvedStage });
@@ -1700,8 +1721,13 @@ leadsRouter.post('/:id/floor-plan', verifyToken, (req, res, next) => {
     // Use only known MIME types for storage; avoid uploading supplied arbitrary MIME
     const safeMime = isStandard ? file.mimetype : 'application/octet-stream';
 
-    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, stage: true, floorPlanUrl: true } });
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, leadId: true, stage: true, floorPlanUrl: true, status: true } });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    // Task #149 — Inactive leads are locked from edits, including file uploads.
+    if (lead.status === 'INACTIVE') {
+      res.status(423).json({ error: 'This lead is Inactive and locked from edits. Reactivate it first.' });
+      return;
+    }
 
     // Files cannot be replaced once uploaded — only new files may be added.
     if (lead.floorPlanUrl) {
@@ -1774,8 +1800,13 @@ leadsRouter.post('/:id/notes', verifyToken, async (req, res) => {
     const user = req.user!;
     const { note } = req.body as { note?: string };
     if (!note?.trim()) { res.status(400).json({ error: 'note is required' }); return; }
-    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true } });
+    const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    // Task #149 — Inactive leads are locked from edits, including adding notes.
+    if (lead.status === 'INACTIVE') {
+      res.status(423).json({ error: 'This lead is Inactive and locked from edits. Reactivate it first.' });
+      return;
+    }
     await logActivity(user.id, 'NOTE_ADDED', id, { note: note.trim() });
     res.status(201).json({ ok: true });
   } catch (err: any) {

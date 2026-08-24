@@ -51,9 +51,10 @@ interface Props {
   leadId: string;
   onMeetingCreated?: () => void;
   onMeetingCompleted?: (meetingType: string) => void;
+  isLocked?: boolean;
 }
 
-export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingCompleted }: Props) {
+export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingCompleted, isLocked }: Props) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,16 +236,24 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
           <h2 className="text-base font-semibold text-gray-900">Meetings</h2>
           <p className="text-sm text-gray-500">{meetings.length} scheduled</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Schedule Meeting'}
-        </button>
+        {!isLocked && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+          >
+            {showForm ? 'Cancel' : '+ Schedule Meeting'}
+          </button>
+        )}
       </div>
 
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          This lead is Inactive — reactivate it to schedule meetings.
+        </div>
+      )}
+
       {/* Schedule Form */}
-      {showForm && (
+      {!isLocked && showForm && (
         <form onSubmit={handleSchedule} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">Schedule a Meeting</h3>
           <div className="grid grid-cols-2 gap-4">

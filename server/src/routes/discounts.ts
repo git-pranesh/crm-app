@@ -6,6 +6,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const discountsRouter = Router();
 export const leadDiscountRouter = Router({ mergeParams: true });
@@ -135,6 +136,7 @@ leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, asy
       res.status(403).json({ error: 'Not authorised to submit a discount request for this lead' });
       return;
     }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     // Check for existing pending request
     const existing = await prisma.discountRequest.findFirst({
@@ -328,7 +330,7 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
     const existing = await prisma.discountRequest.findUnique({
       where: { id },
       include: {
-        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true } },
+        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true, status: true } },
         requestedBy: { select: { id: true, name: true } },
       },
     });
@@ -337,6 +339,7 @@ discountsRouter.patch('/:id/forward', verifyToken, requireRole('BL'), async (req
       res.status(409).json({ error: 'Request is no longer pending' });
       return;
     }
+    if (isLeadLocked(existing.lead.status)) { sendLeadLockedError(res); return; }
     // Only BL-routed requests need forwarding; BH-direct ones are already routed.
     if (existing.approverRole === 'BRANCH_HEAD') {
       res.status(400).json({ error: 'This request is already routed to Branch Head — no forwarding needed.' });
@@ -423,7 +426,7 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
     const existing = await prisma.discountRequest.findUnique({
       where: { id },
       include: {
-        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true } },
+        lead: { select: { id: true, leadId: true, name: true, assignedDesignerId: true, status: true } },
         requestedBy: { select: { id: true, name: true } },
       },
     });
@@ -432,6 +435,7 @@ discountsRouter.patch('/:id', verifyToken, requireRole('BL', 'BRANCH_HEAD'), asy
       res.status(409).json({ error: 'Request is no longer pending' });
       return;
     }
+    if (isLeadLocked(existing.lead.status)) { sendLeadLockedError(res); return; }
 
     const discountPctNum = Number(existing.discountPct);
     const effectiveApproverRole = existing.approverRole ?? (discountPctNum <= 10 ? 'SELF' : discountPctNum <= 15 ? 'BL' : 'BRANCH_HEAD');

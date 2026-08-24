@@ -28,6 +28,7 @@ import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { DESIGN_PHASES, DESIGN_PHASE_DEFAULT_DAYS, MS_PER_DAY } from '../config/slaConfig.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const obObmChecklistRouter = Router({ mergeParams: true });
 
@@ -73,7 +74,7 @@ async function loadLeadForChecklist(leadId: string, user: { id: string; role: st
     where: { id: leadId },
     select: {
       id: true, leadId: true, name: true, email: true, stage: true,
-      assignedDesignerId: true, assignedBLId: true, createdAt: true,
+      assignedDesignerId: true, assignedBLId: true, createdAt: true, status: true,
     },
   });
   if (!lead) return { lead: null, authorized: false };
@@ -163,6 +164,7 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
     const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     const current = await prisma.oBOBMChecklist.findUnique({ where: { leadId } });
     if (!current) {
@@ -206,6 +208,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
     const { lead, authorized } = await loadLeadForChecklist(leadId, user);
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     if (lead.stage !== 'ONBOARDING') {
       res.status(400).json({ error: `Lead must be in Onboarding stage (currently ${lead.stage}).` });

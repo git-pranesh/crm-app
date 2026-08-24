@@ -27,6 +27,7 @@ interface Props {
   stage: string;
   clientEmail: string | null;
   onComplete?: () => void;
+  isLocked?: boolean;
 }
 
 const VISIBLE_STAGES = new Set(['ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
@@ -46,7 +47,7 @@ function toDateInputValue(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
-export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComplete }: Props) {
+export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComplete, isLocked }: Props) {
   const [checklist, setChecklist] = useState<OBOBMChecklist | null>(null);
   const [docItems, setDocItems] = useState<{ key: string; label: string }[]>([]);
   const [template, setTemplate] = useState({ subject: '', html: '' });
@@ -57,7 +58,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
   const [showMailModal, setShowMailModal] = useState(false);
   const [dates, setDates] = useState<Record<string, string>>({});
 
-  const isEditable = stage === 'ONBOARDING';
+  const isEditable = stage === 'ONBOARDING' && !isLocked;
 
   const load = async () => {
     try {

@@ -6,6 +6,7 @@ import { computeDesignPipelineTimeline } from '../config/slaConfig.js';
 import { isAuthorizedForProject, isBLForProject } from '../lib/projectAuth.js';
 import { createNotification } from '../lib/notifications.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const projectsRouter = Router();
 
@@ -18,7 +19,7 @@ const TEAM_MEMBER_INCLUDE = {
 async function findProjectForAuth(projectId: string) {
   return prisma.project.findUnique({
     where: { id: projectId },
-    include: { lead: { select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true } } },
+    include: { lead: { select: { id: true, leadId: true, assignedDesignerId: true, assignedBLId: true, status: true } } },
   });
 }
 
@@ -355,6 +356,7 @@ projectsRouter.post(
         res.status(403).json({ error: 'Not authorised to modify this project' });
         return;
       }
+      if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
       const candidate = await prisma.user.findUnique({ where: { id: userId } });
       if (!candidate || !candidate.isActive || candidate.role !== 'DESIGNER') {
@@ -443,6 +445,7 @@ projectsRouter.patch(
         res.status(403).json({ error: 'Only the project\'s BL can approve team-member requests' });
         return;
       }
+      if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
       const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
       if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member request not found' }); return; }
@@ -496,6 +499,7 @@ projectsRouter.patch(
         res.status(403).json({ error: 'Only the project\'s BL can reject team-member requests' });
         return;
       }
+      if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
       const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
       if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member request not found' }); return; }
@@ -538,6 +542,7 @@ projectsRouter.patch(
         res.status(403).json({ error: 'Not authorised to manage this project\'s team' });
         return;
       }
+      if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
       const member = await prisma.projectTeamMember.findUnique({ where: { id: memberId } });
       if (!member || member.projectId !== id) { res.status(404).json({ error: 'Team member not found' }); return; }
@@ -578,6 +583,7 @@ projectsRouter.patch('/:id', verifyToken, blockBLWrite, async (req, res) => {
       res.status(403).json({ error: 'Not authorised to modify this project' });
       return;
     }
+    if (isLeadLocked(existing.lead.status)) { sendLeadLockedError(res); return; }
 
     const project = await prisma.project.update({
       where: { id },
@@ -623,6 +629,7 @@ projectsRouter.post('/:id/attention-flag', verifyToken, blockBLWrite, async (req
       res.status(403).json({ error: 'Not authorised to modify this project' });
       return;
     }
+    if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
     const flag = await prisma.projectAttentionFlag.create({
       data: { projectId: id, category, description },
@@ -654,6 +661,7 @@ projectsRouter.patch('/:id/attention-flag/:flagId/resolve', verifyToken, blockBL
       res.status(403).json({ error: 'Not authorised to modify this project' });
       return;
     }
+    if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
     const resolved = await prisma.projectAttentionFlag.update({
       where: { id: flagId },

@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { logActivity } from '../lib/activityLog.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const filesRouter = Router({ mergeParams: true });
 
@@ -53,13 +54,14 @@ filesRouter.post(
 
       const lead = await prisma.lead.findUnique({
         where: { id: leadId },
-        select: { id: true, assignedDesignerId: true, assignedBLId: true },
+        select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
       });
       if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
       if (!(await isAuthorizedForLead(lead, user))) {
         res.status(403).json({ error: 'Not authorised to upload files for this lead' });
         return;
       }
+      if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
       const file = req.file;
       if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }

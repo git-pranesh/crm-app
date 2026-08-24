@@ -17,6 +17,7 @@ import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMee
 import { assertAttachmentTypesMatch, validateAttachmentPairing } from '../lib/attachmentValidation.js';
 import { computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects, MEETING_LOCATION_TYPES } from '../lib/meetingScheduler.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 // Selectable when scheduling a NEW meeting. DESIGN_FREEZE/SIGN_OFF remain valid
 // enum values (and stay readable/reportable) for historical rows only — they
@@ -85,7 +86,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, leadId: true, name: true, email: true, phone: true, assignedDesignerId: true, assignedBLId: true, intentRating: true, intentRatingSource: true },
+    select: { id: true, leadId: true, name: true, email: true, phone: true, assignedDesignerId: true, assignedBLId: true, intentRating: true, intentRatingSource: true, status: true },
   });
   if (!lead) {
     res.status(404).json({ error: 'Lead not found' });
@@ -95,6 +96,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     res.status(403).json({ error: 'Not authorised to create meetings for this lead' });
     return;
   }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   // ── Duplicate-meeting guard ────────────────────────────────────────────────
   const activeMeeting = await prisma.meeting.findFirst({
@@ -336,6 +338,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     res.status(403).json({ error: 'Not authorised to update this meeting' });
     return;
   }
+  if (isLeadLocked(meeting.lead.status)) { sendLeadLockedError(res); return; }
 
   // Enforce valid source status — only SCHEDULED meetings can be transitioned
   if (meeting.status !== 'SCHEDULED') {

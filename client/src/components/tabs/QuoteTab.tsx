@@ -30,11 +30,12 @@ interface Props {
   scope?: string | null;
   location?: string | null;
   estimatedValue?: number | string | null;
+  isLocked?: boolean;
 }
 
 const QUOTE_BUILDER_URL = import.meta.env.VITE_QUOTE_BUILDER_URL ?? 'https://proposals.interiorsbydex.com';
 
-export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, projectType, scope, location, estimatedValue }: Props) {
+export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, projectType, scope, location, estimatedValue, isLocked }: Props) {
   const [showIframe, setShowIframe] = useState(false);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loadingQuotes, setLoadingQuotes] = useState(false);
@@ -120,16 +121,24 @@ export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, pro
           >
             Refresh
           </button>
-          <button
-            onClick={() => setShowIframe(!showIframe)}
-            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-          >
-            {showIframe ? 'Hide Builder' : '+ New Quote'}
-          </button>
+          {!isLocked && (
+            <button
+              onClick={() => setShowIframe(!showIframe)}
+              className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+            >
+              {showIframe ? 'Hide Builder' : '+ New Quote'}
+            </button>
+          )}
         </div>
       </div>
 
-      {showIframe && (
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          This lead is Inactive — reactivate it to create or attach quotes.
+        </div>
+      )}
+
+      {!isLocked && showIframe && (
         <div className="border border-gray-200 rounded-xl overflow-hidden">
           <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between">
             <span className="text-xs text-gray-500 font-mono">{iframeSrc}</span>
@@ -212,13 +221,15 @@ export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, pro
                     e.target.value = '';
                   }}
                 />
-                <button
-                  onClick={() => fileInputRefs.current[q.id]?.click()}
-                  disabled={uploadingFor === q.id}
-                  className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg disabled:opacity-50 transition-colors"
-                >
-                  <Upload size={11} /> {uploadingFor === q.id ? 'Uploading…' : 'Attach document'}
-                </button>
+                {!isLocked && (
+                  <button
+                    onClick={() => fileInputRefs.current[q.id]?.click()}
+                    disabled={uploadingFor === q.id}
+                    className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    <Upload size={11} /> {uploadingFor === q.id ? 'Uploading…' : 'Attach document'}
+                  </button>
+                )}
               </div>
             </div>
           ))}

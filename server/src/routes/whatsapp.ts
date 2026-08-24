@@ -10,6 +10,7 @@ import {
   WA_TEMPLATES,
   isTwilioConfigured,
 } from '../lib/whatsapp.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 /**
  * Verifies that an inbound WhatsApp webhook request genuinely came from
@@ -58,9 +59,10 @@ whatsappRouter.post('/send', verifyToken, async (req, res) => {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, leadId: true, name: true, phone: true },
+    select: { id: true, leadId: true, name: true, phone: true, status: true },
   });
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
   if (!lead.phone) { res.status(400).json({ error: 'Lead has no phone number' }); return; }
 
   let messageBody = rawBody ?? '';

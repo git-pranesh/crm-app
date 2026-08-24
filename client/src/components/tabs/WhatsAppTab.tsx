@@ -20,9 +20,9 @@ const TEMPLATE_LABELS: Record<string, string> = {
   on_hold_notification: 'On Hold Notification',
 };
 
-interface Props { leadId: string }
+interface Props { leadId: string; isLocked?: boolean }
 
-export default function WhatsAppTab({ leadId }: Props) {
+export default function WhatsAppTab({ leadId, isLocked }: Props) {
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [templates, setTemplates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,6 +127,11 @@ export default function WhatsAppTab({ leadId }: Props) {
       </div>
 
       {/* Compose form */}
+      {isLocked ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          This lead is Inactive — reactivate it to send WhatsApp messages.
+        </div>
+      ) : (
       <form onSubmit={handleSend} className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
         {/* Template selector */}
         <div className="flex gap-2 flex-wrap">
@@ -172,6 +177,7 @@ export default function WhatsAppTab({ leadId }: Props) {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 }

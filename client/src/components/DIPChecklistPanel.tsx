@@ -19,6 +19,7 @@ interface Props {
   leadId: string;
   stage: string;
   onComplete?: () => void;
+  isLocked?: boolean;
 }
 
 const ITEMS = [
@@ -30,7 +31,7 @@ const ITEMS = [
 
 type ChecklistKey = typeof ITEMS[number]['key'];
 
-export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) {
+export default function DIPChecklistPanel({ leadId, stage, onComplete, isLocked }: Props) {
   const [checklist, setChecklist] = useState<DIPChecklist | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
   }, [leadId, stage]);
 
   const toggle = async (key: ChecklistKey, currentValue: boolean) => {
+    if (isLocked) return;
     setSaving(true);
     try {
       const data = await api.patch<{ checklist: DIPChecklist }>(`/leads/${leadId}/dip-checklist`, {
@@ -73,6 +75,7 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
   };
 
   const saveThreadUrl = async () => {
+    if (isLocked) return;
     setSaving(true);
     try {
       const data = await api.patch<{ checklist: DIPChecklist }>(`/leads/${leadId}/dip-checklist`, {
@@ -151,12 +154,12 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
               key={item.key}
               className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors
                 ${checked ? 'bg-green-50' : 'bg-gray-50 hover:bg-gray-100'}
-                ${(stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') ? 'pointer-events-none opacity-70' : ''}`}
+                ${(stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || isLocked) ? 'pointer-events-none opacity-70' : ''}`}
             >
               <input
                 type="checkbox"
                 checked={checked}
-                disabled={saving || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER'}
+                disabled={saving || stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER' || isLocked}
                 onChange={() => toggle(item.key, checked)}
                 className="w-4 h-4 accent-brand-500"
               />
@@ -167,6 +170,12 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
           );
         })}
       </div>
+
+      {isLocked && (
+        <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Lead is Inactive — reactivate the lead to update the checklist.
+        </div>
+      )}
 
       {/* Internal mail thread URL */}
       {stage !== 'DESIGN_IN_PROGRESS' && stage !== 'HANDED_OVER' && (
@@ -180,11 +189,12 @@ export default function DIPChecklistPanel({ leadId, stage, onComplete }: Props) 
               value={threadUrl}
               onChange={(e) => setThreadUrl(e.target.value)}
               placeholder="https://mail.google.com/…"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              disabled={isLocked}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:opacity-50"
             />
             <button
               onClick={saveThreadUrl}
-              disabled={saving || !threadUrl}
+              disabled={saving || !threadUrl || isLocked}
               className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm disabled:opacity-50 transition-colors"
             >
               Save

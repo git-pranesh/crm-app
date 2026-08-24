@@ -22,6 +22,7 @@ import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
 import { MEETING_LOCATION_TYPES } from '../lib/meetingScheduler.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
 
@@ -35,7 +36,7 @@ async function loadLeadForChecklist(leadId: string, user: { id: string; role: st
     where: { id: leadId },
     select: {
       id: true, leadId: true, name: true, email: true, stage: true,
-      assignedDesignerId: true, assignedBLId: true, estimatedValue: true,
+      assignedDesignerId: true, assignedBLId: true, estimatedValue: true, status: true,
     },
   });
   if (!lead) return { lead: null, authorized: false };
@@ -93,6 +94,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
     const { lead, authorized } = await loadLeadForChecklist(leadId, req.user!);
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     const current = await prisma.pDOBChecklist.findUnique({ where: { leadId } });
     if (!current) {
@@ -142,6 +144,7 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     const { lead, authorized } = await loadLeadForChecklist(leadId, user);
     if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
     if (!authorized) { res.status(403).json({ error: 'Not authorised for this lead' }); return; }
+    if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
     if (lead.stage !== 'PROPOSAL_DISCUSSION') {
       res.status(400).json({ error: `Lead must be in Proposal Discussion stage (currently ${lead.stage}).` });

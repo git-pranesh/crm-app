@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { previewEmail, saveDraft, getDraft, sendDraft } from '../lib/emailService.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const emailRouter = Router();
 
@@ -18,6 +19,7 @@ emailRouter.get('/preview/:type/:leadId', verifyToken, async (req, res) => {
     },
   });
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   const latestMeeting = lead.meetings[0];
 
@@ -60,9 +62,10 @@ emailRouter.patch('/draft/:type/:leadId', verifyToken, async (req, res) => {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, status: true },
   });
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   const draftKey = `${leadId}::${type}`;
   saveDraft(draftKey, subject ?? `${type} — Interiors by DeX`, html);
@@ -78,6 +81,10 @@ emailRouter.post('/send-draft', verifyToken, async (req, res) => {
 
   const draft = getDraft(draftKey);
   if (!draft) { res.status(404).json({ error: 'Draft not found or expired' }); return; }
+
+  const leadId = draftKey.split('::')[0];
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { status: true } });
+  if (lead && isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   await sendDraft(draftKey, to);
 

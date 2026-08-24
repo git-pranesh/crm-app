@@ -24,6 +24,7 @@ interface Props {
   stage: string;
   clientEmail: string | null;
   onComplete?: () => void;
+  isLocked?: boolean;
 }
 
 const VISIBLE_STAGES = new Set(['PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER']);
@@ -43,7 +44,7 @@ function toLocalInputValue(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onComplete }: Props) {
+export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onComplete, isLocked }: Props) {
   const [checklist, setChecklist] = useState<PDOBChecklist | null>(null);
   const [hasPaymentScreenshot, setHasPaymentScreenshot] = useState(false);
   const [hasObQuote, setHasObQuote] = useState(false);
@@ -56,7 +57,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
 
   const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', welcomeMailApprovedByClient: false });
 
-  const isEditable = stage === 'PROPOSAL_DISCUSSION';
+  const isEditable = stage === 'PROPOSAL_DISCUSSION' && !isLocked;
 
   const load = async () => {
     try {

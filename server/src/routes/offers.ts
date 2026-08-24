@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const offersRouter = Router();
 export const leadOfferRouter = Router({ mergeParams: true });
@@ -87,6 +88,7 @@ leadOfferRouter.post('/', verifyToken, async (req, res) => {
   ]);
   if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
   if (!offer) { res.status(404).json({ error: 'Offer not found' }); return; }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   await prisma.$transaction([
     // offer1 is kept in sync for legacy exports/reports that still read the

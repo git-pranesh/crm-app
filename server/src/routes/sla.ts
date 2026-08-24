@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const slaRouter = Router();
 
@@ -65,6 +66,9 @@ slaRouter.patch('/breaches/:id/resolve', verifyToken, requireRole('BL', 'BRANCH_
 
   const breach = await prisma.sLABreach.findUnique({ where: { id } });
   if (!breach) { res.status(404).json({ error: 'SLA breach not found' }); return; }
+
+  const leadForLock = await prisma.lead.findUnique({ where: { id: breach.leadId }, select: { status: true } });
+  if (leadForLock && isLeadLocked(leadForLock.status)) { sendLeadLockedError(res); return; }
 
   const updated = await prisma.sLABreach.update({
     where: { id },

@@ -12,6 +12,7 @@ import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { resolveBaseUrl } from '../lib/baseUrl.js';
 import { sendViaResend } from '../lib/resendEmail.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const adminRouter = Router();
 
@@ -100,17 +101,19 @@ adminRouter.patch('/users/:id/deactivate', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-    // Step 1 — reassign leads if targets provided
+    // Step 1 — reassign leads if targets provided. Inactive leads are frozen
+    // (task #149) and keep their existing assignment — they're excluded here
+    // rather than reassigned, since reassignment is itself an edit.
     const reassignOps: Promise<any>[] = [];
     if (reassignDesignerId) {
       reassignOps.push(prisma.lead.updateMany({
-        where: { assignedDesignerId: id },
+        where: { assignedDesignerId: id, status: { not: 'INACTIVE' } },
         data: { assignedDesignerId: reassignDesignerId },
       }));
     }
     if (reassignBLId) {
       reassignOps.push(prisma.lead.updateMany({
-        where: { assignedBLId: id },
+        where: { assignedBLId: id, status: { not: 'INACTIVE' } },
         data: { assignedBLId: reassignBLId },
       }));
     }
@@ -178,8 +181,9 @@ adminRouter.patch('/projects/:id/pd', async (req, res) => {
     const { id } = req.params;
     const { userId } = req.body as { userId?: string | null };
 
-    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true } } } });
+    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true, status: true } } } });
     if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
     if (userId) {
       const candidate = await prisma.user.findUnique({ where: { id: userId } });
@@ -216,8 +220,9 @@ adminRouter.patch('/projects/:id/dtl', async (req, res) => {
     const { id } = req.params;
     const { userId } = req.body as { userId?: string | null };
 
-    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true } } } });
+    const project = await prisma.project.findUnique({ where: { id }, include: { lead: { select: { id: true, leadId: true, status: true } } } });
     if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+    if (isLeadLocked(project.lead.status)) { sendLeadLockedError(res); return; }
 
     if (userId) {
       const candidate = await prisma.user.findUnique({ where: { id: userId } });
@@ -331,13 +336,14 @@ adminRouter.post('/users/:id/reassign-leads', async (req, res) => {
     });
     if (!targetUser) { res.status(404).json({ error: 'Target user not found' }); return; }
 
+    // Inactive leads are frozen (task #149) and are excluded from reassignment.
     const [designerCount, blCount] = await Promise.all([
       prisma.lead.updateMany({
-        where: { assignedDesignerId: id },
+        where: { assignedDesignerId: id, status: { not: 'INACTIVE' } },
         data: { assignedDesignerId: reassignToUserId },
       }),
       prisma.lead.updateMany({
-        where: { assignedBLId: id },
+        where: { assignedBLId: id, status: { not: 'INACTIVE' } },
         data: { assignedBLId: reassignToUserId },
       }),
     ]);

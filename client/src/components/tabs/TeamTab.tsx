@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700',
 };
 
-export default function TeamTab({ projectId, leadDisplayId }: { projectId: string; leadDisplayId: string }) {
+export default function TeamTab({ projectId, leadDisplayId, isLocked }: { projectId: string; leadDisplayId: string; isLocked?: boolean }) {
   const user = getStoredUser();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [eligible, setEligible] = useState<{ id: string; name: string }[]>([]);
@@ -164,7 +164,7 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-800">Project Team — {leadDisplayId}</h3>
-        {canInitiate && (
+        {canInitiate && !isLocked && (
           <button
             onClick={() => setShowForm((s) => !s)}
             className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
@@ -174,7 +174,13 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
         )}
       </div>
 
-      {showForm && (
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+          This lead is Inactive — reactivate it to manage the project team.
+        </div>
+      )}
+
+      {!isLocked && showForm && (
         <div className="border border-gray-200 rounded-xl p-3 space-y-2 bg-gray-50">
           <select
             value={selectedUserId}
@@ -204,7 +210,7 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
         </div>
       )}
 
-      {isAdmin && (
+      {isAdmin && !isLocked && (
         <div className="border border-gray-200 rounded-xl p-3 space-y-3 bg-gray-50">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Admin — Project Roles</p>
           <div>
@@ -263,7 +269,7 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${STATUS_COLORS[m.status]}`}>{m.status}</span>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-0.5">Requested by {m.requestedBy.name}</p>
-                {canApprove && (
+                {canApprove && !isLocked && (
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => handleApprove(m.id)} className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded text-[10px] font-medium hover:bg-green-600">
                       <Check size={10} /> Approve
@@ -273,7 +279,7 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
                     </button>
                   </div>
                 )}
-                {rejectingId === m.id && (
+                {!isLocked && rejectingId === m.id && (
                   <div className="mt-2 flex gap-1.5">
                     <input
                       value={rejectReason}
@@ -306,7 +312,7 @@ export default function TeamTab({ projectId, leadDisplayId }: { projectId: strin
                     </span>
                   )}
                 </div>
-                {canSetPrimary && !m.isPrimary && (
+                {canSetPrimary && !m.isPrimary && !isLocked && (
                   <button onClick={() => handleMakePrimary(m.id)} className="text-[10px] text-gray-400 hover:text-brand-600">
                     Make primary
                   </button>

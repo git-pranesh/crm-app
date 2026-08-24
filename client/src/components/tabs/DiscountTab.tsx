@@ -91,7 +91,7 @@ const APPROVAL_COLOR: Record<string, string> = {
   red:    'bg-red-50 border-red-200 text-red-800',
 };
 
-interface Props { leadId: string }
+interface Props { leadId: string; isLocked?: boolean }
 
 function getStoredRole(): string | null {
   try {
@@ -103,7 +103,7 @@ function getStoredRole(): string | null {
 const formatINR = (n: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
-export default function DiscountTab({ leadId }: Props) {
+export default function DiscountTab({ leadId, isLocked }: Props) {
   const [requests, setRequests] = useState<DiscountRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -291,7 +291,7 @@ export default function DiscountTab({ leadId }: Props) {
             {requests.filter((r) => r.status === 'PENDING').length} pending
           </p>
         </div>
-        {!isBL && (
+        {!isBL && !isLocked && (
           <button
             onClick={() => setShowForm(!showForm)}
             disabled={hasPending}
@@ -303,14 +303,20 @@ export default function DiscountTab({ leadId }: Props) {
         )}
       </div>
 
-      {hasPending && !showForm && !isBL && (
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          This lead is Inactive — reactivate it to request discounts.
+        </div>
+      )}
+
+      {hasPending && !showForm && !isBL && !isLocked && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
           A discount request is currently pending review.
         </div>
       )}
 
       {/* ── Discount approval rules summary ────────────────────────────────── */}
-      {!isBL && !showForm && (
+      {!isBL && !showForm && !isLocked && (
         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-stone-600 uppercase tracking-wider">
             <Info size={13} /> Approval rules
@@ -337,7 +343,7 @@ export default function DiscountTab({ leadId }: Props) {
       )}
 
       {/* ── Request form ───────────────────────────────────────────────────── */}
-      {!isBL && showForm && (
+      {!isBL && !isLocked && showForm && (
         <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">New Discount Request</h3>
 

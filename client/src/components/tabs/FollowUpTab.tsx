@@ -12,9 +12,9 @@ function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
 }
 
-interface Props { leadId: string }
+interface Props { leadId: string; isLocked?: boolean }
 
-export default function FollowUpTab({ leadId }: Props) {
+export default function FollowUpTab({ leadId, isLocked }: Props) {
   const [tasks, setTasks] = useState<FollowUpTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,15 +166,23 @@ export default function FollowUpTab({ leadId }: Props) {
             {tasks.filter(t => t.isOverdue && t.status === 'PENDING').length} overdue
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-        >
-          {showForm ? 'Cancel' : '+ Add Task'}
-        </button>
+        {!isLocked && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+          >
+            {showForm ? 'Cancel' : '+ Add Task'}
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {isLocked && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
+          This lead is Inactive — reactivate it to add follow-up tasks.
+        </div>
+      )}
+
+      {!isLocked && showForm && (
         <form onSubmit={handleCreate} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">New Follow-up Task</h3>
           <div className="grid grid-cols-2 gap-3">

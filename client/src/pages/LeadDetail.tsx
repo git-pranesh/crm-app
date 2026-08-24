@@ -346,6 +346,11 @@ export default function LeadDetail() {
   const [npsPerStage, setNpsPerStage] = useState<Record<string, { stage: string; score: number | null; sentAt: string; respondedAt: string | null }>>({});
   const [offerOptions, setOfferOptions] = useState<{ id: string; label: string }[]>([]);
 
+  // Task #149 — an Inactive lead is fully locked from edits until reactivated.
+  // Mirrors the server-side lock in leads.ts (PATCH /:id, /:id/assign-direct,
+  // /:id/intent-rating, /:id/floor-plan, /:id/notes).
+  const isLocked = lead?.status === 'INACTIVE';
+
   const loadLead = useCallback(() => {
     if (!leadId) return;
     setLoadingLead(true);
@@ -1283,11 +1288,12 @@ export default function LeadDetail() {
               {/* Stage + intent row */}
               <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                 <button
-                  onClick={openStageModal}
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold cursor-pointer hover:opacity-80 transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'}`}
-                  title="Click to change stage"
+                  onClick={isLocked ? undefined : openStageModal}
+                  disabled={isLocked}
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold transition-opacity ${STAGE_COLORS[lead.stage] ?? 'bg-stone-100 text-stone-600'} ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
+                  title={isLocked ? 'Lead is Inactive — reactivate to change stage' : 'Click to change stage'}
                 >
-                  <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} <ChevronDown size={10} strokeWidth={2.5} /></span>
+                  <span className="flex items-center gap-1">{STAGE_LABELS[lead.stage] ?? lead.stage} {!isLocked && <ChevronDown size={10} strokeWidth={2.5} />}</span>
                 </button>
                 {/* Task #88: status badge, decoupled from stage */}
                 {lead.status !== 'ACTIVE' && (
@@ -1297,9 +1303,10 @@ export default function LeadDetail() {
                 )}
                 {/* Intent stars + auto badge */}
                 <button
-                  onClick={() => openIntentModal(lead.intentRating ?? 0)}
-                  title="Click to override intent rating"
-                  className="flex items-center gap-1.5 hover:opacity-70 transition-opacity"
+                  onClick={isLocked ? undefined : () => openIntentModal(lead.intentRating ?? 0)}
+                  disabled={isLocked}
+                  title={isLocked ? 'Lead is Inactive — reactivate to override intent rating' : 'Click to override intent rating'}
+                  className={`flex items-center gap-1.5 transition-opacity ${isLocked ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-70'}`}
                 >
                   {Array.from({ length: 5 }, (_, i) => (
                     <span key={i} className={`text-base ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-stone-200'}`}>★</span>
@@ -1387,21 +1394,21 @@ export default function LeadDetail() {
       {/* PD→OB checklist for PROPOSAL_DISCUSSION (and later, as a record) */}
       {lead && ['PROPOSAL_DISCUSSION', 'ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'].includes(lead.stage) && (
         <div className="px-6 pt-4">
-          <PDOBChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} />
+          <PDOBChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} isLocked={isLocked} />
         </div>
       )}
 
       {/* OB→OBM checklist for ONBOARDING (and later, as a record) */}
       {lead && ['ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'].includes(lead.stage) && (
         <div className="px-6 pt-4">
-          <OBOBMChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} />
+          <OBOBMChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} isLocked={isLocked} />
         </div>
       )}
 
       {/* DIP Checklist for ONBOARDING_MEETING / DESIGN_IN_PROGRESS / HANDED_OVER (legacy) */}
       {lead && (lead.stage === 'ONBOARDING_MEETING' || lead.stage === 'DESIGN_IN_PROGRESS' || lead.stage === 'HANDED_OVER') && (
         <div className="px-6 pt-4">
-          <DIPChecklistPanel leadId={leadId!} stage={lead.stage} />
+          <DIPChecklistPanel leadId={leadId!} stage={lead.stage} isLocked={isLocked} />
         </div>
       )}
 
@@ -1472,13 +1479,20 @@ export default function LeadDetail() {
                             <div className="relative flex flex-col items-center">
                               {/* Node */}
                               <button
-                                onClick={openStageModal}
+                                onClick={isLocked ? undefined : openStageModal}
+                                disabled={isLocked}
                                 title={
-                                  isCurrent && lead.slaStatus && lead.slaStatus !== 'ok'
+                                  isLocked
+                                    ? 'Lead is Inactive — reactivate to change stage'
+                                    : isCurrent && lead.slaStatus && lead.slaStatus !== 'ok'
                                     ? `${lead.slaStatus === 'breach' ? 'SLA breached' : 'SLA approaching'} — ${lead.daysInCurrentStage}d in stage`
                                     : `Click to change stage`
                                 }
                                 className={`relative w-14 h-14 rounded-full flex flex-col items-center justify-center text-center transition-all border-2 ${
+                                  isLocked
+                                    ? 'opacity-60 cursor-not-allowed'
+                                    : ''
+                                } ${
                                   isCurrent
                                     ? 'bg-brand-500 border-brand-600 text-white shadow-md'
                                     : tatColorClasses
@@ -1606,12 +1620,14 @@ export default function LeadDetail() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-800">Client Details</h3>
-                    <button
-                      onClick={openEditDetails}
-                      className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
-                    >
-                      <Pencil size={11} strokeWidth={2} /> Edit
-                    </button>
+                    {!isLocked && (
+                      <button
+                        onClick={openEditDetails}
+                        className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
+                      >
+                        <Pencil size={11} strokeWidth={2} /> Edit
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-x-8">
                     <FactRow label="Full Name" value={lead.name} />
@@ -1632,12 +1648,14 @@ export default function LeadDetail() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-800">Project Details</h3>
-                    <button
-                      onClick={openEditDetails}
-                      className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
-                    >
-                      <Pencil size={11} strokeWidth={2} /> Edit
-                    </button>
+                    {!isLocked && (
+                      <button
+                        onClick={openEditDetails}
+                        className="flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
+                      >
+                        <Pencil size={11} strokeWidth={2} /> Edit
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-x-8">
                     <FactRow label="Project Type" value={lead.projectType} />
@@ -1678,15 +1696,17 @@ export default function LeadDetail() {
                       ) : (
                         <>
                           <span className="text-xs text-gray-300">No file uploaded</span>
-                          <button
-                            onClick={() => floorPlanInputRef.current?.click()}
-                            disabled={uploadingFloorPlan}
-                            className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50"
-                            style={{ border: '1px solid #EDE8E3' }}
-                          >
-                            <Upload size={10} strokeWidth={2} />
-                            {uploadingFloorPlan ? 'Uploading…' : 'Upload'}
-                          </button>
+                          {!isLocked && (
+                            <button
+                              onClick={() => floorPlanInputRef.current?.click()}
+                              disabled={uploadingFloorPlan}
+                              className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-700 px-2 py-0.5 rounded-lg transition-colors disabled:opacity-50"
+                              style={{ border: '1px solid #EDE8E3' }}
+                            >
+                              <Upload size={10} strokeWidth={2} />
+                              {uploadingFloorPlan ? 'Uploading…' : 'Upload'}
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -1768,16 +1788,17 @@ export default function LeadDetail() {
               );
             })()}
 
-            {activeTab === 'calls' && <CallLogTab leadId={leadId!} />}
-            {activeTab === 'followups' && <FollowUpTab leadId={leadId!} />}
+            {activeTab === 'calls' && <CallLogTab leadId={leadId!} isLocked={isLocked} />}
+            {activeTab === 'followups' && <FollowUpTab leadId={leadId!} isLocked={isLocked} />}
             {activeTab === 'meetings' && (
               <MeetingsTab
                 leadId={leadId!}
                 onMeetingCreated={loadLead}
                 onMeetingCompleted={handleMeetingCompleted}
+                isLocked={isLocked}
               />
             )}
-            {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} />}
+            {activeTab === 'whatsapp' && <WhatsAppTab leadId={leadId!} isLocked={isLocked} />}
             {activeTab === 'quotes' && lead && (
               <QuoteTab
                 leadId={leadId!}
@@ -1790,14 +1811,15 @@ export default function LeadDetail() {
                 scope={lead.scope}
                 location={lead.location}
                 estimatedValue={lead.estimatedValue}
+                isLocked={isLocked}
               />
             )}
-            {activeTab === 'discount' && <DiscountTab leadId={leadId!} />}
+            {activeTab === 'discount' && <DiscountTab leadId={leadId!} isLocked={isLocked} />}
             {activeTab === 'files' && lead && (
-              <FilesTab leadId={leadId!} currentStage={lead.stage} floorPlanUrl={lead.floorPlanUrl} />
+              <FilesTab leadId={leadId!} currentStage={lead.stage} floorPlanUrl={lead.floorPlanUrl} isLocked={isLocked} />
             )}
             {activeTab === 'team' && lead?.project && (
-              <TeamTab projectId={lead.project.id} leadDisplayId={lead.leadId} />
+              <TeamTab projectId={lead.project.id} leadDisplayId={lead.leadId} isLocked={isLocked} />
             )}
           </div>
         </div>
@@ -1866,8 +1888,10 @@ export default function LeadDetail() {
                       <span key={i} className={`text-sm ${i < (lead.intentRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
                     ))}
                   </div>
-                  <button onClick={() => openIntentModal(lead.intentRating ?? 0)}
-                    className="text-xs text-brand-500 hover:underline font-medium">Override</button>
+                  {!isLocked && (
+                    <button onClick={() => openIntentModal(lead.intentRating ?? 0)}
+                      className="text-xs text-brand-500 hover:underline font-medium">Override</button>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-1">
                   {lead.intentRatingSource === 'auto' && (

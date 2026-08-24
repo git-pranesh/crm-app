@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
+import { isLeadLocked } from '../lib/leadLock.js';
 
 export const callWebhookRouter = Router();
 
@@ -44,10 +45,10 @@ callWebhookRouter.post('/exotel', async (req, res) => {
             { phone2: { contains: phone } },
           ],
         },
-        select: { id: true },
+        select: { id: true, status: true },
       });
 
-      if (lead) {
+      if (lead && !isLeadLocked(lead.status)) {
         // Look for a matching call within the last 5 minutes (manual log created around same time)
         const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
         const existing = await prisma.call.findFirst({

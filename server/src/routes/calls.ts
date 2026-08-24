@@ -10,6 +10,7 @@ import { sendEmail } from '../lib/email.js';
 import { assertNextPlanMeetingSchedulable, createNextPlanRecords, runNextPlanMeetingSideEffects, sendNextPlanMails, summarizeNextPlanItems, validateFutureDate, validateMeetingTypeMode, validateNextPlanItems, type NextPlanItem } from '../lib/nextPlanOfAction.js';
 import { assertNoActiveMeeting, computeMeetingNumbering, createMeetingRecord, runMeetingScheduledSideEffects } from '../lib/meetingScheduler.js';
 import { validateAttachmentPairing, validateGenericAttachments } from '../lib/attachmentValidation.js';
+import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const callsRouter = Router({ mergeParams: true });
 
@@ -147,7 +148,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
 
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: { id: true, leadId: true, name: true, phone: true, email: true, createdAt: true, assignedDesignerId: true, assignedBLId: true },
+    select: { id: true, leadId: true, name: true, phone: true, email: true, createdAt: true, assignedDesignerId: true, assignedBLId: true, status: true },
   });
   if (!lead) {
     res.status(404).json({ error: 'Lead not found' });
@@ -157,6 +158,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     res.status(403).json({ error: 'Not authorised to log calls for this lead' });
     return;
   }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   // callbackDetails/followUpTask may target another user's queue — the same
   // reporting-scope rule task creation uses applies here so a caller can't
@@ -468,7 +470,7 @@ callsRouter.post(
       // Verify the lead exists and the requester is authorised for it
       const lead = await prisma.lead.findUnique({
         where: { id: leadId },
-        select: { id: true, assignedDesignerId: true, assignedBLId: true },
+        select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
       });
       if (!lead) {
         res.status(404).json({ error: 'Lead not found' });
@@ -478,6 +480,7 @@ callsRouter.post(
         res.status(403).json({ error: 'Not authorised to upload files for this lead' });
         return;
       }
+      if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
       const file = req.file;
       if (!file) {

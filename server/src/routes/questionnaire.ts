@@ -14,6 +14,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
+import { isLeadLocked } from '../lib/leadLock.js';
 
 export const googleFormWebhookRouter = Router();
 export const questionnaireRouter = Router({ mergeParams: true });
@@ -46,6 +47,7 @@ googleFormWebhookRouter.post('/', async (req, res) => {
         id: true,
         leadId: true,
         name: true,
+        status: true,
         assignedDesignerId: true,
         assignedBLId: true,
       },
@@ -53,6 +55,13 @@ googleFormWebhookRouter.post('/', async (req, res) => {
 
     if (!lead) {
       res.status(404).json({ error: `Lead not found for identifier: ${leadIdentifier}` });
+      return;
+    }
+
+    if (isLeadLocked(lead.status)) {
+      // Webhook has no interactive client to show a 423 to — ack it so the
+      // external form provider doesn't retry, but skip the write entirely.
+      res.json({ ok: false, error: 'Lead is inactive; questionnaire not recorded.' });
       return;
     }
 
