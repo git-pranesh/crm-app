@@ -5,7 +5,7 @@ import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import EmailPreviewModal from '../EmailPreviewModal';
 import { istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 
-const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Design Draft', 'Contract', 'Other'] as const;
+const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Lifestyle Sheet', 'Other'] as const;
 
 function getApiBase() {
   return (import.meta as any).env?.VITE_API_BASE ?? '/api';
@@ -78,7 +78,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
   } | null>(null);
   const [statusForm, setStatusForm] = useState({
     mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '',
-    replanScheduledAt: '', replanLocation: '', momAgenda: '',
+    replanScheduledAt: '', replanLocation: '',
   });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   // Editable draft ("click Send") step for client-facing MOM/reschedule/
@@ -150,7 +150,6 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
     setStatusModal({ meetingId, meetingType, status });
     setStatusForm({
       mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '', replanScheduledAt: '', replanLocation: '',
-      momAgenda: '',
     });
     setMomAttachmentTypes([]);
     setMomFiles([]);
@@ -197,7 +196,6 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
         {
           status: statusModal.status,
           mom: statusForm.mom || undefined,
-          momAgenda: statusForm.momAgenda || undefined,
           momAttachmentTypes: momAttachmentTypes.length ? momAttachmentTypes : undefined,
           momAttachments,
           nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
@@ -393,19 +391,6 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
               )}
               {statusModal.status === 'COMPLETED' && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Agenda <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={statusForm.momAgenda}
-                      onChange={(e) => setStatusForm({ ...statusForm, momAgenda: e.target.value })}
-                      required
-                      placeholder="What this meeting covered…"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    />
-                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
                     <div className="flex flex-wrap gap-2 mb-2">

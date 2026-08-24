@@ -10,11 +10,19 @@
 import nodemailer from 'nodemailer';
 import { sendViaResend } from './resendEmail.js';
 
+export interface EmailAttachment {
+  filename: string;
+  /** Base64-encoded file content. */
+  content: string;
+  contentType?: string;
+}
+
 export interface EmailPayload {
   to: string;
   subject: string;
   html: string;
   cc?: string[];
+  attachments?: EmailAttachment[];
 }
 
 let _transporter: nodemailer.Transporter | null = null;
@@ -45,19 +53,27 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
   const cc = payload.cc?.length ? payload.cc : undefined;
 
+  const attachments = payload.attachments?.length ? payload.attachments : undefined;
+
   // 1) Resend — the configured, working integration. Preferred whenever a key exists.
   if (process.env.RESEND_API_KEY) {
-    const result = await sendViaResend({ from, to: payload.to, subject: payload.subject, html: payload.html, cc });
-    console.log(`[email:resend] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''} (id: ${result.id})`);
+    const result = await sendViaResend({ from, to: payload.to, subject: payload.subject, html: payload.html, cc, attachments });
+    console.log(`[email:resend] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}${attachments ? ` (${attachments.length} attachment(s))` : ''} (id: ${result.id})`);
     return;
   }
 
   // 2) SMTP — legacy path, still supported if explicitly configured.
   const isSmtpConfigured = !!process.env.SMTP_HOST;
+  const nodemailerAttachments = attachments?.map((a) => ({
+    filename: a.filename,
+    content: a.content,
+    encoding: 'base64' as const,
+    contentType: a.contentType,
+  }));
   if (isSmtpConfigured) {
     const transporter = getTransporter();
-    await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
-    console.log(`[email:smtp] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`);
+    await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html, attachments: nodemailerAttachments });
+    console.log(`[email:smtp] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}${attachments ? ` (${attachments.length} attachment(s))` : ''}`);
     return;
   }
 
@@ -67,8 +83,8 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     throw new Error(`No email provider configured (RESEND_API_KEY or SMTP_HOST) — refusing to silently drop "${payload.subject}" → ${payload.to}`);
   }
   const transporter = getTransporter();
-  const info = await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
-  console.log(`[email:dev] No provider configured — NOT actually sent. Would send "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`, JSON.parse(info.message).subject);
+  const info = await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html, attachments: nodemailerAttachments });
+  console.log(`[email:dev] No provider configured — NOT actually sent. Would send "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}${attachments ? ` (${attachments.length} attachment(s))` : ''}`, JSON.parse(info.message).subject);
 }
 
 // ── Pre-built templates ────────────────────────────────────────────────────────

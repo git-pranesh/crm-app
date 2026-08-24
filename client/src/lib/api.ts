@@ -196,7 +196,6 @@ export interface Meeting {
   location?: string;
   rescheduleHistory?: { scheduledAt: string; reason: string; rescheduledAt: string }[];
   mom?: string;
-  momAgenda?: string;
   momAttachmentTypes?: string[];
   momAttachments?: { type: string; fileUrl?: string; storagePath?: string }[];
   nextPlanOfActionItems?: NextPlanItem[];

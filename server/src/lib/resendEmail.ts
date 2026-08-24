@@ -4,6 +4,7 @@ export interface ResendEmailPayload {
   html: string;
   from: string;
   cc?: string[];
+  attachments?: { filename: string; content: string; contentType?: string }[];
 }
 
 export interface ResendSendResult {
@@ -33,6 +34,9 @@ export async function sendViaResend(payload: ResendEmailPayload): Promise<Resend
       subject: payload.subject,
       html: payload.html,
       ...(payload.cc?.length ? { cc: payload.cc } : {}),
+      ...(payload.attachments?.length
+        ? { attachments: payload.attachments.map((a) => ({ filename: a.filename, content: a.content })) }
+        : {}),
     }),
   });
 

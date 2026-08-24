@@ -25,7 +25,7 @@ import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 // are intentionally excluded here per Task #86.
 const CREATABLE_MEETING_TYPES = ['DQL', 'PP', 'PD', 'ONBOARDING', 'OBM'];
 // Kept in lockstep with client/src/components/tabs/MeetingsTab.tsx MOM_ATTACHMENT_TYPES.
-const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Design Draft', 'Proposal', 'Contract', 'Other'];
+const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Lifestyle Sheet', 'Other'];
 // Same private Supabase bucket used by the call-log attachment upload endpoint
 // (server/src/routes/calls.ts) — MOM attachments reuse it via the same
 // /leads/:leadId/calls/upload-attachment route.
@@ -231,7 +231,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
   const {
     status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation,
-    momAgenda, momAttachmentTypes, momAttachments, nextPlanOfAction,
+    momAttachmentTypes, momAttachments, nextPlanOfAction,
   } = req.body as {
     status?: string;
     mom?: string;
@@ -241,7 +241,6 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     newScheduledAt?: string;
     replanScheduledAt?: string;
     replanLocation?: string;
-    momAgenda?: string;
     momAttachmentTypes?: string[];
     momAttachments?: { type: string; storagePath?: string; fileUrl?: string }[];
     nextPlanOfAction?: NextPlanItem[];
@@ -256,10 +255,6 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
   if (status === 'COMPLETED') {
     if (!mom?.trim()) {
       res.status(400).json({ error: 'mom (Minutes of Meeting) is required when marking COMPLETED' });
-      return;
-    }
-    if (!momAgenda?.trim()) {
-      res.status(400).json({ error: 'momAgenda is required when marking COMPLETED' });
       return;
     }
     if (momAttachmentTypes?.some((t) => !MOM_ATTACHMENT_TYPES.includes(t))) {
@@ -409,7 +404,6 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     const updateData: any = { status, outcome };
     if (status === 'COMPLETED') {
       updateData.mom = mom;
-      updateData.momAgenda = momAgenda?.trim();
       updateData.momAttachmentTypes = momAttachmentTypes?.length ? momAttachmentTypes : undefined;
       updateData.momAttachments = momAttachments?.length ? momAttachments : undefined;
       updateData.nextPlanOfActionItems = nextPlanOfAction?.length ? nextPlanOfAction : undefined;
@@ -484,14 +478,31 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     let emailPayload;
 
     if (status === 'COMPLETED') {
-      const hydratedForEmail = momAttachments?.length
-        ? (await hydrateMomAttachments({ momAttachments })).momAttachments as { type: string; fileUrl?: string }[]
-        : [];
-      const attachmentsHtml = hydratedForEmail.length
-        ? `<p><strong>Attachments:</strong></p><ul>${hydratedForEmail
-            .filter((a) => a.fileUrl)
-            .map((a) => `<li>${a.type}: <a href="${a.fileUrl}">View</a></li>`)
-            .join('')}</ul>`
+      // Download the actual file bytes so they ride along as real email
+      // attachments (not just a link) — per the client's ask that "the email
+      // should also have the attachment attached".
+      const momEmailAttachments: { filename: string; content: string; contentType?: string }[] = [];
+      if (momAttachments?.length && supabaseAdmin) {
+        for (const att of momAttachments) {
+          if (!att.storagePath) continue;
+          const { data, error } = await supabaseAdmin.storage
+            .from(MOM_ATTACHMENTS_BUCKET)
+            .download(att.storagePath);
+          if (error || !data) {
+            console.warn(`[meetings:mom-email] Could not download attachment ${att.storagePath}: ${error?.message}`);
+            continue;
+          }
+          const buffer = Buffer.from(await data.arrayBuffer());
+          const originalName = att.storagePath.split('/').pop() ?? att.type;
+          momEmailAttachments.push({
+            filename: `${att.type} - ${originalName}`,
+            content: buffer.toString('base64'),
+            contentType: data.type || undefined,
+          });
+        }
+      }
+      const attachmentsHtml = momEmailAttachments.length
+        ? `<p><strong>Attachments:</strong> ${momEmailAttachments.length} file(s) attached to this email.</p>`
         : '';
       const rendered = await renderMailTemplate('MOM', {
         clientName: lead.name,
@@ -500,7 +511,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
         mom: mom!.replace(/\n/g, '<br/>'),
         attachmentsHtml,
       });
-      emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
+      emailPayload = { to: '', subject: rendered.subject, html: rendered.html, attachments: momEmailAttachments.length ? momEmailAttachments : undefined };
     } else if (status === 'RESCHEDULED') {
       emailPayload = rescheduleEmail({
         clientName: lead.name,
