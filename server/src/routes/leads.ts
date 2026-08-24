@@ -1181,8 +1181,15 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         }
       }
 
-      // Intent rating log when moving into MQL (G1/G6)
-      if (stage === 'MQL' && prevStage === 'EFFECTIVE_LEAD') {
+      // Intent rating log on every stage transition (previously only logged
+      // once, on the EFFECTIVE_LEAD -> MQL move / G1/G6). Widened to run on
+      // any stage change so the audit trail reflects the system-computed
+      // rating at each hop, not just the first one. This only ever writes an
+      // IntentRatingLog row — finalRating still defers to whatever is
+      // already on the lead (lead.intentRating ?? systemRating), so it never
+      // overwrites a manual override; the calculation itself and the manual
+      // override endpoint are unchanged.
+      if (stage && stage !== prevStage) {
         try {
           const leadWithRels = await prisma.lead.findUnique({
             where: { id },
