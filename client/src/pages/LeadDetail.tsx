@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -349,6 +350,12 @@ export default function LeadDetail() {
   const [gateInfoStage, setGateInfoStage] = useState<string | null>(null); // popover target
   const [gateDetails, setGateDetails] = useState<Record<string, { label: string; satisfied: boolean }[]>>({});
   const [gateDetailsLoading, setGateDetailsLoading] = useState(false);
+  // Portal-rendered popover position, computed from the clicked (i) button's
+  // on-screen rect so the popover escapes the Stage Roadmap's horizontally-
+  // scrolling strip (overflow-x-auto there clips vertical overflow too, which
+  // was cutting the gate list off). `openUpward` flips the popover below the
+  // button when there isn't enough room above it in the viewport.
+  const [gateInfoPos, setGateInfoPos] = useState<{ top: number; left: number; openUpward: boolean } | null>(null);
 
   const [avgNps, setAvgNps] = useState<number | null>(null);
   const [npsPerStage, setNpsPerStage] = useState<Record<string, { stage: string; score: number | null; sentAt: string; respondedAt: string | null }>>({});
@@ -1650,7 +1657,19 @@ export default function LeadDetail() {
                                       e.stopPropagation();
                                       if (isGateInfoOpen) {
                                         setGateInfoStage(null);
+                                        setGateInfoPos(null);
                                       } else {
+                                        // Position the popover from the button's live viewport rect (not the
+                                        // scrolling roadmap strip's coordinate space) so it can be portalled
+                                        // out to <body> and is never clipped by the strip's overflow-x-auto.
+                                        // Flip below the button if there isn't ~180px of room above it.
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const openUpward = rect.top > 200;
+                                        setGateInfoPos({
+                                          left: rect.left + rect.width / 2,
+                                          top: openUpward ? rect.top - 6 : rect.bottom + 6,
+                                          openUpward,
+                                        });
                                         setGateInfoStage(stage);
                                         if (lead && nextStage) {
                                           setGateDetailsLoading(true);
@@ -1668,9 +1687,14 @@ export default function LeadDetail() {
                                   >
                                     <Info size={10} strokeWidth={2} />
                                   </button>
-                                  {isGateInfoOpen && (
+                                  {isGateInfoOpen && gateInfoPos && createPortal(
                                     <div
-                                      className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 z-20 w-48 text-left"
+                                      className="fixed bg-white rounded-xl shadow-lg border border-gray-100 p-2.5 z-[100] w-56 max-h-72 overflow-y-auto text-left"
+                                      style={{
+                                        left: gateInfoPos.left,
+                                        top: gateInfoPos.top,
+                                        transform: `translate(-50%, ${gateInfoPos.openUpward ? '-100%' : '0'})`,
+                                      }}
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">
@@ -1690,7 +1714,8 @@ export default function LeadDetail() {
                                           </div>
                                         ))
                                       )}
-                                    </div>
+                                    </div>,
+                                    document.body,
                                   )}
                                 </div>
                               )}
@@ -1702,7 +1727,7 @@ export default function LeadDetail() {
                   </div>
                   {/* Close popover on outside click */}
                   {gateInfoStage && (
-                    <div className="fixed inset-0 z-10" onClick={() => setGateInfoStage(null)} />
+                    <div className="fixed inset-0 z-10" onClick={() => { setGateInfoStage(null); setGateInfoPos(null); }} />
                   )}
                 </div>
 
