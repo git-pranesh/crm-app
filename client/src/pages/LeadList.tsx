@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
 import StatusBadge, { STATUS_LABELS, STATUS_COLORS } from '../components/StatusBadge';
 import { SOURCE_OPTIONS } from '../lib/leadSources';
+import { DateInput } from '../components/ui/DateTimeInputs';
 
 interface Lead {
   id: string; leadId: string; name: string; phone: string; email?: string;
@@ -369,24 +370,20 @@ export default function LeadList() {
             placeholder="Location"
             className="rounded-xl px-3 py-1.5 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-          <input type="date" value={filters.originDateFrom} onChange={(e) => setFilter('originDateFrom', e.target.value)}
-            title="Lead origin date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-          <input type="date" value={filters.originDateTo} onChange={(e) => setFilter('originDateTo', e.target.value)}
-            title="Lead origin date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <DateInput value={filters.originDateFrom} onChange={(v) => setFilter('originDateFrom', v)}
+            placeholderText="Origin date (from)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
+          <DateInput value={filters.originDateTo} onChange={(v) => setFilter('originDateTo', v)}
+            placeholderText="Origin date (to)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
           <input type="number" value={filters.budgetMin} onChange={(e) => setFilter('budgetMin', e.target.value)}
             placeholder="Budget min ₹" className="rounded-xl px-3 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
           <input type="number" value={filters.budgetMax} onChange={(e) => setFilter('budgetMax', e.target.value)}
             placeholder="Budget max ₹" className="rounded-xl px-3 py-1.5 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-          <input type="date" value={filters.possessionDateFrom} onChange={(e) => setFilter('possessionDateFrom', e.target.value)}
-            title="Possession date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-          <input type="date" value={filters.possessionDateTo} onChange={(e) => setFilter('possessionDateTo', e.target.value)}
-            title="Possession date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <DateInput value={filters.possessionDateFrom} onChange={(v) => setFilter('possessionDateFrom', v)}
+            placeholderText="Possession date (from)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
+          <DateInput value={filters.possessionDateTo} onChange={(v) => setFilter('possessionDateTo', v)}
+            placeholderText="Possession date (to)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
           <select value={filters.intent} onChange={(e) => setFilter('intent', e.target.value)}
             title="Intent rating" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
             style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
@@ -394,12 +391,10 @@ export default function LeadList() {
             <option value="1">1 star</option><option value="2">2 stars</option>
             <option value="3">3 stars</option><option value="4">4 stars</option><option value="5">5 stars</option>
           </select>
-          <input type="date" value={filters.projectedObFrom} onChange={(e) => setFilter('projectedObFrom', e.target.value)}
-            title="Expected OB date (from)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-          <input type="date" value={filters.projectedObTo} onChange={(e) => setFilter('projectedObTo', e.target.value)}
-            title="Expected OB date (to)" className="rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-            style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+          <DateInput value={filters.projectedObFrom} onChange={(v) => setFilter('projectedObFrom', v)}
+            placeholderText="Expected OB date (from)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
+          <DateInput value={filters.projectedObTo} onChange={(v) => setFilter('projectedObTo', v)}
+            placeholderText="Expected OB date (to)" className="rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300" />
           {hasFilters && (
             <button onClick={clearFilters} className="text-xs text-stone-400 hover:text-stone-600 underline">
               Clear

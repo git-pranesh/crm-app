@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
 import { api, type CallRecord, type FollowUpTask, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import { formatISTDate, formatISTDateTime, istInputToISO } from '../../lib/dateFormat';
+import { DateInput, TimeInput, DateTimeInput } from '../ui/DateTimeInputs';
 
 const ATTACHMENT_TYPES = ['Lifestyle Capture', 'Proposal', 'Pitch Presentation'] as const;
 
@@ -508,24 +509,20 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 value={scheduleForm.dueDate}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, dueDate: e.target.value })}
+                onChange={(v) => setScheduleForm({ ...scheduleForm, dueDate: v })}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Time <span className="text-red-500">*</span>
               </label>
-              <input
-                type="time"
+              <TimeInput
                 value={scheduleForm.dueTime}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, dueTime: e.target.value })}
+                onChange={(v) => setScheduleForm({ ...scheduleForm, dueTime: v })}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
           </div>
@@ -594,11 +591,9 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time of Call</label>
-              <input
-                type="datetime-local"
+              <DateTimeInput
                 value={form.calledAt}
-                onChange={(e) => setForm({ ...form, calledAt: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => setForm({ ...form, calledAt: v })}
               />
             </div>
             <div>
@@ -744,19 +739,15 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
                 Callback Details <span className="text-red-500">*</span>
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="date"
+                <DateInput
                   value={form.callbackDueDate}
-                  onChange={(e) => setForm({ ...form, callbackDueDate: e.target.value })}
+                  onChange={(v) => setForm({ ...form, callbackDueDate: v })}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
-                <input
-                  type="time"
+                <TimeInput
                   value={form.callbackDueTime}
-                  onChange={(e) => setForm({ ...form, callbackDueTime: e.target.value })}
+                  onChange={(v) => setForm({ ...form, callbackDueTime: v })}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <input
                   type="text"
@@ -794,12 +785,10 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
                   <option value="">Mode…</option>
                   {MEETING_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
-                <input
-                  type="datetime-local"
+                <DateTimeInput
                   value={form.meetingScheduledAt}
-                  onChange={(e) => setForm({ ...form, meetingScheduledAt: e.target.value })}
+                  onChange={(v) => setForm({ ...form, meetingScheduledAt: v })}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
                 <select
                   value={form.meetingLocation}
@@ -832,22 +821,18 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Due Date</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={form.dueDate}
-                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                    onChange={(v) => setForm({ ...form, dueDate: v })}
                     required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Due Time <span className="text-red-500">*</span></label>
-                  <input
-                    type="time"
+                  <TimeInput
                     value={form.dueTime}
-                    onChange={(e) => setForm({ ...form, dueTime: e.target.value })}
+                    onChange={(v) => setForm({ ...form, dueTime: v })}
                     required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
               </div>

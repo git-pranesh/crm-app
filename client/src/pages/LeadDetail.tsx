@@ -10,6 +10,7 @@ import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
 import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import { formatISTDate, formatPossession, istDateOnly, istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
+import { DateInput } from '../components/ui/DateTimeInputs';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
 import MeetingsTab from '../components/tabs/MeetingsTab';
@@ -987,10 +988,9 @@ export default function LeadDetail() {
                     <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                       Reopen date <span className="text-brand-500">*</span>
                     </label>
-                    <input type="date" value={onHoldReopenDate} onChange={(e) => setOnHoldReopenDate(e.target.value)}
+                    <DateInput value={onHoldReopenDate} onChange={setOnHoldReopenDate}
                       required min={istDateOnly(new Date(Date.now() + 86400000))}
-                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
-                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+                      className="w-full rounded-xl px-3 py-2.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all" />
                     <p className="text-xs text-stone-400 mt-1">Internal team notified now. Lead auto-reactivates when this date arrives.</p>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-stone-700">
@@ -1167,13 +1167,11 @@ export default function LeadDetail() {
                     </select>
                     {possessionMode === 'custom' && (
                       <>
-                        <input
-                          type="date"
+                        <DateInput
                           value={isIsoDateString(editDetails.possessionTimeline) ? editDetails.possessionTimeline : ''}
                           min={istDateOnly(new Date())}
-                          onChange={(e) => setEditDetails({ ...editDetails, possessionTimeline: e.target.value })}
-                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all mt-2"
-                          style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                          onChange={(v) => setEditDetails({ ...editDetails, possessionTimeline: v })}
+                          className="w-full rounded-xl px-3 py-2 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all mt-2"
                         />
                         {editDetails.possessionTimeline && !isIsoDateString(editDetails.possessionTimeline) && (
                           <p className="text-[11px] text-stone-400 mt-1">

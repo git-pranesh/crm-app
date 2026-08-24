@@ -3,6 +3,7 @@ import { Check, Mail, AlertCircle, Send } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
+import { DateInput } from './ui/DateTimeInputs';
 
 interface OBOBMChecklist {
   id: string;
@@ -333,11 +334,10 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
                 {f.label}
                 <FieldStatus saving={savingKeys.has(f.key)} saved={savedKeys.has(f.key)} />
               </label>
-              <input
-                type="date"
+              <DateInput
                 disabled={!isEditable || savingKeys.has(f.key)}
                 value={dates[f.key] ?? ''}
-                onChange={(e) => saveDate(f.key, e.target.value)}
+                onChange={(v) => saveDate(f.key, v)}
                 className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
               />
             </div>

@@ -4,6 +4,7 @@ import { api, type Meeting, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import EmailPreviewModal from '../EmailPreviewModal';
 import { istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
+import { DateTimeInput } from '../ui/DateTimeInputs';
 
 const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Lifestyle Sheet', 'Other'] as const;
 
@@ -337,12 +338,10 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Date & Time <span className="text-red-500">*</span>
               </label>
-              <input
-                type="datetime-local"
+              <DateTimeInput
                 value={form.scheduledAt}
-                onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
+                onChange={(v) => setForm({ ...form, scheduledAt: v })}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
             <div>
@@ -500,13 +499,11 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       New Date & Time <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateTimeInput
                       value={statusForm.newScheduledAt}
-                      onChange={(e) => setStatusForm({ ...statusForm, newScheduledAt: e.target.value })}
+                      onChange={(v) => setStatusForm({ ...statusForm, newScheduledAt: v })}
                       required
                       min={minRescheduleDateTime()}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
                     <p className="text-xs text-gray-400 mt-1">The meeting stays active and moves to this new time. You'll review the client notification email before it's sent.</p>
                   </div>
@@ -535,12 +532,10 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Date & Time <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="datetime-local"
+                        <DateTimeInput
                           value={statusForm.replanScheduledAt}
-                          onChange={(e) => setStatusForm({ ...statusForm, replanScheduledAt: e.target.value })}
+                          onChange={(v) => setStatusForm({ ...statusForm, replanScheduledAt: v })}
                           required
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                         />
                       </div>
                       <div>

@@ -8,6 +8,7 @@ import StatusBadge from '../components/StatusBadge';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
+import { DateInput } from '../components/ui/DateTimeInputs';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Lead {
@@ -1071,22 +1072,18 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
             {/* Lead origin date range */}
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Lead origin date (from)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.originDateFrom}
-                onChange={(e) => setSF('originDateFrom', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('originDateFrom', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Lead origin date (to)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.originDateTo}
-                onChange={(e) => setSF('originDateTo', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('originDateTo', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
 
@@ -1117,22 +1114,18 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
             {/* Possession / Expected move-in date */}
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (from)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.possessionDateFrom}
-                onChange={(e) => setSF('possessionDateFrom', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('possessionDateFrom', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Possession date (to)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.possessionDateTo}
-                onChange={(e) => setSF('possessionDateTo', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('possessionDateTo', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
 
@@ -1145,22 +1138,18 @@ function SalesPipelineView({ userRole }: { userRole: string }) {
             {/* Projected OB date range */}
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Proj. OB date (from)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.projectedObFrom}
-                onChange={(e) => setSF('projectedObFrom', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('projectedObFrom', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-500 mb-1.5">Proj. OB date (to)</label>
-              <input
-                type="date"
+              <DateInput
                 value={salesFilters.projectedObTo}
-                onChange={(e) => setSF('projectedObTo', e.target.value)}
-                className="w-full rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
-                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}
+                onChange={(v) => setSF('projectedObTo', v)}
+                className="w-full rounded-xl px-3 py-1.5 text-sm border-[#EDE8E3] bg-[#FDFAF7] focus:outline-none focus:ring-2 focus:ring-brand-300"
               />
             </div>
           </div>

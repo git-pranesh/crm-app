@@ -6,6 +6,7 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
+import { DateInput } from '../components/ui/DateTimeInputs';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AnyRow = Record<string, unknown>;
@@ -372,12 +373,12 @@ export default function Reports() {
         </div>
         {preset === 'custom' && (
           <div className="flex items-center gap-2">
-            <input type="date" value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
+            <DateInput value={customStart}
+              onChange={setCustomStart}
               className="border border-gray-200 rounded-lg px-2 py-1 text-xs" />
             <span className="text-xs text-gray-400">→</span>
-            <input type="date" value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
+            <DateInput value={customEnd}
+              onChange={setCustomEnd}
               className="border border-gray-200 rounded-lg px-2 py-1 text-xs" />
             <button
               onClick={fetchAll}

@@ -3,6 +3,7 @@ import { Check, Mail, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
 import EmailPreviewModal from './EmailPreviewModal';
+import { DateTimeInput } from './ui/DateTimeInputs';
 
 interface PDOBChecklist {
   id: string;
@@ -257,12 +258,10 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">OB meeting date &amp; time</label>
-          <input
-            type="datetime-local"
+          <DateTimeInput
             disabled={!isEditable || saving}
             value={form.obMeetingScheduledAt}
-            onChange={(e) => setForm((f) => ({ ...f, obMeetingScheduledAt: e.target.value }))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
+            onChange={(v) => setForm((f) => ({ ...f, obMeetingScheduledAt: v }))}
           />
         </div>
         <div>

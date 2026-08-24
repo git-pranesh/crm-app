@@ -13,6 +13,7 @@ import { getStoredUser, logout } from '../lib/auth';
 import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import PhoneInput from './PhoneInput';
 import { SOURCE_OPTIONS } from '../lib/leadSources';
+import { DateInput } from './ui/DateTimeInputs';
 import { todayISTDateString } from '../lib/dateFormat';
 
 interface SearchLead {
@@ -506,15 +507,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <option>Custom date</option>
                   <option>Possession Received</option>
                 </select>
-                {newLeadPossessionMode === 'custom' && <input
-                  type="date"
+                {newLeadPossessionMode === 'custom' && <DateInput
                   value={newLead.possessionTimeline}
                   min={todayISTDateString()}
-                  onChange={(e) => setNewLead({ ...newLead, possessionTimeline: e.target.value })}
-                  onBlur={(e) => validateNewLeadField('possessionTimeline', e.target.value)}
+                  onChange={(v) => {
+                    setNewLead({ ...newLead, possessionTimeline: v });
+                    validateNewLeadField('possessionTimeline', v);
+                  }}
                   required
-                  className="w-full rounded-xl px-3 py-2.5 text-sm mt-2 focus:outline-none focus:ring-2 transition-all"
-                  style={{ border: newLeadErrors.possessionTimeline ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
+                  className={`w-full rounded-xl px-3 py-2.5 text-sm mt-2 bg-[#FDFAF7] focus:outline-none focus:ring-2 transition-all ${newLeadErrors.possessionTimeline ? 'border-red-500' : 'border-[#EDE8E3]'}`}
                 />}
                 {newLeadErrors.possessionTimeline && (
                   <p className="text-[11px] text-red-500 mt-1">{newLeadErrors.possessionTimeline}</p>

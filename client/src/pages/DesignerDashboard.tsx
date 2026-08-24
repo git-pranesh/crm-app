@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import { api } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
+import { DateInput } from '../components/ui/DateTimeInputs';
 import {
   TrendingUp, TrendingDown, Minus, Calendar, Star, Bell,
   AlertTriangle, Target, RefreshCw, ChevronRight,
@@ -228,15 +229,15 @@ export default function DesignerDashboard() {
         <div className="flex items-center flex-wrap gap-2">
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-stone-500 font-medium">From</label>
-            <input
-              type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            <DateInput
+              value={dateFrom} onChange={setDateFrom}
               className="border border-stone-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-stone-500 font-medium">To</label>
-            <input
-              type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            <DateInput
+              value={dateTo} onChange={setDateTo}
               className="border border-stone-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             />
           </div>

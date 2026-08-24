@@ -66,10 +66,11 @@ interface DateInputProps {
   className?: string;
   placeholderText?: string;
   id?: string;
+  disabled?: boolean;
 }
 
 /** Calendar-only picker. Value/onChange use "YYYY-MM-DD" strings. */
-export function DateInput({ value, onChange, min, max, required, className, placeholderText, id }: DateInputProps) {
+export function DateInput({ value, onChange, min, max, required, className, placeholderText, id, disabled }: DateInputProps) {
   return (
     <DatePicker
       id={id}
@@ -84,6 +85,7 @@ export function DateInput({ value, onChange, min, max, required, className, plac
       autoComplete="off"
       required={required}
       isClearable={!required}
+      disabled={disabled}
     />
   );
 }
@@ -95,10 +97,11 @@ interface TimeInputProps {
   className?: string;
   placeholderText?: string;
   id?: string;
+  disabled?: boolean;
 }
 
 /** Clock-only picker. Value/onChange use "HH:MM" (24h) strings. */
-export function TimeInput({ value, onChange, required, className, placeholderText, id }: TimeInputProps) {
+export function TimeInput({ value, onChange, required, className, placeholderText, id, disabled }: TimeInputProps) {
   return (
     <DatePicker
       id={id}
@@ -115,6 +118,7 @@ export function TimeInput({ value, onChange, required, className, placeholderTex
       autoComplete="off"
       required={required}
       isClearable={!required}
+      disabled={disabled}
     />
   );
 }
@@ -127,10 +131,11 @@ interface DateTimeInputProps {
   className?: string;
   placeholderText?: string;
   id?: string;
+  disabled?: boolean;
 }
 
 /** Calendar + clock picker. Value/onChange use "YYYY-MM-DDTHH:mm" strings. */
-export function DateTimeInput({ value, onChange, min, required, className, placeholderText, id }: DateTimeInputProps) {
+export function DateTimeInput({ value, onChange, min, required, className, placeholderText, id, disabled }: DateTimeInputProps) {
   return (
     <DatePicker
       id={id}
@@ -146,6 +151,7 @@ export function DateTimeInput({ value, onChange, min, required, className, place
       autoComplete="off"
       required={required}
       isClearable={!required}
+      disabled={disabled}
     />
   );
 }

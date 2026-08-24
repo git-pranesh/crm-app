@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Users2, CalendarDays, Activity, AlertTriangle, CheckCircle2, Circle, Star, Tag, Trash2, Upload, type LucideIcon } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import EmptyState from '../components/ui/EmptyState';
+import { DateInput } from '../components/ui/DateTimeInputs';
 
 interface User {
   id: string; name: string; email: string; role: string;
@@ -667,19 +668,17 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Responded from</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={npsDateFrom}
-                    onChange={(e) => setNpsDateFrom(e.target.value)}
+                    onChange={setNpsDateFrom}
                     className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Responded to</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={npsDateTo}
-                    onChange={(e) => setNpsDateTo(e.target.value)}
+                    onChange={setNpsDateTo}
                     className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                 </div>
