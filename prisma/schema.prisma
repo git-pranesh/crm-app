@@ -911,6 +911,10 @@ model OBOBMChecklist {
   cancellationConfirmed    Boolean   @default(false)
   npsTriggered             Boolean   @default(false)
   npsTriggeredAt           DateTime?
+  /// Client has confirmed the OBM checklist details (timeline, welcome
+  /// documents, etc.). Required before the OBM welcome mail can be sent —
+  /// blocked at the checklist level, not just at the stage-move gate.
+  clientConfirmed          Boolean   @default(false)
   obmMailSent              Boolean   @default(false)
   obmMailSentAt            DateTime?
   completedAt              DateTime?

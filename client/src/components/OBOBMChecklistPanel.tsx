@@ -18,6 +18,7 @@ interface OBOBMChecklist {
   npsTriggeredAt: string | null;
   obmMailSent: boolean;
   obmMailSentAt: string | null;
+  clientConfirmed: boolean;
   completedAt: string | null;
   [key: string]: any; // dexMaterialDone, dexMaterialConfirmed, etc.
 }
@@ -176,6 +177,7 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
     !allDatesFilled && 'All timeline dates',
     !allDocsDone && 'All welcome-document items',
     !checklist.npsTriggered && 'NPS survey triggered',
+    !checklist.clientConfirmed && 'Client confirmed',
     !clientEmail && "Client's email",
   ].filter(Boolean) as string[];
 
@@ -263,6 +265,20 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
             <Send size={11} strokeWidth={2.5} /> {triggeringNps ? 'Sending…' : 'Trigger NPS'}
           </button>
         )}
+      </div>
+
+      {/* Client confirmation — required before the OBM mail can be sent */}
+      <div className="flex items-center justify-between mb-4 px-3 py-2 rounded-lg bg-gray-50">
+        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!checklist.clientConfirmed}
+            disabled={!isEditable || saving}
+            onChange={(e) => toggleDoc('clientConfirmed', e.target.checked)}
+            className="w-3.5 h-3.5 accent-gray-500"
+          />
+          Client confirmed
+        </label>
       </div>
 
       {isEditable && (

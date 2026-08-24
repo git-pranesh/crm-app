@@ -190,6 +190,7 @@ obObmChecklistRouter.patch('/', verifyToken, async (req, res) => {
       if (body[doneKey] !== undefined) data[doneKey] = !!body[doneKey];
       if (body[confirmedKey] !== undefined) data[confirmedKey] = !!body[confirmedKey];
     }
+    if (body.clientConfirmed !== undefined) data.clientConfirmed = !!body.clientConfirmed;
     const checklist = await prisma.oBOBMChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'OB_OBM_CHECKLIST_UPDATED', leadId, data);
 
@@ -235,6 +236,7 @@ obObmChecklistRouter.post('/send-obm-mail', verifyToken, async (req, res) => {
       if (!(checklist as any)[f]) missing.push(TIMELINE_LABELS[f]);
     }
     if (!checklist.npsTriggered) missing.push('NPS survey triggered');
+    if (!checklist.clientConfirmed) missing.push('Client confirmed');
     if (!lead.email) missing.push("Client's email address");
     if (missing.length) {
       res.status(400).json({ error: 'Cannot send OBM mail — missing requirements', missing });
