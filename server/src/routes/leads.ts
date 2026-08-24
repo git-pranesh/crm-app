@@ -1299,7 +1299,7 @@ const REACTIVATION_REASONS = [
   'Client re-engaged',
   'Budget approved',
   'Timeline resumed',
-  'Placed on hold in error',
+  'Inactivated by Mistake',
   'Other',
 ];
 
@@ -1311,6 +1311,13 @@ leadsRouter.post('/:id/reactivate', verifyToken, async (req, res) => {
 
     if (!reason?.trim()) {
       res.status(400).json({ error: 'A reason is required to reactivate this lead.' });
+      return;
+    }
+
+    const existing = await prisma.lead.findUnique({ where: { id }, select: { email: true } });
+    if (!existing) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!existing.email?.trim()) {
+      res.status(400).json({ error: 'This lead has no email on file. Add a client email before reactivating.' });
       return;
     }
 

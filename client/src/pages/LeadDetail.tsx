@@ -84,7 +84,7 @@ const STAGE_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-stone-100 text-stone-600',
 };
 
-const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Placed on hold in error', 'Other'];
+const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Inactivated by Mistake', 'Other'];
 const INACTIVE_REASONS = ['Budget mismatch', 'Not interested', 'Went with another vendor', 'Unresponsive', 'Timeline mismatch', 'Other'];
 
 const STAGE_LABELS: Record<string, string> = {
@@ -675,6 +675,7 @@ export default function LeadDetail() {
     e.preventDefault();
     const resolvedReason = reactivateReason === 'Other' ? reactivateReasonOther.trim() : reactivateReason;
     if (!resolvedReason) { toast.error('Please select or enter a reason'); return; }
+    if (!lead?.email?.trim()) { toast.error('This lead has no email on file. Add a client email before reactivating.'); return; }
     setReactivating(true);
     try {
       await api.post(`/leads/${leadId}/reactivate`, {
