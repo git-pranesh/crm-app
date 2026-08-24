@@ -50,6 +50,7 @@ const COLUMN_MAP: Record<string, string> = {
   estimatedvalue: 'estimatedValue',
   builder: 'builder',
   expectedmoveinddmmyyyy: 'expectedMoveIn', expectedmovein: 'expectedMoveIn',
+  expectedinteriorhandoverdateddmmyyyy: 'expectedMoveIn', expectedinteriorhandoverdate: 'expectedMoveIn',
   pan: 'pan', gst: 'gst', notes: 'notes',
   createdat: 'createdAt',
 };
@@ -70,7 +71,7 @@ function normaliseStageValue(raw: string): string {
   return raw.replace(/^\s*\d+\s*[-.]\s*/, '').trim().toUpperCase().replace(/[\s-]+/g, '_');
 }
 
-// "Expected Move-In (DD-MM-YYYY)" — parse that exact format; anything else
+// "Expected Interior Handover Date (DD-MM-YYYY)" — parse that exact format; anything else
 // (blank, unparseable) is left unset rather than guessed at.
 function parseDDMMYYYY(raw: string | undefined): Date | undefined {
   if (!raw?.trim()) return undefined;
@@ -192,7 +193,7 @@ importRouter.get('/template', verifyToken, requireRole('BL', 'BRANCH_HEAD'), (_r
     'PID', 'Lead Name', 'Contact number', 'Alternate Phone', 'Mail id', 'Alternate Email',
     'Lead Stage', 'Lead Source', 'Project Type', 'Project Type 1', 'Scope', 'Location',
     'Offer Committed', 'Possession Timeline', 'Estimated Value', 'Builder',
-    'Expected Move-In (DD-MM-YYYY)',
+    'Expected Interior Handover Date (DD-MM-YYYY)',
   ];
   const example = [
     'X2001', 'Jane Doe', '9876543210', '', 'jane@example.com', '',

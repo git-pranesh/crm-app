@@ -968,7 +968,7 @@ export default function LeadDetail() {
             <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Edit Lead Details</h3>
             <p className="text-xs text-stone-400 mb-5">
               The following <strong>Project Details</strong> are required before moving EL → MQL:
-              Client Budget, Project Type, Lead Source, Location, Builder, Scope of Work, Expected Move-in.
+              Client Budget, Project Type, Lead Source, Location, Builder, Scope of Work, Expected Interior Handover Date.
               Client Details fields are recommended but not gated.
               Leads with 1★ intent cannot advance regardless.
             </p>
@@ -1132,7 +1132,7 @@ export default function LeadDetail() {
                   </div>
                   {([
                     { key: 'estimatedValue', label: 'Client Budget (₹)', placeholder: '1500000', type: 'number' },
-                    { key: 'expectedMoveIn', label: 'Expected Move-in', type: 'date' },
+                    { key: 'expectedMoveIn', label: 'Expected Interior Handover Date', type: 'date' },
                     { key: 'expectedObDate', label: 'Expected OB Date', type: 'date' },
                     { key: 'offerProposed', label: 'Offer proposed', type: 'offer' },
                     { key: 'notes', label: 'Notes', placeholder: 'Any additional context…', colSpan: 2, multiline: true },
@@ -1778,7 +1778,7 @@ export default function LeadDetail() {
                     <FactRow label="Location" value={lead.location} />
                     <FactRow label="Builder" value={lead.builder} />
                     <FactRow label="Client Budget" value={fmtVal(lead.estimatedValue)} />
-                    <FactRow label="Expected Move-in" value={lead.expectedMoveIn
+                    <FactRow label="Expected Interior Handover Date" value={lead.expectedMoveIn
                       ? formatISTDate(lead.expectedMoveIn, { year: 'numeric' })
                       : undefined} />
                     <FactRow label="Expected OB Date" value={lead.expectedObDate

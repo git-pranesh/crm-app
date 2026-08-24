@@ -845,7 +845,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     // the rule only holds at creation time and silently stops applying the
     // moment someone edits an existing lead.
     if (expectedMoveIn !== undefined && !expectedMoveIn) {
-      res.status(400).json({ error: 'Expected Move-in date cannot be cleared — it is a required field.' });
+      res.status(400).json({ error: 'Expected Interior Handover Date cannot be cleared — it is a required field.' });
       return;
     }
     if (possessionTimeline !== undefined && !possessionTimeline?.trim()) {
