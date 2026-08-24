@@ -466,6 +466,10 @@ model FollowUpTask {
   originatingCallId String?
   /// Task #115 — array of { type, storagePath?, fileUrl? }, multiple attachments allowed.
   attachments  Json?
+  /// Set (to a MeetingType-style value like 'DQL'/'PP'/'PD') when this task represents a
+  /// call scheduled ahead of time via "Schedule Call" — distinguishes it from every other
+  /// FollowUpTask use (callback, generic follow-up) for Call-tab rendering purposes.
+  callStageType String?
 
   lead            Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   assignedTo      User  @relation(fields: [assignedToId], references: [id])

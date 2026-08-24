@@ -24,6 +24,12 @@ const INACTIVATION_MONTHS = 3;
 
 const VALID_OUTCOMES = ['ANSWERED', 'RNR_1', 'RNR_2', 'RNR_3', 'RNR_4', 'RNR_5', 'RNR_6_PLUS', 'CALLBACK', 'MEETING_SCHEDULED'];
 
+// Same stage vocabulary as MeetingType, since a scheduled call is typically
+// "the DQL call", "the PP call", etc. — kept as a plain string on FollowUpTask
+// rather than the MeetingType enum since this is a call, not a meeting.
+const CALL_STAGE_TYPES = ['DQL', 'PP', 'PD', 'ONBOARDING', 'OBM', 'OTHER'];
+const CALL_TASK_TYPES = ['INTERNAL', 'EXTERNAL'];
+
 // ── POST /api/leads/:leadId/calls ─────────────────────────────────────────────
 callsRouter.post('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
@@ -401,6 +407,99 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   });
 });
 
+// ── POST /api/leads/:leadId/calls/schedule ────────────────────────────────────
+// Distinct entry point for scheduling a call that hasn't happened yet — separate
+// from POST '/' above (Log Call), which always records a call that already took
+// place. Creates a FollowUpTask marked with callStageType so it renders as a
+// "Scheduled Call" wherever calls/tasks are shown, and can later be completed
+// (logged) or rescheduled through the existing follow-up task flow.
+callsRouter.post('/schedule', verifyToken, async (req, res) => {
+  const { leadId } = req.params as { leadId: string };
+  const user = req.user!;
+
+  const { stageType, agenda, taskType, dueDate, dueTime, assignedToId } = req.body as {
+    stageType: string;
+    agenda?: string;
+    taskType: string;
+    dueDate: string;
+    dueTime: string;
+    assignedToId?: string;
+  };
+
+  if (!stageType || !CALL_STAGE_TYPES.includes(stageType)) {
+    res.status(400).json({ error: `stageType must be one of: ${CALL_STAGE_TYPES.join(', ')}` });
+    return;
+  }
+  if (!taskType || !CALL_TASK_TYPES.includes(taskType)) {
+    res.status(400).json({ error: `taskType must be one of: ${CALL_TASK_TYPES.join(', ')}` });
+    return;
+  }
+  if (!dueDate || !dueTime) {
+    res.status(400).json({ error: 'dueDate and dueTime are required to schedule a call' });
+    return;
+  }
+  try {
+    validateFutureDate(dueDate, 'dueDate');
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: { id: true, leadId: true, name: true, assignedDesignerId: true, assignedBLId: true, status: true },
+  });
+  if (!lead) {
+    res.status(404).json({ error: 'Lead not found' });
+    return;
+  }
+  if (!(await isAuthorizedForLead(lead, user))) {
+    res.status(403).json({ error: 'Not authorised to schedule calls for this lead' });
+    return;
+  }
+  if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
+
+  if (assignedToId && !(await isAuthorizedToAssignTask(assignedToId, user))) {
+    res.status(403).json({ error: 'Not authorised to assign a scheduled call to this user' });
+    return;
+  }
+
+  const task = await prisma.followUpTask.create({
+    data: {
+      leadId,
+      assignedToId: assignedToId ?? user.id,
+      dueDate: new Date(dueDate),
+      dueTime,
+      timeFrom: dueTime,
+      agenda: agenda?.trim() || undefined,
+      taskType: taskType as any,
+      callStageType: stageType,
+    },
+  });
+
+  await prisma.activityLog.create({
+    data: {
+      userId: user.id,
+      action: 'CALL_SCHEDULED',
+      leadId,
+      meta: { stageType, taskType, dueDate, dueTime },
+    },
+  });
+
+  if (task.assignedToId !== user.id) {
+    const dueStr = new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    await createNotification(
+      task.assignedToId,
+      'TASK_SCHEDULED',
+      `Call scheduled for ${lead.name} (${lead.leadId}) — ${stageType} call due ${dueStr} at ${dueTime}`,
+      leadId,
+      new Date(task.dueDate),
+    );
+  }
+
+  res.status(201).json({ scheduledCall: task });
+});
+
 // ── Allowed MIME types for call attachments ───────────────────────────────────
 const ALLOWED_ATTACHMENT_MIMES = new Set([
   'application/pdf',
@@ -455,7 +554,16 @@ callsRouter.get('/', verifyToken, async (req, res) => {
 
   const rnrCount = rawCalls.filter((c) => RNR_OUTCOMES.includes(c.outcome as any)).length;
 
-  res.json({ calls, rnrCount, needsEscalation: rnrCount >= ESCALATION_THRESHOLD });
+  // Scheduled-but-not-yet-made calls (created via "Schedule Call") — surfaced
+  // in the same response so the Call tab can render them alongside logged
+  // calls, clearly distinguished, without a second round-trip.
+  const scheduledCalls = await prisma.followUpTask.findMany({
+    where: { leadId, callStageType: { not: null }, status: 'PENDING' },
+    include: { assignedTo: { select: { id: true, name: true, role: true } } },
+    orderBy: { dueDate: 'asc' },
+  });
+
+  res.json({ calls, rnrCount, needsEscalation: rnrCount >= ESCALATION_THRESHOLD, scheduledCalls });
 });
 
 // ── POST /api/leads/:leadId/calls/upload-attachment ───────────────────────────

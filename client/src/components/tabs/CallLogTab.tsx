@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, Paperclip, X } from 'lucide-react';
-import { api, type CallRecord, type NextPlanItem } from '../../lib/api';
+import { api, type CallRecord, type FollowUpTask, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
 import { formatISTDate, formatISTDateTime, istInputToISO } from '../../lib/dateFormat';
 
@@ -12,6 +12,17 @@ const MEETING_TYPES = [
   { value: 'PD', label: 'PD' },
   { value: 'ONBOARDING', label: 'OB' },
   { value: 'OBM', label: 'OBM' },
+];
+// Same stage vocabulary as MEETING_TYPES, plus a catch-all — a scheduled
+// call is usually "the DQL call", "the PP call", etc., but not every call
+// maps to a meeting stage.
+const CALL_STAGE_TYPES = [
+  { value: 'DQL', label: 'DQL' },
+  { value: 'PP', label: 'PP' },
+  { value: 'PD', label: 'PD' },
+  { value: 'ONBOARDING', label: 'OB' },
+  { value: 'OBM', label: 'OBM' },
+  { value: 'OTHER', label: 'Other' },
 ];
 const MEETING_MODES = [
   { value: 'EC_VISIT', label: 'EC Visit' },
@@ -165,12 +176,25 @@ interface Props { leadId: string; isLocked?: boolean }
 
 export default function CallLogTab({ leadId, isLocked }: Props) {
   const [calls, setCalls] = useState<CallRecord[]>([]);
+  const [scheduledCalls, setScheduledCalls] = useState<FollowUpTask[]>([]);
   const [rnrCount, setRnrCount] = useState(0);
   const [needsEscalation, setNeedsEscalation] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // "Schedule Call" — a distinct entry point/form from "Log Call" above, for
+  // calls that haven't happened yet.
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    stageType: '',
+    taskType: 'EXTERNAL',
+    dueDate: '',
+    dueTime: '',
+    agenda: '',
+  });
 
   const [form, setForm] = useState({
     outcome: '',
@@ -201,12 +225,13 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
 
   const loadCalls = async () => {
     try {
-      const data = await api.get<{ calls: CallRecord[]; rnrCount: number; needsEscalation: boolean }>(
+      const data = await api.get<{ calls: CallRecord[]; rnrCount: number; needsEscalation: boolean; scheduledCalls: FollowUpTask[] }>(
         `/leads/${leadId}/calls`,
       );
       setCalls(data.calls);
       setRnrCount(data.rnrCount);
       setNeedsEscalation(data.needsEscalation);
+      setScheduledCalls(data.scheduledCalls ?? []);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -215,6 +240,30 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
   };
 
   useEffect(() => { loadCalls(); }, [leadId]);
+
+  const handleScheduleCall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleForm.stageType) { setError('Please select a stage type'); return; }
+    if (!scheduleForm.dueDate || !scheduleForm.dueTime) { setError('Please pick a date and time'); return; }
+    setError(null);
+    setScheduling(true);
+    try {
+      await api.post(`/leads/${leadId}/calls/schedule`, {
+        stageType: scheduleForm.stageType,
+        taskType: scheduleForm.taskType,
+        dueDate: scheduleForm.dueDate,
+        dueTime: scheduleForm.dueTime,
+        agenda: scheduleForm.agenda.trim() || undefined,
+      });
+      setScheduleForm({ stageType: '', taskType: 'EXTERNAL', dueDate: '', dueTime: '', agenda: '' });
+      setShowScheduleForm(false);
+      await loadCalls();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   // Task #115 — attachments support multiple files per category. Each click
   // on a category button adds a new attachment slot (categories can repeat);
@@ -356,14 +405,109 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
           <p className="text-sm text-gray-500">{calls.length} call{calls.length !== 1 ? 's' : ''} · {rnrCount} RNR</p>
         </div>
         {!isLocked && (
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
-          >
-            {showForm ? 'Cancel' : '+ Log Call'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowScheduleForm(false); setShowForm(!showForm); }}
+              className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 transition-colors"
+            >
+              {showForm ? 'Cancel' : '+ Log Call'}
+            </button>
+            <button
+              onClick={() => { setShowForm(false); setShowScheduleForm(!showScheduleForm); }}
+              className="bg-white border border-brand-300 text-brand-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-50 transition-colors"
+            >
+              {showScheduleForm ? 'Cancel' : '+ Schedule Call'}
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Schedule Call Form — distinct entry point for a call that hasn't happened yet */}
+      {!isLocked && showScheduleForm && (
+        <form onSubmit={handleScheduleCall} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+          <h3 className="font-medium text-gray-900">Schedule a Call</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Stage Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={scheduleForm.stageType}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, stageType: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                <option value="">Select…</option>
+                {CALL_STAGE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Internal / External <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={scheduleForm.taskType}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, taskType: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                <option value="EXTERNAL">External (with client)</option>
+                <option value="INTERNAL">Internal</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={scheduleForm.dueDate}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, dueDate: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Time <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="time"
+                value={scheduleForm.dueTime}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, dueTime: e.target.value })}
+                required
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
+              <input
+                type="text"
+                value={scheduleForm.agenda}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, agenda: e.target.value })}
+                placeholder="What's this call for…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowScheduleForm(false)}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={scheduling}
+              className="bg-brand-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            >
+              {scheduling ? 'Scheduling…' : 'Schedule Call'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {isLocked && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
@@ -659,6 +803,32 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
             {uploadingAttachment ? 'Uploading attachment…' : submitting ? 'Saving…' : 'Save Call'}
           </button>
         </form>
+      )}
+
+      {/* Scheduled Calls — calls not yet made, clearly separate from the logged-call list below */}
+      {!loading && scheduledCalls.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Scheduled Calls</p>
+          {scheduledCalls.map((task) => (
+            <div key={task.id} className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded">
+                    Scheduled
+                  </span>
+                  <span className="text-sm font-medium text-gray-900">{task.callStageType} call</span>
+                  <span className="text-xs text-gray-500">
+                    {task.taskType === 'INTERNAL' ? 'Internal' : 'External'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {formatISTDate(task.dueDate)}{task.dueTime ? ` at ${task.dueTime}` : ''}
+                  {task.agenda ? ` · ${task.agenda}` : ''}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Call List */}

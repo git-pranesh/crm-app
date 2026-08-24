@@ -175,6 +175,10 @@ export interface FollowUpTask {
   createdAt: string;
   assignedTo: { id: string; name: string; role: string };
   lead?: { id: string; leadId: string; name: string; stage: string };
+  /// Set only when this task was created via "Schedule Call" — marks it as a
+  /// scheduled-but-not-yet-made call (DQL/PP/PD/etc.) rather than a generic
+  /// follow-up or callback task.
+  callStageType?: string;
 }
 
 export interface Meeting {
