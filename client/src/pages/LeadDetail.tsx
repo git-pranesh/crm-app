@@ -1793,6 +1793,7 @@ export default function LeadDetail() {
             {activeTab === 'meetings' && (
               <MeetingsTab
                 leadId={leadId!}
+                clientEmail={lead?.email ?? null}
                 onMeetingCreated={loadLead}
                 onMeetingCompleted={handleMeetingCompleted}
                 isLocked={isLocked}

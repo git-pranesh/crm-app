@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
 import { sendEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { saveDraft } from '../lib/emailService.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
 import { notifyManagers } from '../lib/notifications.js';
@@ -230,7 +231,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
   const {
     status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation,
-    momAgenda, momAttachmentTypes, momAttachments, sendMomMail, nextPlanOfAction,
+    momAgenda, momAttachmentTypes, momAttachments, nextPlanOfAction,
   } = req.body as {
     status?: string;
     mom?: string;
@@ -243,8 +244,6 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     momAgenda?: string;
     momAttachmentTypes?: string[];
     momAttachments?: { type: string; storagePath?: string; fileUrl?: string }[];
-    /// Mandatory checkbox confirming the MOM will be emailed to the client — cannot be submitted false.
-    sendMomMail?: boolean;
     nextPlanOfAction?: NextPlanItem[];
   };
 
@@ -274,10 +273,6 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       assertAttachmentTypesMatch(momAttachmentTypes, momAttachments, 'momAttachmentTypes');
     } catch (err: any) {
       res.status(400).json({ error: err.message });
-      return;
-    }
-    if (sendMomMail !== true) {
-      res.status(400).json({ error: 'You must confirm the MOM email will be sent to the client to complete this meeting' });
       return;
     }
   }
@@ -478,7 +473,13 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     await sendNextPlanMails(nextPlanOfAction, { name: lead.name, email: lead.email });
   }
 
-  // Auto-triggered emails
+  // Client-facing mail (MOM / reschedule / no-show) is drafted here but not
+  // auto-sent — it's saved as an editable draft the designer must open and
+  // explicitly click Send on (client/src/components/tabs/MeetingsTab.tsx),
+  // reusing the same draft/send-draft endpoints (routes/email.ts) as the
+  // PD→OB Welcome Mail pattern. `pendingMail` in the response carries the
+  // prefilled content the client needs to open that review step.
+  let pendingMail: { draftKey: string; type: string; to: string; subject: string; html: string } | undefined;
   if (lead.email) {
     let emailPayload;
 
@@ -511,20 +512,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
     if (emailPayload) {
       emailPayload.to = lead.email;
-      queues.emails.add(`meeting-${status.toLowerCase()}`, {
-        emailPayload,
-        leadId: lead.id,
-        meetingId: id,
-      }).catch(() => {});
-
-      await prisma.emailLog.create({
-        data: {
-          leadId: lead.id,
-          type: `MEETING_${status}`,
-          sentTo: lead.email,
-          subject: emailPayload.subject,
-        },
-      });
+      const type = `MEETING_${status}`;
+      const draftKey = `${lead.id}::${type}`;
+      saveDraft(draftKey, emailPayload.subject, emailPayload.html, { leadId: lead.id, type });
+      pendingMail = { draftKey, type, to: emailPayload.to, subject: emailPayload.subject, html: emailPayload.html };
     }
   }
 
@@ -623,5 +614,5 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
   }
 
-  res.json({ meeting: updated, replacementMeeting: replacementMeeting ?? undefined });
+  res.json({ meeting: updated, replacementMeeting: replacementMeeting ?? undefined, pendingMail });
 });

@@ -46,3 +46,4 @@
 - [mergeParams route param naming](merge-params-naming.md) — Express router mounted with `{ mergeParams: true }` under `/:leadId` must destructure `req.params.leadId`, not `req.params.id` — silent Prisma `undefined` bugs otherwise
 - [Mail delivery path](mail-delivery-path.md) — mail triggers use Nodemailer/SMTP with a silent console-only fallback, not the installed Resend integration; "sendEmail resolved" ≠ "client received it"
 - [Client checklist audit pattern](checklist-audit-pattern.md) — verify every row of a client bug-list against live code before building; a meaningful fraction is usually already fixed or misdescribed
+- [Duplicate email pathways](duplicate-email-pathways.md) — lib/email.ts and lib/emailService.ts each had their own Nodemailer transporter; grep for all transporter instances, not just the one call site named

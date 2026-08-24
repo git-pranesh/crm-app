@@ -1,37 +1,15 @@
-import nodemailer from 'nodemailer';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './prisma.js';
+import { sendEmail } from './email.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates/email');
 
-// ── Nodemailer transporter (lazy) ─────────────────────────────────────────────
-let _transporter: nodemailer.Transporter | null = null;
-
-function getTransporter() {
-  if (_transporter) return _transporter;
-
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT ?? 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    // Return a dev preview transporter
-    _transporter = nodemailer.createTransport({ jsonTransport: true });
-    return _transporter;
-  }
-
-  _transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  });
-  return _transporter;
-}
+// Real delivery (Resend / SMTP / dev-guard) is centralized in ./email.ts —
+// this module used to keep its own separate Nodemailer transporter, which
+// silently bypassed Resend entirely. It now delegates to sendEmail().
 
 // ── Fill HTML template with variables ────────────────────────────────────────
 function fillTemplate(templateName: string, vars: Record<string, string>): string {
@@ -66,15 +44,9 @@ export async function sendEmailByType(
   if (!config) throw new Error(`Unknown email type: ${type}`);
 
   const html = fillTemplate(config.template, vars);
-  const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
 
-  const transporter = getTransporter();
-  const isDevTransport = !process.env.SMTP_HOST;
-
-  if (isDevTransport) {
-    console.log(`[email:dev] Would send "${config.subject}" to ${to ?? '(no recipient)'}`);
-  } else if (to) {
-    await transporter.sendMail({ from, to, subject: config.subject, html });
+  if (to) {
+    await sendEmail({ to, subject: config.subject, html });
   }
 
   // Log the send
@@ -93,27 +65,31 @@ export function previewEmail(type: string, vars: Record<string, string>): string
 }
 
 // ── Draft storage (in-memory for dev; use Redis/DB for prod) ─────────────────
-const drafts = new Map<string, { subject: string; html: string }>();
+interface DraftMeta { leadId: string; type: string }
+const drafts = new Map<string, { subject: string; html: string; meta?: DraftMeta }>();
 
-export function saveDraft(key: string, subject: string, html: string) {
-  drafts.set(key, { subject, html });
+export function saveDraft(key: string, subject: string, html: string, meta?: DraftMeta) {
+  // Preserve meta set at creation time (e.g. by meetings.ts) even if the
+  // caller re-saving edited content (routes/email.ts PATCH /draft) doesn't
+  // pass it again.
+  const existingMeta = drafts.get(key)?.meta;
+  drafts.set(key, { subject, html, meta: meta ?? existingMeta });
 }
 
 export function getDraft(key: string) {
   return drafts.get(key) ?? null;
 }
 
-export async function sendDraft(key: string, to: string, from?: string): Promise<void> {
+export async function sendDraft(key: string, to: string): Promise<void> {
   const draft = drafts.get(key);
   if (!draft) throw new Error('Draft not found');
 
-  const transporter = getTransporter();
-  const fromAddr = from ?? process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
-
-  if (!process.env.SMTP_HOST) {
-    console.log(`[email:dev] Would send draft "${draft.subject}" to ${to}`);
-  } else {
-    await transporter.sendMail({ from: fromAddr, to, subject: draft.subject, html: draft.html });
-  }
+  await sendEmail({ to, subject: draft.subject, html: draft.html });
   drafts.delete(key);
+
+  if (draft.meta) {
+    await prisma.emailLog.create({
+      data: { leadId: draft.meta.leadId, type: draft.meta.type, sentTo: to, subject: draft.subject },
+    }).catch((e) => console.warn('[emailService] Log write failed:', e.message));
+  }
 }

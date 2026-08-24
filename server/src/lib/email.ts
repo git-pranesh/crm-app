@@ -1,9 +1,14 @@
 /**
- * Email helper — Nodemailer-backed delivery.
- * Uses SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS env vars when configured.
- * Falls back to a dev preview (jsonTransport — logs to console) when unconfigured.
+ * Email helper — real delivery for all client-facing mail.
+ * Send order: Resend (RESEND_API_KEY) → SMTP (SMTP_HOST/PORT/USER/PASS) →
+ * dev-only console preview (jsonTransport) when NEITHER is configured, which
+ * only happens outside production. This is the single choke point every
+ * client-facing send route funnels through — fixing it here fixes all of
+ * them (PD→OB, OB→OBM, meeting mails via the queue worker, next-plan mails,
+ * lead-status mails) without touching each call site.
  */
 import nodemailer from 'nodemailer';
+import { sendViaResend } from './resendEmail.js';
 
 export interface EmailPayload {
   to: string;
@@ -37,20 +42,33 @@ function getTransporter(): nodemailer.Transporter {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
-  const transporter = getTransporter();
   const from = process.env.FROM_EMAIL ?? 'noreply@interiorsbydex.com';
-  const isSmtpConfigured = !!process.env.SMTP_HOST;
-
   const cc = payload.cc?.length ? payload.cc : undefined;
 
-  if (isSmtpConfigured) {
-    await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
-    console.log(`[email] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`);
-  } else {
-    // Dev / unconfigured: jsonTransport logs without network I/O
-    const info = await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
-    console.log(`[email:dev] Would send "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`, JSON.parse(info.message).subject);
+  // 1) Resend — the configured, working integration. Preferred whenever a key exists.
+  if (process.env.RESEND_API_KEY) {
+    const result = await sendViaResend({ from, to: payload.to, subject: payload.subject, html: payload.html, cc });
+    console.log(`[email:resend] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''} (id: ${result.id})`);
+    return;
   }
+
+  // 2) SMTP — legacy path, still supported if explicitly configured.
+  const isSmtpConfigured = !!process.env.SMTP_HOST;
+  if (isSmtpConfigured) {
+    const transporter = getTransporter();
+    await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
+    console.log(`[email:smtp] Sent "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`);
+    return;
+  }
+
+  // 3) Neither configured — this must never happen in production, where it
+  // would silently drop a client-facing email. Fail loudly instead.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`No email provider configured (RESEND_API_KEY or SMTP_HOST) — refusing to silently drop "${payload.subject}" → ${payload.to}`);
+  }
+  const transporter = getTransporter();
+  const info = await transporter.sendMail({ from, to: payload.to, cc, subject: payload.subject, html: payload.html });
+  console.log(`[email:dev] No provider configured — NOT actually sent. Would send "${payload.subject}" → ${payload.to}${cc ? ` (cc: ${cc.join(', ')})` : ''}`, JSON.parse(info.message).subject);
 }
 
 // ── Pre-built templates ────────────────────────────────────────────────────────

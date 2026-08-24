@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mail, ChevronDown, ChevronUp, Paperclip, X } from 'lucide-react';
 import { api, type Meeting, type NextPlanItem } from '../../lib/api';
 import NextPlanOfActionPicker from '../NextPlanOfActionPicker';
+import EmailPreviewModal from '../EmailPreviewModal';
 import { istDatetimeLocalValue, istInputToISO } from '../../lib/dateFormat';
 
 const MOM_ATTACHMENT_TYPES = ['Floor Plan', 'Proposal', 'Design Draft', 'Contract', 'Other'] as const;
@@ -49,12 +50,13 @@ const STATUS_COLORS: Record<string, string> = {
 
 interface Props {
   leadId: string;
+  clientEmail?: string | null;
   onMeetingCreated?: () => void;
   onMeetingCompleted?: (meetingType: string) => void;
   isLocked?: boolean;
 }
 
-export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingCompleted, isLocked }: Props) {
+export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onMeetingCompleted, isLocked }: Props) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +78,15 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
   } | null>(null);
   const [statusForm, setStatusForm] = useState({
     mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '',
-    replanScheduledAt: '', replanLocation: '', momAgenda: '', sendMomMail: false,
+    replanScheduledAt: '', replanLocation: '', momAgenda: '',
   });
   const [statusSubmitting, setStatusSubmitting] = useState(false);
+  // Editable draft ("click Send") step for client-facing MOM/reschedule/
+  // no-show mail — mirrors the PD→OB Welcome Mail / OB→OBM pattern instead
+  // of auto-sending on completion.
+  const [pendingMail, setPendingMail] = useState<{ draftKey: string; type: string; subject: string; html: string } | null>(null);
+  const [sendingMail, setSendingMail] = useState(false);
+  const [mailSentNotice, setMailSentNotice] = useState<string | null>(null);
   const [momAttachmentTypes, setMomAttachmentTypes] = useState<string[]>([]);
   const [momFiles, setMomFiles] = useState<File[]>([]);
   const [uploadingMomAttachment, setUploadingMomAttachment] = useState(false);
@@ -142,7 +150,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
     setStatusModal({ meetingId, meetingType, status });
     setStatusForm({
       mom: '', rescheduledReason: '', newScheduledAt: '', noShowReason: '', replanScheduledAt: '', replanLocation: '',
-      momAgenda: '', sendMomMail: false,
+      momAgenda: '',
     });
     setMomAttachmentTypes([]);
     setMomFiles([]);
@@ -153,10 +161,6 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
   const handleStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModal) return;
-    if (statusModal.status === 'COMPLETED' && !statusForm.sendMomMail) {
-      setError('You must confirm the MOM email will be sent to the client');
-      return;
-    }
     if (statusModal.status === 'COMPLETED' && momAttachmentTypes.length !== momFiles.length) {
       setError('Each selected attachment category must have exactly one uploaded file.');
       return;
@@ -188,34 +192,62 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
         setUploadingMomAttachment(false);
       }
 
-      await api.patch(`/meetings/${statusModal.meetingId}/status`, {
-        status: statusModal.status,
-        mom: statusForm.mom || undefined,
-        momAgenda: statusForm.momAgenda || undefined,
-        momAttachmentTypes: momAttachmentTypes.length ? momAttachmentTypes : undefined,
-        momAttachments,
-        sendMomMail: statusModal.status === 'COMPLETED' ? statusForm.sendMomMail : undefined,
-        nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
-        rescheduledReason: statusForm.rescheduledReason || undefined,
-        noShowReason: statusForm.noShowReason || undefined,
-        newScheduledAt: statusForm.newScheduledAt
-          ? istInputToISO(statusForm.newScheduledAt)
-          : undefined,
-        replanScheduledAt: statusForm.replanScheduledAt
-          ? istInputToISO(statusForm.replanScheduledAt)
-          : undefined,
-        replanLocation: statusForm.replanLocation || undefined,
-      });
+      const result = await api.patch<{ pendingMail?: { draftKey: string; type: string; to: string; subject: string; html: string } }>(
+        `/meetings/${statusModal.meetingId}/status`,
+        {
+          status: statusModal.status,
+          mom: statusForm.mom || undefined,
+          momAgenda: statusForm.momAgenda || undefined,
+          momAttachmentTypes: momAttachmentTypes.length ? momAttachmentTypes : undefined,
+          momAttachments,
+          nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
+          rescheduledReason: statusForm.rescheduledReason || undefined,
+          noShowReason: statusForm.noShowReason || undefined,
+          newScheduledAt: statusForm.newScheduledAt
+            ? istInputToISO(statusForm.newScheduledAt)
+            : undefined,
+          replanScheduledAt: statusForm.replanScheduledAt
+            ? istInputToISO(statusForm.replanScheduledAt)
+            : undefined,
+          replanLocation: statusForm.replanLocation || undefined,
+        },
+      );
       const completedType = statusModal.status === 'COMPLETED' ? statusModal.meetingType : null;
       setStatusModal(null);
       await loadMeetings();
       onMeetingCreated?.(); // reload lead data in parent
       if (completedType) onMeetingCompleted?.(completedType);
+      // Open the editable draft the designer must review and click Send on —
+      // client-facing mail is never auto-sent.
+      if (result.pendingMail) {
+        setPendingMail({
+          draftKey: result.pendingMail.draftKey,
+          type: result.pendingMail.type,
+          subject: result.pendingMail.subject,
+          html: result.pendingMail.html,
+        });
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
       setStatusSubmitting(false);
       setUploadingMomAttachment(false);
+    }
+  };
+
+  const handleSendPendingMail = async (subject: string, html: string) => {
+    if (!pendingMail) return;
+    setSendingMail(true);
+    setError(null);
+    try {
+      await api.patch(`/email/draft/${pendingMail.type}/${leadId}`, { subject, html });
+      await api.post('/email/send-draft', { draftKey: pendingMail.draftKey, to: clientEmail });
+      setMailSentNotice(`Email sent to ${clientEmail}`);
+      setPendingMail(null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSendingMail(false);
     }
   };
 
@@ -423,15 +455,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                       </div>
                     )}
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                    <input
-                      type="checkbox"
-                      checked={statusForm.sendMomMail}
-                      onChange={(e) => setStatusForm({ ...statusForm, sendMomMail: e.target.checked })}
-                      required
-                    />
-                    I confirm the MOM will be emailed to the client <span className="text-red-500">*</span>
-                  </label>
+                  <p className="text-xs text-gray-400">You'll be able to review and edit the MOM email before it's sent to the client.</p>
                   <div className="border-t border-gray-100 pt-3">
                     <NextPlanOfActionPicker items={nextPlanItems} onChange={setNextPlanItems} />
                   </div>
@@ -464,7 +488,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                       min={minRescheduleDateTime()}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
-                    <p className="text-xs text-gray-400 mt-1">The meeting stays active and moves to this new time. Client will be notified.</p>
+                    <p className="text-xs text-gray-400 mt-1">The meeting stays active and moves to this new time. You'll review the client notification email before it's sent.</p>
                   </div>
                 </>
               )}
@@ -482,7 +506,7 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
                       placeholder="e.g. Client forgot, unavailable at last minute…"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
-                    <p className="text-xs text-gray-400 mt-1">A follow-up email will be sent to the client automatically.</p>
+                    <p className="text-xs text-gray-400 mt-1">You'll be able to review and edit the follow-up email before it's sent to the client.</p>
                   </div>
                   <div className="border-t border-gray-100 pt-3">
                     <p className="text-xs font-semibold text-gray-500 mb-2">Next tentative replan</p>
@@ -659,6 +683,30 @@ export default function MeetingsTab({ leadId, onMeetingCreated, onMeetingComplet
             </div>
           ))}
         </div>
+      )}
+
+      {mailSentNotice && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white text-sm px-4 py-2.5 rounded-lg shadow-lg z-50">
+          {mailSentNotice}
+        </div>
+      )}
+
+      {pendingMail && (
+        <EmailPreviewModal
+          title={
+            pendingMail.type === 'MEETING_COMPLETED'
+              ? 'Review MOM Email'
+              : pendingMail.type === 'MEETING_RESCHEDULED'
+              ? 'Review Reschedule Email'
+              : 'Review No-show Email'
+          }
+          defaultSubject={pendingMail.subject}
+          defaultHtml={pendingMail.html}
+          recipientLabel={clientEmail ?? '(no client email on file)'}
+          sending={sendingMail}
+          onSend={handleSendPendingMail}
+          onClose={() => setPendingMail(null)}
+        />
       )}
     </div>
   );

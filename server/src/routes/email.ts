@@ -68,7 +68,7 @@ emailRouter.patch('/draft/:type/:leadId', verifyToken, async (req, res) => {
   if (isLeadLocked(lead.status)) { sendLeadLockedError(res); return; }
 
   const draftKey = `${leadId}::${type}`;
-  saveDraft(draftKey, subject ?? `${type} — Interiors by DeX`, html);
+  saveDraft(draftKey, subject ?? `${type} — Interiors by DeX`, html, { leadId, type });
 
   res.json({ message: 'Draft saved', draftKey });
 });

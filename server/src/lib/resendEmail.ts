@@ -3,6 +3,7 @@ export interface ResendEmailPayload {
   subject: string;
   html: string;
   from: string;
+  cc?: string[];
 }
 
 export interface ResendSendResult {
@@ -26,7 +27,13 @@ export async function sendViaResend(payload: ResendEmailPayload): Promise<Resend
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      from: payload.from,
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+      ...(payload.cc?.length ? { cc: payload.cc } : {}),
+    }),
   });
 
   if (!response.ok) {
