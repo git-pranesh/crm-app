@@ -29,7 +29,7 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
   const attachmentFileRef = useRef<HTMLInputElement>(null);
 
   // Action modal: complete / not-done / reschedule
-  const [actionModal, setActionModal] = useState<{ taskId: string; kind: 'complete' | 'not-done' | 'reschedule' } | null>(null);
+  const [actionModal, setActionModal] = useState<{ taskId: string; kind: 'complete' | 'not-done' | 'reschedule'; task: FollowUpTask } | null>(null);
   const [actionForm, setActionForm] = useState({
     outcome: '', completedAt: todayDateStr(), reason: '', dueDate: '', dueTime: '',
   });
@@ -98,8 +98,8 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
     }
   };
 
-  const openAction = (taskId: string, kind: 'complete' | 'not-done' | 'reschedule') => {
-    setActionModal({ taskId, kind });
+  const openAction = (task: FollowUpTask, kind: 'complete' | 'not-done' | 'reschedule') => {
+    setActionModal({ taskId: task.id, kind, task });
     setActionForm({ outcome: '', completedAt: todayDateStr(), reason: '', dueDate: '', dueTime: '' });
     setError(null);
   };
@@ -301,7 +301,7 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
               {(actionModal.kind === 'complete' || actionModal.kind === 'not-done') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Outcome <span className="text-red-500">*</span>
+                    Reason <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     rows={3}
@@ -328,6 +328,21 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
               )}
               {actionModal.kind === 'reschedule' && (
                 <>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 space-y-0.5">
+                    <p className="text-xs font-medium text-gray-500">Currently scheduled</p>
+                    <p className="text-sm text-gray-700">
+                      {formatISTDate(actionModal.task.dueDate, { weekday: 'short' })}
+                      {(actionModal.task.timeFrom || actionModal.task.dueTime) && (
+                        <span className="text-gray-500">
+                          {' '}at {actionModal.task.timeFrom ?? actionModal.task.dueTime}
+                          {actionModal.task.timeTo ? `–${actionModal.task.timeTo}` : ''}
+                        </span>
+                      )}
+                    </p>
+                    {actionModal.task.agenda && (
+                      <p className="text-xs text-gray-500 italic">{actionModal.task.agenda}</p>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -419,19 +434,19 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
                 {isActionable(task) && (
                   <div className="flex gap-2">
                     <button
-                      onClick={() => openAction(task.id, 'complete')}
+                      onClick={() => openAction(task, 'complete')}
                       className="text-xs bg-green-50 text-green-700 border border-green-200 px-2.5 py-1.5 rounded-lg hover:bg-green-100 transition-colors"
                     >
                       Complete
                     </button>
                     <button
-                      onClick={() => openAction(task.id, 'reschedule')}
+                      onClick={() => openAction(task, 'reschedule')}
                       className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1.5 rounded-lg hover:bg-amber-100 transition-colors"
                     >
                       Reschedule
                     </button>
                     <button
-                      onClick={() => openAction(task.id, 'not-done')}
+                      onClick={() => openAction(task, 'not-done')}
                       className="text-xs bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       Not Done
@@ -448,7 +463,7 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
 
               {task.outcome && (
                 <div className="mt-2 bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-xs font-medium text-gray-500 mb-0.5">Outcome</p>
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Reason</p>
                   <p className="text-xs text-gray-700">{task.outcome}</p>
                 </div>
               )}

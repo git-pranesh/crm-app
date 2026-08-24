@@ -97,7 +97,7 @@ function TaskCard({
         </div>
         {task.agenda && <p className="text-xs text-stone-400 italic mt-1">{task.agenda}</p>}
         {task.outcome && (
-          <p className="text-xs text-stone-500 mt-1"><span className="font-medium">Outcome:</span> {task.outcome}</p>
+          <p className="text-xs text-stone-500 mt-1"><span className="font-medium">Reason:</span> {task.outcome}</p>
         )}
         {task.attachments && task.attachments.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -311,7 +311,7 @@ export default function Tasks() {
               {(actionModal.kind === 'complete' || actionModal.kind === 'not-done') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Outcome <span className="text-red-500">*</span>
+                    Reason <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     rows={3}
