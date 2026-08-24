@@ -228,7 +228,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
   const taskAttachmentFileRef = useRef<HTMLInputElement>(null);
   // External Notes — a single optional attachment, deliberately separate from
   // the categorized attachment selector above (Lifestyle Capture/Proposal/Pitch).
-  const [externalNotesFile, setExternalNotesFile] = useState<File | null>(null);
+  const [externalNotesFiles, setExternalNotesFiles] = useState<File[]>([]);
   const externalNotesFileRef = useRef<HTMLInputElement>(null);
 
   const loadCalls = async () => {
@@ -293,7 +293,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
     setNextPlanItems([]);
     setSelectedAttachmentTypes([]);
     setAttachmentFiles([]);
-    setExternalNotesFile(null);
+    setExternalNotesFiles([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -362,25 +362,27 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
         setUploadingAttachment(false);
       }
 
-      // Upload the External Notes attachment, if provided — a single file,
-      // deliberately independent of the categorized `attachments` upload above.
-      let externalNotesAttachment: { fileName: string; storagePath: string } | undefined;
-      if (externalNotesFile) {
+      // Upload the External Notes attachment(s), if provided — independent of
+      // the categorized `attachments` upload above.
+      const externalNotesAttachments: { fileName: string; storagePath: string }[] = [];
+      if (externalNotesFiles.length > 0) {
         setUploadingAttachment(true);
         const token = localStorage.getItem('crm_token') ?? '';
-        const fd = new FormData();
-        fd.append('file', externalNotesFile);
-        const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: fd,
-        });
-        if (!uploadResp.ok) {
-          const err = await uploadResp.json().catch(() => ({}));
-          throw new Error(err.error ?? 'External notes attachment upload failed');
+        for (const file of externalNotesFiles) {
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadResp = await fetch(`${getApiBase()}/leads/${leadId}/calls/upload-attachment`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          if (!uploadResp.ok) {
+            const err = await uploadResp.json().catch(() => ({}));
+            throw new Error(err.error ?? 'External notes attachment upload failed');
+          }
+          const uploadData = await uploadResp.json();
+          externalNotesAttachments.push({ fileName: file.name, storagePath: uploadData.storagePath });
         }
-        const uploadData = await uploadResp.json();
-        externalNotesAttachment = { fileName: externalNotesFile.name, storagePath: uploadData.storagePath };
         setUploadingAttachment(false);
       }
 
@@ -389,7 +391,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
         duration: form.duration ? Number(form.duration) * 60 : undefined,
         notes: form.notes.trim(),
         externalNotes: form.externalNotes.trim() || undefined,
-        externalNotesAttachment,
+        externalNotesAttachments,
         calledAt: form.calledAt ? istInputToISO(form.calledAt) : undefined,
         location: form.location.trim() || undefined,
         attachments,
@@ -693,31 +695,31 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               placeholder="What the client should see in the call summary email…"
             />
-            <div className="mt-1.5">
-              {externalNotesFile ? (
-                <span className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {externalNotesFiles.map((f, idx) => (
+                <span key={`${f.name}-${idx}`} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-lg">
                   <Paperclip size={11} strokeWidth={2} />
-                  {externalNotesFile.name}
-                  <button type="button" onClick={() => setExternalNotesFile(null)} className="text-gray-400 hover:text-gray-600">
+                  {f.name}
+                  <button type="button" onClick={() => setExternalNotesFiles(externalNotesFiles.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-gray-600">
                     <X size={11} strokeWidth={2} />
                   </button>
                 </span>
-              ) : (
-                <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400 w-fit">
-                  <Paperclip size={11} strokeWidth={2} />
-                  Add attachment
-                  <input
-                    ref={externalNotesFileRef}
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      const picked = e.target.files?.[0];
-                      if (picked) setExternalNotesFile(picked);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
-              )}
+              ))}
+              <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-600 cursor-pointer hover:border-brand-400 w-fit">
+                <Paperclip size={11} strokeWidth={2} />
+                Add attachment
+                <input
+                  ref={externalNotesFileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length > 0) setExternalNotesFiles([...externalNotesFiles, ...picked]);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
             </div>
             {form.outcome === 'ANSWERED' && (
               <label className="flex items-center gap-2 text-sm text-gray-700 mt-2">

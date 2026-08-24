@@ -449,10 +449,10 @@ model Call {
   /// sent on an ANSWERED call. Kept separate from `notes` (now "Internal
   /// Notes", staff-only, never emailed).
   externalNotes    String?
-  /// Single attachment for externalNotes: { fileName?, fileUrl?, storagePath? }.
+  /// Attachments for externalNotes: array of { fileName?, fileUrl?, storagePath? }.
   /// Deliberately its own field, not part of the categorized `attachments`
   /// array (Lifestyle Capture / Proposal / Pitch Presentation).
-  externalNotesAttachment Json?
+  externalNotesAttachments Json?
   createdAt        DateTime    @default(now())
 
   lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)

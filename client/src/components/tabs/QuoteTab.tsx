@@ -56,13 +56,15 @@ export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, pro
 
   useState(() => { loadQuotes(); });
 
-  const handleAttach = async (quoteId: string, file: File) => {
+  const handleAttach = async (quoteId: string, files: File[]) => {
     setUploadingFor(quoteId);
     try {
-      const fd = new FormData();
-      fd.set('file', file);
-      await uploadFile(`/quotes/${quoteId}/files`, fd);
-      toast.success('Quote document attached');
+      for (const file of files) {
+        const fd = new FormData();
+        fd.set('file', file);
+        await uploadFile(`/quotes/${quoteId}/files`, fd);
+      }
+      toast.success(files.length > 1 ? 'Quote documents attached' : 'Quote document attached');
       await loadQuotes();
     } catch (e: any) {
       toast.error(e.message ?? 'Could not attach file');
@@ -213,11 +215,12 @@ export default function QuoteTab({ leadId, leadRef, pid, name, phone, email, pro
                 <input
                   ref={(el) => { fileInputRefs.current[q.id] = el; }}
                   type="file"
+                  multiple
                   accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleAttach(q.id, file);
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) handleAttach(q.id, files);
                     e.target.value = '';
                   }}
                 />

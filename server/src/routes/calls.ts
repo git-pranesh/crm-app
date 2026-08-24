@@ -40,7 +40,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     duration,
     notes,
     externalNotes,
-    externalNotesAttachment,
+    externalNotesAttachments,
     recordingUrl,
     location,
     calledAt,
@@ -55,10 +55,10 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     duration?: number;
     // "Internal Notes" — staff-only, never sent to the client.
     notes?: string;
-    // "External Notes" (+ optional single attachment) — the ONLY notes content
+    // "External Notes" (+ optional attachments) — the ONLY notes content
     // allowed into the ANSWERED-call auto-mail below.
     externalNotes?: string;
-    externalNotesAttachment?: { fileName?: string; fileUrl?: string; storagePath?: string };
+    externalNotesAttachments?: { fileName?: string; fileUrl?: string; storagePath?: string }[];
     recordingUrl?: string;
     location?: string;
     calledAt?: string;
@@ -91,14 +91,14 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     return;
   }
 
-  // External Notes attachment is optional, but if present must be a real
-  // uploaded file — same "type is a fixed label, file must exist" shape as
-  // the other single/generic attachment fields on this route.
-  if (externalNotesAttachment) {
+  // External Notes attachments are optional, but if present must all be real
+  // uploaded files — same "type is a fixed label, file must exist" shape as
+  // the other generic attachment fields on this route.
+  if (externalNotesAttachments?.length) {
     try {
       validateGenericAttachments(
-        [{ type: 'External Notes', ...externalNotesAttachment }],
-        'externalNotesAttachment',
+        externalNotesAttachments.map((a) => ({ type: 'External Notes', ...a })),
+        'externalNotesAttachments',
       );
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -238,7 +238,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
         duration,
         notes,
         externalNotes: externalNotes?.trim() || undefined,
-        externalNotesAttachment: externalNotesAttachment ?? undefined,
+        externalNotesAttachments: externalNotesAttachments?.length ? externalNotesAttachments : undefined,
         recordingUrl,
         location: location?.trim() || undefined,
         calledAt: calledAt ? new Date(calledAt) : undefined,
@@ -393,8 +393,11 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     const managers = await prisma.user.findMany({ where: { role: 'BRANCH_HEAD' }, select: { email: true } });
     const cc = [...ccUsers, ...managers].map((u) => u.email).filter((e): e is string => !!e);
 
-    const attachmentsHtml = externalNotesAttachment?.fileUrl
-      ? `<p><a href="${externalNotesAttachment.fileUrl}">${externalNotesAttachment.fileName ?? 'View attachment'}</a></p>`
+    const attachmentsHtml = externalNotesAttachments?.length
+      ? externalNotesAttachments
+          .filter((a) => a.fileUrl)
+          .map((a) => `<p><a href="${a.fileUrl}">${a.fileName ?? 'View attachment'}</a></p>`)
+          .join('')
       : '';
 
     const { subject, html } = await renderMailTemplate('CALL_LOG_SUMMARY', {
