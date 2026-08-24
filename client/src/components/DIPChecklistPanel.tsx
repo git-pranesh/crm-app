@@ -10,6 +10,7 @@ interface DIPChecklist {
   discountApprovalFormSent: boolean;
   npsTriggered: boolean;
   cxApprovalReceived: boolean;
+  internalMailThreadCompleted: boolean;
   internalMailThreadUrl: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -27,6 +28,7 @@ const ITEMS = [
   { key: 'discountApprovalFormSent', label: 'Discount approval form sent to finance' },
   { key: 'npsTriggered', label: 'NPS survey triggered' },
   { key: 'cxApprovalReceived', label: 'CX approval received' },
+  { key: 'internalMailThreadCompleted', label: 'Internal mail thread completed' },
 ] as const;
 
 type ChecklistKey = typeof ITEMS[number]['key'];
