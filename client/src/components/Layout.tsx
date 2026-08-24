@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import {
   LayoutDashboard, Kanban, Users, CalendarDays, Calendar,
   MessageCircle, Tag, Building2, BarChart2, Users2, Settings,
-  Bell, Search, X, ChevronRight, ChevronDown, Plus,
+  Bell, Search, X, ChevronRight, ChevronDown, Plus, ListChecks,
   type LucideIcon,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -57,10 +57,19 @@ const NAV_GROUPS: NavGroupDef[] = [
       { to: '/pipeline?tab=design', label: 'Design Pipeline', Icon: Building2, rolesOnly: ['DESIGNER', 'CRE'] },
       { to: '/leads', label: 'Leads', Icon: Users },
       { to: '/projects', label: 'Projects', Icon: Building2 },
-      { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
-      { to: '/calendar', label: 'Calendar', Icon: Calendar },
       { to: '/whatsapp', label: 'WhatsApp', Icon: MessageCircle },
       { to: '/discounts', label: 'Discounts', Icon: Tag },
+    ],
+  },
+  {
+    // Grouped per client request — Tasks page previously had no nav entry at
+    // all; Calls has no standalone cross-lead page yet (calls only live
+    // nested inside a lead's Call Log tab), so only Task + Meetings link here.
+    label: 'TASK & MEETINGS',
+    items: [
+      { to: '/tasks', label: 'Tasks', Icon: ListChecks },
+      { to: '/meetings', label: 'Meetings', Icon: CalendarDays },
+      { to: '/calendar', label: 'Calendar', Icon: Calendar },
     ],
   },
   {

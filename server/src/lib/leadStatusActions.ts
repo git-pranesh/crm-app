@@ -132,6 +132,16 @@ export async function markLeadInactive(opts: {
   await prisma.sLABreach.updateMany({ where: { leadId, resolvedAt: null }, data: { resolvedAt: new Date() } });
   await prisma.lead.update({ where: { id: leadId }, data: { isSLABreached: false } });
 
+  // Auto-clear this lead's open tasks (task-batch request) — an inactive
+  // lead should never keep dangling PENDING tasks on anyone's Tasks list.
+  // Uses the same terminal status/fields the manual "Not Done" action writes
+  // (server/src/routes/tasks.ts PATCH /:id/not-done), with a synthetic
+  // outcome so the audit trail still reads sensibly.
+  await prisma.followUpTask.updateMany({
+    where: { leadId, status: 'PENDING' },
+    data: { status: 'NOT_DONE', isCompleted: false, outcome: 'Lead marked inactive — task auto-cleared' },
+  });
+
   await logActivity(actorId, 'STATUS_CHANGED', leadId, {
     from: existing.status, to: 'INACTIVE', reason, notes: notes?.trim() || undefined, notifiedClient: notifyClient,
   });

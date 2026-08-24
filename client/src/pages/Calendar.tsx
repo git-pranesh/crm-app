@@ -2,11 +2,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays } from 'lucide-react';
 import { api } from '../lib/api';
+import type { FollowUpTask } from '../lib/api';
 import { getStoredUser } from '../lib/auth';
+import { formatISTDate, istDateOnly } from '../lib/dateFormat';
 import toast from 'react-hot-toast';
 
-type ViewMode = 'month' | 'week' | 'day';
+type ViewMode = 'month' | 'week' | 'day' | 'upcoming';
 type Scope = 'mine' | 'team';
+type Bucket = 'tomorrow' | 'thisWeek' | 'nextWeek';
 
 interface CalEvent {
   id: string;
@@ -121,6 +124,14 @@ export default function Calendar() {
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // ── Upcoming view (task #127-batch) — Tomorrow / This Week / Next Week
+  // buckets for tasks + meetings, separate from the dashboard's due-date
+  // count widget (which is untouched). Reuses the existing /tasks/my and
+  // /calendar endpoints — no data-model merge, no new backend route.
+  const [upcomingTasks, setUpcomingTasks] = useState<FollowUpTask[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalEvent[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(false);
+
   const getRange = useCallback((v: ViewMode, c: Date): [Date, Date] => {
     if (v === 'month') {
       return [startOfMonth(c.getFullYear(), c.getMonth()), endOfMonth(c.getFullYear(), c.getMonth())];
@@ -148,6 +159,117 @@ export default function Calendar() {
   }, [getRange]);
 
   useEffect(() => { fetchEvents(view, cursor, scope); }, [view, cursor, scope]);
+
+  const fetchUpcoming = useCallback(async (s: Scope) => {
+    setUpcomingLoading(true);
+    try {
+      const today = new Date();
+      const from = today;
+      const to = addDays(today, 14);
+      const [tasksRes, eventsRes] = await Promise.all([
+        s === 'mine'
+          ? api.get<{ tasks: FollowUpTask[] }>('/tasks/my')
+          : api.get<{ tasks: FollowUpTask[] }>('/tasks/team').catch(() => ({ tasks: [] })),
+        api.get<{ events: CalEvent[] }>(`/calendar?from=${isoDate(from)}&to=${isoDate(to)}&scope=${s}`),
+      ]);
+      setUpcomingTasks((tasksRes.tasks ?? []).filter((t) => t.status === 'PENDING'));
+      setUpcomingEvents(eventsRes.events ?? []);
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to load upcoming items');
+    } finally {
+      setUpcomingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (view === 'upcoming') fetchUpcoming(scope); }, [view, scope, fetchUpcoming]);
+
+  // Same bucket semantics as the dashboard's due-date summary widget
+  // (Tomorrow / This Week [day 2-7] / Next Week [day 8-14]), computed in IST
+  // — kept separate from that widget's own code/state entirely.
+  const bucketForDateKey = (dateKey: string): Bucket | null => {
+    const todayKey = isoDate(today);
+    const d = new Date(`${dateKey}T00:00:00`);
+    const t = new Date(`${todayKey}T00:00:00`);
+    const diffDays = Math.round((d.getTime() - t.getTime()) / 86400000);
+    if (diffDays === 1) return 'tomorrow';
+    if (diffDays >= 2 && diffDays <= 7) return 'thisWeek';
+    if (diffDays >= 8 && diffDays <= 14) return 'nextWeek';
+    return null;
+  };
+
+  interface UpcomingItem { id: string; kind: 'Task' | 'Call' | 'Meeting'; title: string; leadName: string; leadDbId: string; dateLabel: string; bucket: Bucket }
+
+  const upcomingItems: UpcomingItem[] = [
+    ...upcomingTasks.flatMap((t) => {
+      const bucket = bucketForDateKey(istDateOnly(t.dueDate));
+      if (!bucket || !t.lead) return [];
+      return [{
+        id: `task-${t.id}`,
+        kind: (t.callStageType ? 'Call' : 'Task') as 'Task' | 'Call',
+        title: t.agenda || (t.callStageType ? `${t.callStageType} call` : 'Follow-up task'),
+        leadName: t.lead.name,
+        leadDbId: t.lead.id,
+        dateLabel: formatISTDate(t.dueDate),
+        bucket,
+      }];
+    }),
+    ...upcomingEvents.flatMap((ev) => {
+      const bucket = bucketForDateKey(istDateKey(ev.scheduledAt));
+      if (!bucket) return [];
+      return [{
+        id: `meeting-${ev.id}`,
+        kind: 'Meeting' as const,
+        title: `${ev.type}${ev.ppNumber ? ` PP${ev.ppNumber}` : ''}`,
+        leadName: ev.leadName,
+        leadDbId: ev.leadDbId,
+        dateLabel: formatISTDate(ev.scheduledAt),
+        bucket,
+      }];
+    }),
+  ];
+
+  const KIND_BADGE: Record<UpcomingItem['kind'], string> = {
+    Task: 'bg-stone-100 text-stone-700',
+    Call: 'bg-amber-100 text-amber-700',
+    Meeting: 'bg-green-100 text-green-700',
+  };
+
+  const renderUpcoming = () => (
+    <div className="flex-1 overflow-auto p-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {([['tomorrow', 'Tomorrow'], ['thisWeek', 'This Week'], ['nextWeek', 'Next Week']] as [Bucket, string][]).map(([bucket, label]) => {
+          const items = upcomingItems.filter((it) => it.bucket === bucket);
+          return (
+            <div key={bucket} className="bg-white rounded-2xl border border-gray-100 flex flex-col">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">{label}</h3>
+                <span className="text-xs text-gray-400 font-medium">{items.length}</span>
+              </div>
+              <div className="p-3 space-y-2 flex-1">
+                {items.length === 0 && !upcomingLoading && (
+                  <p className="text-xs text-gray-400 text-center py-6">Nothing scheduled</p>
+                )}
+                {items.map((it) => (
+                  <button
+                    key={it.id}
+                    onClick={() => navigate(`/leads/${it.leadDbId}`)}
+                    className="w-full text-left p-2.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${KIND_BADGE[it.kind]}`}>{it.kind}</span>
+                      <span className="text-[10px] text-gray-400">{it.dateLabel}</span>
+                    </div>
+                    <p className="text-xs font-medium text-gray-800 mt-1 truncate">{it.title}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{it.leadName}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   const goTo = (offset: number) => {
     setCursor((c) => {
@@ -342,7 +464,7 @@ export default function Calendar() {
           )}
 
           <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-            {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
+            {(['month', 'week', 'day', 'upcoming'] as ViewMode[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -367,7 +489,9 @@ export default function Calendar() {
       </div>
 
       {/* Calendar body */}
-      {isEmpty ? (
+      {view === 'upcoming' ? (
+        renderUpcoming()
+      ) : isEmpty ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-14 h-14 rounded-2xl bg-stone-100 flex items-center justify-center mb-3">
