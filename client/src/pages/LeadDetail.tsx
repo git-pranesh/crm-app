@@ -21,6 +21,7 @@ import TeamTab from '../components/tabs/TeamTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
 import PhoneInput from '../components/PhoneInput';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
+import ChatTab from '../components/tabs/ChatTab';
 import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
 
@@ -1891,6 +1892,7 @@ export default function LeadDetail() {
               });
               return (
                 <div className="space-y-5">
+                  <ChatTab leadId={leadId!} />
                   <h3 className="text-sm font-semibold text-gray-700">Full Activity Log</h3>
                   {activities.length === 0 ? (
                     <p className="text-xs text-gray-400 py-8 text-center">No activity yet</p>

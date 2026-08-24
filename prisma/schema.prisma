@@ -236,6 +236,7 @@ model User {
   discountRequestsReviewed  DiscountRequest[] @relation("ReviewerDiscounts")
   discountRequestsForwarded DiscountRequest[] @relation("ForwarderDiscounts")
   whatsappMessagesSent      WhatsAppMessage[]
+  leadChatMessages          LeadChatMessage[]
   emailsPreviewed           EmailLog[]
   activityLogs              ActivityLog[]
   notifications             NotificationLog[]
@@ -372,6 +373,7 @@ model Lead {
   quotes               Quote[]
   discountRequests     DiscountRequest[]
   whatsappMessages     WhatsAppMessage[]
+  chatMessages         LeadChatMessage[]
   emailLogs            EmailLog[]
   slaBreaches          SLABreach[]
   leadOffers           LeadOffer[]
@@ -642,6 +644,19 @@ model WhatsAppMessage {
   sentBy User? @relation(fields: [sentById], references: [id])
 
   @@map("whatsapp_messages")
+}
+
+model LeadChatMessage {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("lead_chat_messages")
 }
 
 model EmailLog {
