@@ -21,7 +21,10 @@ import { sendEmail } from '../lib/email.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { assignLeadToDesigner, incrementAssigned } from '../services/assignmentService.js';
-import { MEETING_LOCATION_TYPES } from '../lib/meetingScheduler.js';
+import {
+  MEETING_LOCATION_TYPES, assertNoActiveMeeting, computeMeetingNumbering,
+  createMeetingRecord, runMeetingScheduledSideEffects, type ScheduleMeetingLead,
+} from '../lib/meetingScheduler.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
 
 export const pdObChecklistRouter = Router({ mergeParams: true });
@@ -29,6 +32,60 @@ export const pdObChecklistRouter = Router({ mergeParams: true });
 /** Admin-configurable default (see lib/mailTemplates.ts, code PD_OB_WELCOME). */
 export async function pdObWelcomeMailTemplate(clientName: string): Promise<{ subject: string; html: string }> {
   return renderMailTemplate('PD_OB_WELCOME', { clientName });
+}
+
+/**
+ * Task #65: keeps the lead's ONBOARDING-type Meeting in sync with the OB
+ * meeting date/location captured on the PD→OB checklist, so it shows up on
+ * the shared Meetings tab/page (which only reads from the Meeting table).
+ * ONBOARDING-type meetings are only ever created via this path, so "the
+ * lead's ONBOARDING meeting" is treated as the canonical link — no new
+ * schema column needed. Reuses the shared scheduler helpers so this gets the
+ * same activity log / notification / confirmation email+SMS side effects as
+ * any other scheduled meeting.
+ */
+async function syncOBMeetingFromChecklist(
+  lead: { id: string; leadId: string; name: string; email: string | null; assignedDesignerId: string | null; assignedBLId: string | null },
+  scheduledAt: Date,
+  location: string,
+  user: { id: string },
+): Promise<void> {
+  const existing = await prisma.meeting.findFirst({
+    where: { leadId: lead.id, type: 'ONBOARDING' },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (existing && existing.status === 'SCHEDULED') {
+    // Already-active ONBOARDING meeting from a prior checklist save — just
+    // update it in place rather than creating a duplicate.
+    await prisma.meeting.update({
+      where: { id: existing.id },
+      data: { scheduledAt, location, mode: location as any },
+    });
+    return;
+  }
+
+  // No active ONBOARDING meeting yet — create one. Guard against the
+  // one-active-meeting-per-lead invariant so this never silently creates a
+  // conflicting second active meeting.
+  await assertNoActiveMeeting(lead.id);
+  const { ppNumber } = await computeMeetingNumbering(lead.id, 'ONBOARDING');
+  const meeting = await createMeetingRecord(prisma, {
+    leadId: lead.id,
+    type: 'ONBOARDING',
+    mode: location,
+    scheduledAt: scheduledAt.toISOString(),
+    location,
+    ppNumber,
+  });
+  const scheduleLead: ScheduleMeetingLead = {
+    id: lead.id, leadId: lead.leadId, name: lead.name, email: lead.email,
+    phone: null, assignedDesignerId: lead.assignedDesignerId, assignedBLId: lead.assignedBLId,
+  };
+  await runMeetingScheduledSideEffects({
+    meeting, lead: scheduleLead, user, type: 'ONBOARDING', mode: location,
+    scheduledAt: scheduledAt.toISOString(), ppNumber,
+  });
 }
 
 async function loadLeadForChecklist(leadId: string, user: { id: string; role: string }) {
@@ -137,6 +194,19 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
 
     const checklist = await prisma.pDOBChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'PD_OB_CHECKLIST_UPDATED', leadId, data);
+
+    // Task #65: an OB meeting date/location entered here must also show up on
+    // the shared Meetings tab/page, which only ever reads from the Meeting
+    // table — the checklist fields alone were invisible everywhere else.
+    // Only sync once both fields are present (a Meeting row needs both a
+    // scheduledAt and a mode/location); this best-effort sync must never
+    // fail the checklist save itself (e.g. if the lead already has an
+    // unrelated active meeting blocking a new one).
+    if ((obMeetingScheduledAt !== undefined || obMeetingLocation !== undefined)
+      && checklist.obMeetingScheduledAt && checklist.obMeetingLocation) {
+      await syncOBMeetingFromChecklist(lead, checklist.obMeetingScheduledAt, checklist.obMeetingLocation, req.user!)
+        .catch((e: any) => console.warn('[pd-ob-checklist:meeting-sync]', e.message));
+    }
 
     res.json({ checklist });
   } catch (err: any) {
