@@ -108,7 +108,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
 
     const {
       paymentValue, projectValue, furnitureValue, obMeetingScheduledAt, obMeetingLocation, notes,
-      welcomeMailApprovedByClient,
+      finalPitchPresentationConfirmed,
     } = req.body as Record<string, any>;
 
     const data: Record<string, any> = {};
@@ -124,7 +124,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
       data.obMeetingLocation = obMeetingLocation || null;
     }
     if (notes !== undefined) data.notes = notes?.trim() || null;
-    if (welcomeMailApprovedByClient !== undefined) data.welcomeMailApprovedByClient = !!welcomeMailApprovedByClient;
+    if (finalPitchPresentationConfirmed !== undefined) data.finalPitchPresentationConfirmed = !!finalPitchPresentationConfirmed;
 
     const checklist = await prisma.pDOBChecklist.update({ where: { leadId }, data });
     await logActivity(req.user!.id, 'PD_OB_CHECKLIST_UPDATED', leadId, data);
@@ -155,17 +155,21 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     if (!checklist) { res.status(404).json({ error: 'PD→OB checklist not found.' }); return; }
     if (checklist.completedAt) { res.status(400).json({ error: 'Welcome mail already sent.' }); return; }
 
-    const [paymentScreenshot, obQuote, pdFinalFile, welcomeMailScreenshot] = await Promise.all([
+    const [paymentScreenshot, obQuote, finalPitchPresentationFile, generatedQuotationFile, welcomeMailScreenshot] = await Promise.all([
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
-      // Founder spec item 6: final pitch presentation or PD file, uploaded
-      // during Proposal Discussion — mirrors stageRequirements.ts's
-      // PROPOSAL_DISCUSSION->ONBOARDING `fileAnyOf` gate. This direct
-      // transition (send-welcome-mail bypasses checkStageRequirements
+      // Both the Final Pitch Presentation AND the Generated Quotation are now
+      // required together (previously either/or) — mirrors
+      // stageRequirements.ts's PROPOSAL_DISCUSSION->ONBOARDING gate. This
+      // direct transition (send-welcome-mail bypasses checkStageRequirements
       // entirely) must enforce the same minimum, or a lead could reach
-      // Onboarding without it.
+      // Onboarding without both.
       prisma.leadFile.findFirst({
-        where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: { in: ['PITCH_PRESENTATION', 'QUOTATION'] } },
+        where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: 'PITCH_PRESENTATION' },
+        select: { id: true },
+      }),
+      prisma.leadFile.findFirst({
+        where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: { in: ['QUOTATION', 'GENERATED_QUOTE'] } },
         select: { id: true },
       }),
       // Task #84: client approval-of-wording proof for THIS mail.
@@ -175,14 +179,15 @@ pdObChecklistRouter.post('/send-welcome-mail', verifyToken, async (req, res) => 
     const missing: string[] = [];
     if (!paymentScreenshot) missing.push('Payment screenshot (Files tab)');
     if (!obQuote) missing.push('OB Quote (Files tab)');
-    if (!pdFinalFile) missing.push('Final pitch presentation or PD file (Files → Proposal Discussion)');
+    if (!finalPitchPresentationFile) missing.push('Final Pitch Presentation file (Files → Proposal Discussion)');
+    if (!generatedQuotationFile) missing.push('Generated Quotation file (Files → Proposal Discussion)');
     if (checklist.paymentValue == null) missing.push('Payment value');
     if (checklist.projectValue == null) missing.push('Project value (excl. furniture)');
     if (checklist.furnitureValue == null) missing.push('Furniture value');
     if (!checklist.obMeetingScheduledAt) missing.push('OB meeting date/time');
     if (!checklist.obMeetingLocation) missing.push('OB meeting location');
     if (!checklist.notes || !checklist.notes.trim()) missing.push('Notes');
-    if (!checklist.welcomeMailApprovedByClient) missing.push('Welcome mail approved by client');
+    if (!checklist.finalPitchPresentationConfirmed) missing.push('Final Pitch Presentation confirmed');
     if (!welcomeMailScreenshot) missing.push('Welcome mail approval screenshot (Files tab)');
     if (!lead.email) missing.push("Client's email address");
     if (missing.length) {

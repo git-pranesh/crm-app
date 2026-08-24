@@ -13,7 +13,7 @@ interface PDOBChecklist {
   obMeetingScheduledAt: string | null;
   obMeetingLocation: string | null;
   notes: string | null;
-  welcomeMailApprovedByClient: boolean;
+  finalPitchPresentationConfirmed: boolean;
   welcomeMailSent: boolean;
   welcomeMailSentAt: string | null;
   completedAt: string | null;
@@ -55,7 +55,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [sending, setSending] = useState(false);
   const [showMailModal, setShowMailModal] = useState(false);
 
-  const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', welcomeMailApprovedByClient: false });
+  const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', finalPitchPresentationConfirmed: false });
 
   const isEditable = stage === 'PROPOSAL_DISCUSSION' && !isLocked;
 
@@ -81,7 +81,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           obMeetingScheduledAt: toLocalInputValue(data.checklist.obMeetingScheduledAt),
           obMeetingLocation: data.checklist.obMeetingLocation ?? '',
           notes: data.checklist.notes ?? '',
-          welcomeMailApprovedByClient: data.checklist.welcomeMailApprovedByClient,
+          finalPitchPresentationConfirmed: data.checklist.finalPitchPresentationConfirmed,
         });
       }
     } catch (e: any) {
@@ -106,7 +106,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         obMeetingScheduledAt: form.obMeetingScheduledAt || null,
         obMeetingLocation: form.obMeetingLocation || null,
         notes: form.notes || null,
-        welcomeMailApprovedByClient: form.welcomeMailApprovedByClient,
+        finalPitchPresentationConfirmed: form.finalPitchPresentationConfirmed,
       });
       setChecklist(data.checklist);
       await load();
@@ -165,7 +165,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
     !checklist.obMeetingScheduledAt && 'OB meeting date/time',
     !checklist.obMeetingLocation && 'OB meeting location',
     !checklist.notes?.trim() && 'Notes',
-    !form.welcomeMailApprovedByClient && 'Welcome mail approved by client',
+    !form.finalPitchPresentationConfirmed && 'Final Pitch Presentation confirmed',
     !hasWelcomeMailScreenshot && 'Welcome mail approval screenshot',
     !clientEmail && "Client's email",
   ].filter(Boolean) as string[];
@@ -196,15 +196,15 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
           {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}
         </div>
-        <label className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer ${form.welcomeMailApprovedByClient ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} ${!isEditable ? 'pointer-events-none opacity-70' : ''}`}>
+        <label className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer ${form.finalPitchPresentationConfirmed ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} ${!isEditable ? 'pointer-events-none opacity-70' : ''}`}>
           <input
             type="checkbox"
             disabled={!isEditable || saving}
-            checked={form.welcomeMailApprovedByClient}
-            onChange={(e) => setForm((f) => ({ ...f, welcomeMailApprovedByClient: e.target.checked }))}
+            checked={form.finalPitchPresentationConfirmed}
+            onChange={(e) => setForm((f) => ({ ...f, finalPitchPresentationConfirmed: e.target.checked }))}
             className="rounded border-gray-300"
           />
-          Welcome mail wording approved by client
+          Final Pitch Presentation
         </label>
       </div>
 

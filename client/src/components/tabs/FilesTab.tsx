@@ -90,7 +90,8 @@ const REQUIRED_FILES: Record<string, RequiredFileGroup[]> = {
   // (The PD→OB checklist itself additionally requires a Payment Screenshot
   // and OB Quote — see the PD→OB checklist panel, not this folder badge.)
   PROPOSAL_DISCUSSION: [
-    { types: ['PITCH_PRESENTATION', 'QUOTATION'], mode: 'any' },
+    { types: ['PITCH_PRESENTATION'], mode: 'all' },
+    { types: ['QUOTATION', 'GENERATED_QUOTE'], mode: 'any' },
     { types: ['WELCOME_MAIL_SCREENSHOT'], mode: 'all' },
   ],
   ONBOARDING: [{ types: ['GENERATED_QUOTE'], mode: 'all' }],

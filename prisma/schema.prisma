@@ -863,12 +863,11 @@ model PDOBChecklist {
   obMeetingScheduledAt DateTime?
   obMeetingLocation    String?
   notes                String?
-  /// Client confirmed (verbally/in writing) that the welcome-mail wording is
-  /// approved — evidenced by a screenshot uploaded as a
-  /// WELCOME_MAIL_SCREENSHOT LeadFile (stage PROPOSAL_DISCUSSION). Required
-  /// before the PD→OB welcome mail can be sent (Task #84 — moved here from
-  /// OBOBMChecklist, since it gates *this* checklist's mail, not the OBM one).
-  welcomeMailApprovedByClient Boolean @default(false)
+  /// Admin/BL confirms the Final Pitch Presentation has been shared with the
+  /// client. Required before the PD→OB welcome mail can be sent. (Replaces
+  /// the former "welcome mail wording approved by client" tickbox, which is
+  /// now covered by the WELCOME_MAIL_SCREENSHOT file requirement below.)
+  finalPitchPresentationConfirmed Boolean @default(false)
   welcomeMailSent      Boolean   @default(false)
   welcomeMailSentAt    DateTime?
   completedAt          DateTime?

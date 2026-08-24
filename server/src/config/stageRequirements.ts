@@ -151,8 +151,12 @@ export const STAGE_REQUIREMENTS: Record<string, StageRequirement[]> = {
    */
   'PROPOSAL_DISCUSSION->ONBOARDING': [
     {
-      type: 'fileAnyOf', fileTypes: ['PITCH_PRESENTATION', 'QUOTATION'], stages: ['PROPOSAL_DISCUSSION'],
-      label: 'Final pitch presentation or PD file (Files → PD)',
+      type: 'file', fileType: 'PITCH_PRESENTATION', stages: ['PROPOSAL_DISCUSSION'],
+      label: 'Final Pitch Presentation file (Files → PD)',
+    },
+    {
+      type: 'quote', stages: ['PROPOSAL_DISCUSSION'], fileTypes: ['QUOTATION', 'GENERATED_QUOTE'],
+      label: 'Generated Quotation file (Files → PD)',
     },
     { type: 'pdObChecklist', label: 'Completed PD→OB checklist (welcome mail sent)' },
   ],
