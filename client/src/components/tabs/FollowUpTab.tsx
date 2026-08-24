@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Paperclip, X } from 'lucide-react';
 import { api, type FollowUpTask } from '../../lib/api';
 import { formatISTDate, todayISTDateString } from '../../lib/dateFormat';
+import { DateInput, TimeInput } from '../ui/DateTimeInputs';
 
 function todayDateStr() {
   return todayISTDateString();
@@ -211,13 +212,11 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Due Date <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
+              <DateInput
                 value={form.dueDate}
-                onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                onChange={(v) => setForm({ ...form, dueDate: v })}
                 min={todayDateStr()}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
             <div>
@@ -246,20 +245,16 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
-              <input
-                type="time"
+              <TimeInput
                 value={form.timeFrom}
-                onChange={(e) => setForm({ ...form, timeFrom: e.target.value, dueTime: e.target.value || form.dueTime })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => setForm({ ...form, timeFrom: v, dueTime: v || form.dueTime })}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
-              <input
-                type="time"
+              <TimeInput
                 value={form.timeTo}
-                onChange={(e) => setForm({ ...form, timeTo: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => setForm({ ...form, timeTo: v })}
               />
             </div>
           </div>
@@ -332,12 +327,10 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
               {actionModal.kind === 'complete' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Completed On</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={actionForm.completedAt}
-                    onChange={(e) => setActionForm({ ...actionForm, completedAt: e.target.value })}
+                    onChange={(v) => setActionForm({ ...actionForm, completedAt: v })}
                     max={todayDateStr()}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                   <p className="text-xs text-gray-400 mt-1">Can be backdated; cannot be set in the future.</p>
                 </div>
@@ -364,22 +357,18 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         New Due Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={actionForm.dueDate}
-                        onChange={(e) => setActionForm({ ...actionForm, dueDate: e.target.value })}
+                        onChange={(v) => setActionForm({ ...actionForm, dueDate: v })}
                         min={todayDateStr()}
                         required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                      <input
-                        type="time"
+                      <TimeInput
                         value={actionForm.dueTime}
-                        onChange={(e) => setActionForm({ ...actionForm, dueTime: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        onChange={(v) => setActionForm({ ...actionForm, dueTime: v })}
                       />
                     </div>
                   </div>

@@ -6,6 +6,7 @@ import type { FollowUpTask } from '../lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser } from '../lib/auth';
 import { formatISTDate, todayISTDateString } from '../lib/dateFormat';
+import { DateInput, TimeInput } from '../components/ui/DateTimeInputs';
 
 type Filter = 'upcoming' | 'overdue' | 'completed' | 'not_done' | 'all';
 
@@ -326,12 +327,10 @@ export default function Tasks() {
               {actionModal.kind === 'complete' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Completed On</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={actionForm.completedAt}
-                    onChange={(e) => setActionForm({ ...actionForm, completedAt: e.target.value })}
+                    onChange={(v) => setActionForm({ ...actionForm, completedAt: v })}
                     max={todayDateStr()}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                   />
                   <p className="text-xs text-gray-400 mt-1">Can be backdated; cannot be set in the future.</p>
                 </div>
@@ -343,22 +342,18 @@ export default function Tasks() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         New Due Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={actionForm.dueDate}
-                        onChange={(e) => setActionForm({ ...actionForm, dueDate: e.target.value })}
+                        onChange={(v) => setActionForm({ ...actionForm, dueDate: v })}
                         min={todayDateStr()}
                         required
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                      <input
-                        type="time"
+                      <TimeInput
                         value={actionForm.dueTime}
-                        onChange={(e) => setActionForm({ ...actionForm, dueTime: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        onChange={(v) => setActionForm({ ...actionForm, dueTime: v })}
                       />
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import type { NextPlanItem } from '../lib/api';
 import { todayISTDateString, istDatetimeLocalValue } from '../lib/dateFormat';
+import { DateInput, TimeInput, DateTimeInput } from './ui/DateTimeInputs';
 
 /**
  * Shared "next plan of action" multi-select (Task #86) — used by both the
@@ -83,20 +84,18 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
                   className="col-span-2 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               )}
-              <input
-                type="date"
+              <DateInput
                 required
                 min={todayISTDateString()}
                 value={item.dueDate ?? ''}
-                onChange={(e) => updateItem(idx, { dueDate: e.target.value })}
-                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => updateItem(idx, { dueDate: v })}
+                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 w-full"
               />
-              <input
-                type="time"
+              <TimeInput
                 required
                 value={item.dueTime ?? ''}
-                onChange={(e) => updateItem(idx, { dueTime: e.target.value })}
-                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => updateItem(idx, { dueTime: v })}
+                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 w-full"
               />
               {item.kind === 'TASK' && (
                 <select
@@ -141,13 +140,12 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
                 <option value="">Mode…</option>
                 {MEETING_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
-              <input
-                type="datetime-local"
+              <DateTimeInput
                 required
                 min={istDatetimeLocalValue(new Date())}
                 value={item.scheduledAt ?? ''}
-                onChange={(e) => updateItem(idx, { scheduledAt: e.target.value })}
-                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+                onChange={(v) => updateItem(idx, { scheduledAt: v })}
+                className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 w-full"
               />
               <select
                 value={item.location ?? ''}
