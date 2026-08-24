@@ -675,7 +675,6 @@ export default function LeadDetail() {
     setReactivateReason('');
     setReactivateReasonOther('');
     setReactivateNotes('');
-    setReactivateNotifyClient(false);
     setReactivateModal(true);
   };
 

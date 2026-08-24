@@ -65,13 +65,20 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
 
     // Uploaded-file status is sourced from LeadFile (single source of truth —
     // mirrors how stageRequirements.ts checks file gates).
-    const [paymentScreenshot, obQuote, welcomeMailScreenshot] = await Promise.all([
+    const [paymentScreenshot, obQuote, welcomeMailScreenshot, finalPitchPresentationFile, generatedQuotationFile] = await Promise.all([
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'PAYMENT_SCREENSHOT' }, select: { id: true } }),
       prisma.leadFile.findFirst({ where: { leadId, fileType: 'OB_QUOTE' }, select: { id: true } }),
       // Task #84 — client approval-of-wording proof now belongs to the PD→OB
       // welcome mail (moved from OBOBMChecklist), scoped to this checklist's
       // own upload stage so it can't be satisfied by an OBM-stage screenshot.
       prisma.leadFile.findFirst({ where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: 'WELCOME_MAIL_SCREENSHOT' }, select: { id: true } }),
+      // These two mirror the exact checks send-welcome-mail enforces below —
+      // previously absent from this GET response, so the "Share welcome mail"
+      // button could appear enabled client-side and then fail server-side
+      // with "missing: Final Pitch Presentation file" / "Generated Quotation
+      // file" even though every visible checkbox/field was filled in.
+      prisma.leadFile.findFirst({ where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: 'PITCH_PRESENTATION' }, select: { id: true } }),
+      prisma.leadFile.findFirst({ where: { leadId, stage: 'PROPOSAL_DISCUSSION', fileType: { in: ['QUOTATION', 'GENERATED_QUOTE'] } }, select: { id: true } }),
     ]);
 
     res.json({
@@ -79,6 +86,8 @@ pdObChecklistRouter.get('/', verifyToken, async (req, res) => {
       hasPaymentScreenshot: !!paymentScreenshot,
       hasObQuote: !!obQuote,
       hasWelcomeMailScreenshot: !!welcomeMailScreenshot,
+      hasFinalPitchPresentationFile: !!finalPitchPresentationFile,
+      hasGeneratedQuotationFile: !!generatedQuotationFile,
       welcomeMailTemplate: await pdObWelcomeMailTemplate(lead.name),
     });
   } catch (err: any) {

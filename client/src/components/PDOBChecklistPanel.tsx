@@ -49,6 +49,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [hasPaymentScreenshot, setHasPaymentScreenshot] = useState(false);
   const [hasObQuote, setHasObQuote] = useState(false);
   const [hasWelcomeMailScreenshot, setHasWelcomeMailScreenshot] = useState(false);
+  const [hasFinalPitchPresentationFile, setHasFinalPitchPresentationFile] = useState(false);
+  const [hasGeneratedQuotationFile, setHasGeneratedQuotationFile] = useState(false);
   const [template, setTemplate] = useState({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,12 +68,16 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         hasPaymentScreenshot: boolean;
         hasObQuote: boolean;
         hasWelcomeMailScreenshot: boolean;
+        hasFinalPitchPresentationFile: boolean;
+        hasGeneratedQuotationFile: boolean;
         welcomeMailTemplate: { subject: string; html: string };
       }>(`/leads/${leadId}/pd-ob-checklist`);
       setChecklist(data.checklist);
       setHasPaymentScreenshot(data.hasPaymentScreenshot);
       setHasObQuote(data.hasObQuote);
       setHasWelcomeMailScreenshot(data.hasWelcomeMailScreenshot);
+      setHasFinalPitchPresentationFile(data.hasFinalPitchPresentationFile);
+      setHasGeneratedQuotationFile(data.hasGeneratedQuotationFile);
       setTemplate(data.welcomeMailTemplate);
       if (data.checklist) {
         setForm({
@@ -159,6 +165,8 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const requiredMissing = [
     !hasPaymentScreenshot && 'Payment screenshot',
     !hasObQuote && 'OB Quote',
+    !hasFinalPitchPresentationFile && 'Final Pitch Presentation file (Files → Proposal Discussion)',
+    !hasGeneratedQuotationFile && 'Generated Quotation file (Files → Proposal Discussion)',
     checklist.paymentValue == null && 'Payment value',
     checklist.projectValue == null && 'Project value',
     checklist.furnitureValue == null && 'Furniture value',
@@ -195,6 +203,12 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         </div>
         <div className={`text-xs px-3 py-2 rounded-lg ${hasWelcomeMailScreenshot ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
           {hasWelcomeMailScreenshot ? '✓' : '⚠'} Approval screenshot {hasWelcomeMailScreenshot ? 'uploaded' : '— upload in Files tab'}
+        </div>
+        <div className={`text-xs px-3 py-2 rounded-lg ${hasFinalPitchPresentationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          {hasFinalPitchPresentationFile ? '✓' : '⚠'} Pitch Presentation file {hasFinalPitchPresentationFile ? 'uploaded' : '— upload in Files tab'}
+        </div>
+        <div className={`text-xs px-3 py-2 rounded-lg ${hasGeneratedQuotationFile ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+          {hasGeneratedQuotationFile ? '✓' : '⚠'} Generated Quotation file {hasGeneratedQuotationFile ? 'uploaded' : '— upload in Files tab'}
         </div>
         <label className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg cursor-pointer ${form.finalPitchPresentationConfirmed ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'} ${!isEditable ? 'pointer-events-none opacity-70' : ''}`}>
           <input

@@ -47,3 +47,6 @@
 - [Mail delivery path](mail-delivery-path.md) — mail triggers use Nodemailer/SMTP with a silent console-only fallback, not the installed Resend integration; "sendEmail resolved" ≠ "client received it"
 - [Client checklist audit pattern](checklist-audit-pattern.md) — verify every row of a client bug-list against live code before building; a meaningful fraction is usually already fixed or misdescribed
 - [Duplicate email pathways](duplicate-email-pathways.md) — lib/email.ts and lib/emailService.ts each had their own Nodemailer transporter; grep for all transporter instances, not just the one call site named
+- [Getter-only useState button bug](getter-only-usestate-bug.md) — `const [x] = useState(...)` then calling a nonexistent `setX(...)` throws and silently aborts the whole handler before later lines run (e.g. a modal never opens)
+- [Checklist gate client/server parity](checklist-client-server-parity.md) — a checklist "send" button's enable condition must mirror every check the send endpoint enforces, or it falsely enables then 500s/400s on submit
+- [Resend sandbox rejects example.com](resend-sandbox-test-domains.md) — Resend returns 422 for `to` addresses on placeholder domains like example.com; use delivered@resend.dev to prove a real send path end-to-end in dev/test
