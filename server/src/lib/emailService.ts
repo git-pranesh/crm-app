@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from './prisma.js';
-import { sendEmail } from './email.js';
+import { sendEmail, type EmailAttachment } from './email.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, '../../templates/email');
@@ -66,14 +66,14 @@ export function previewEmail(type: string, vars: Record<string, string>): string
 
 // ── Draft storage (in-memory for dev; use Redis/DB for prod) ─────────────────
 interface DraftMeta { leadId: string; type: string }
-const drafts = new Map<string, { subject: string; html: string; meta?: DraftMeta }>();
+const drafts = new Map<string, { subject: string; html: string; meta?: DraftMeta; attachments?: EmailAttachment[] }>();
 
-export function saveDraft(key: string, subject: string, html: string, meta?: DraftMeta) {
-  // Preserve meta set at creation time (e.g. by meetings.ts) even if the
-  // caller re-saving edited content (routes/email.ts PATCH /draft) doesn't
-  // pass it again.
-  const existingMeta = drafts.get(key)?.meta;
-  drafts.set(key, { subject, html, meta: meta ?? existingMeta });
+export function saveDraft(key: string, subject: string, html: string, meta?: DraftMeta, attachments?: EmailAttachment[]) {
+  // Preserve meta/attachments set at creation time (e.g. by meetings.ts) even
+  // if the caller re-saving edited content (routes/email.ts PATCH /draft)
+  // doesn't pass them again.
+  const existing = drafts.get(key);
+  drafts.set(key, { subject, html, meta: meta ?? existing?.meta, attachments: attachments ?? existing?.attachments });
 }
 
 export function getDraft(key: string) {
@@ -84,7 +84,7 @@ export async function sendDraft(key: string, to: string): Promise<void> {
   const draft = drafts.get(key);
   if (!draft) throw new Error('Draft not found');
 
-  await sendEmail({ to, subject: draft.subject, html: draft.html });
+  await sendEmail({ to, subject: draft.subject, html: draft.html, attachments: draft.attachments });
   drafts.delete(key);
 
   if (draft.meta) {
