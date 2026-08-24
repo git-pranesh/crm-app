@@ -46,6 +46,10 @@ const LEAD_INCLUDE = {
     select: { id: true },
     take: 1,
   },
+  attentionFlags: {
+    where: { resolvedAt: null },
+    orderBy: { createdAt: 'desc' as const },
+  },
 } as const;
 
 // ── GET /api/leads — list with filters + pagination ───────────────────────────
@@ -1630,6 +1634,77 @@ leadsRouter.get('/:id/intent-rating-history', verifyToken, async (req, res) => {
       },
     });
     res.json({ history: logs });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/leads/:id/attention-flag — flag a lead for attention ───────────
+// Mirrors projects.ts's ProjectAttentionFlag pattern, but deliberately does
+// NOT apply projects.ts's `blockBLWrite` gate — BL is fully allowed here,
+// using the same `isAuthorizedForLead` scope every other lead-mutation route
+// already uses (ADMIN/BRANCH_HEAD any lead, DESIGNER/CRE own lead, BL own team).
+leadsRouter.post('/:id/attention-flag', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id } = req.params;
+    const { category, description } = req.body as { category?: string; description?: string };
+
+    if (!category?.trim() || !description?.trim()) {
+      res.status(400).json({ error: 'category and description are required' });
+      return;
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, user))) {
+      res.status(403).json({ error: 'Not authorised to flag this lead' });
+      return;
+    }
+
+    const flag = await prisma.leadAttentionFlag.create({
+      data: { leadId: id, category, description },
+    });
+
+    await logActivity(user.id, 'LEAD_ATTENTION_FLAG_ADDED', id, { category, description });
+
+    res.status(201).json({ flag });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/leads/:id/attention-flag/:flagId/resolve ──────────────────────
+leadsRouter.patch('/:id/attention-flag/:flagId/resolve', verifyToken, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { id, flagId } = req.params;
+
+    const flag = await prisma.leadAttentionFlag.findUnique({ where: { id: flagId } });
+    if (!flag) { res.status(404).json({ error: 'Flag not found' }); return; }
+    if (flag.leadId !== id) { res.status(400).json({ error: 'Flag does not belong to this lead' }); return; }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id },
+      select: { id: true, assignedDesignerId: true, assignedBLId: true, status: true },
+    });
+    if (!lead) { res.status(404).json({ error: 'Lead not found' }); return; }
+    if (!(await isAuthorizedForLead(lead, user))) {
+      res.status(403).json({ error: 'Not authorised to resolve this flag' });
+      return;
+    }
+
+    const updated = await prisma.leadAttentionFlag.update({
+      where: { id: flagId },
+      data: { resolvedAt: new Date() },
+    });
+
+    await logActivity(user.id, 'LEAD_ATTENTION_FLAG_RESOLVED', id, { flagId });
+
+    res.json({ flag: updated });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

@@ -387,8 +387,22 @@ model Lead {
   npsResponses         NPSResponse[]
   project              Project?
   leadFiles            LeadFile[]
+  attentionFlags       LeadAttentionFlag[]
 
   @@map("leads")
+}
+
+model LeadAttentionFlag {
+  id          String    @id @default(cuid())
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  /// Delayed | At Risk | Blocked | Urgent — same vocabulary as ProjectAttentionFlag
+  category    String
+  description String
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("lead_attention_flags")
 }
 
 model Contact {

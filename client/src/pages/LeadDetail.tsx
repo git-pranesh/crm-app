@@ -44,6 +44,7 @@ interface Lead {
   assignedDesignerId?: string | null; assignedBLId?: string | null;
   currentOffer?: { id: string; name: string } | null;
   project?: { id: string; projectCode?: string | null } | null;
+  attentionFlags?: Array<{ id: string; category: string; description: string; createdAt: string }>;
   _count: { calls: number; meetings: number; followUpTasks: number };
 }
 
@@ -301,6 +302,13 @@ export default function LeadDetail() {
   const [pendingRating, setPendingRating] = useState(0);
   const [intentReason, setIntentReason] = useState('');
   const [savingIntent, setSavingIntent] = useState(false);
+
+  // Lead-level attention flag (mirrors ProjectAttentionFlag; BL + BH usable)
+  const [flagModal, setFlagModal] = useState(false);
+  const [flagCategory, setFlagCategory] = useState('');
+  const [flagDescription, setFlagDescription] = useState('');
+  const [savingFlag, setSavingFlag] = useState(false);
+  const [resolvingFlagId, setResolvingFlagId] = useState<string | null>(null);
 
   const [editDetailsModal, setEditDetailsModal] = useState(false);
   const [editDetails, setEditDetails] = useState<typeof EMPTY_EDIT>(EMPTY_EDIT);
@@ -711,6 +719,40 @@ export default function LeadDetail() {
       toast.error(e.message ?? 'Could not update rating');
     } finally {
       setSavingIntent(false);
+    }
+  };
+
+  const openFlagModal = () => {
+    setFlagCategory('');
+    setFlagDescription('');
+    setFlagModal(true);
+  };
+
+  const handleFlagSave = async () => {
+    if (!flagCategory.trim() || !flagDescription.trim()) { toast.error('Category and description are required'); return; }
+    setSavingFlag(true);
+    try {
+      await api.post(`/leads/${leadId}/attention-flag`, { category: flagCategory.trim(), description: flagDescription.trim() });
+      toast.success('Lead flagged for attention');
+      setFlagModal(false);
+      loadLead(); loadActivities();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not flag lead');
+    } finally {
+      setSavingFlag(false);
+    }
+  };
+
+  const handleResolveFlag = async (flagId: string) => {
+    setResolvingFlagId(flagId);
+    try {
+      await api.patch(`/leads/${leadId}/attention-flag/${flagId}/resolve`, {});
+      toast.success('Flag resolved');
+      loadLead(); loadActivities();
+    } catch (e: any) {
+      toast.error(e.message ?? 'Could not resolve flag');
+    } finally {
+      setResolvingFlagId(null);
     }
   };
 
@@ -1236,6 +1278,44 @@ export default function LeadDetail() {
         </div>
       )}
 
+      {/* ── Lead attention-flag modal ─────────────────────────────────────────── */}
+      {flagModal && (
+        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-warm-lg w-full max-w-sm p-6">
+            <h3 className="font-bold text-stone-900 mb-1 tracking-tight">Flag Lead for Attention</h3>
+            <p className="text-xs text-stone-400 mb-4">Visible to the team until resolved.</p>
+            <div className="mb-3">
+              <label className="block text-sm font-semibold text-stone-700 mb-1.5">Category</label>
+              <select value={flagCategory} onChange={(e) => setFlagCategory(e.target.value)}
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+                <option value="">Select category…</option>
+                <option value="Delayed">Delayed</option>
+                <option value="At Risk">At Risk</option>
+                <option value="Blocked">Blocked</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-stone-700 mb-1.5">Description</label>
+              <textarea rows={3} value={flagDescription} onChange={(e) => setFlagDescription(e.target.value)}
+                placeholder="What needs attention?"
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setFlagModal(false)}
+                className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
+                style={{ border: '1px solid #EDE8E3' }}>Cancel</button>
+              <button onClick={handleFlagSave} disabled={savingFlag || !flagCategory || !flagDescription.trim()}
+                className="flex-1 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
+                {savingFlag ? 'Flagging…' : 'Flag Lead'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Hidden floor plan file input ─────────────────────────────────────── */}
       <input
         type="file"
@@ -1331,6 +1411,11 @@ export default function LeadDetail() {
 
             {/* Right: action buttons */}
             <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <button
+                onClick={openFlagModal}
+                className="flex items-center gap-1.5 text-red-600 px-3 py-1.5 rounded-xl text-xs hover:bg-red-50 transition-colors font-medium"
+                style={{ border: '1px solid #fca5a5' }}
+              ><AlertTriangle size={13} strokeWidth={2} /> Flag</button>
               <button
                 onClick={() => toast('Call logging — coming soon')}
                 className="flex items-center gap-1.5 text-stone-600 px-3 py-1.5 rounded-xl text-xs hover:bg-stone-50 transition-colors font-medium"
@@ -1447,6 +1532,29 @@ export default function LeadDetail() {
           <div className="bg-white rounded-b-2xl p-5" style={{ border: '1px solid #EDE8E3' }}>
             {activeTab === 'overview' && lead && (
               <div className="space-y-6">
+                {/* ── Attention flags ───────────────────────────────────────── */}
+                {lead.attentionFlags && lead.attentionFlags.length > 0 && (
+                  <div className="space-y-2">
+                    {lead.attentionFlags.map((f) => (
+                      <div key={f.id} className="flex items-start justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                        <div className="flex items-start gap-2 min-w-0">
+                          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-600" strokeWidth={2.5} />
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-red-700">{f.category}</span>
+                            <p className="text-xs text-red-600 mt-0.5">{f.description}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleResolveFlag(f.id)}
+                          disabled={resolvingFlagId === f.id}
+                          className="text-xs font-semibold text-red-700 hover:text-red-900 shrink-0 disabled:opacity-50"
+                        >
+                          {resolvingFlagId === f.id ? 'Resolving…' : 'Resolve'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* ── Stage Roadmap ─────────────────────────────────────────── */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
