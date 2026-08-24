@@ -58,8 +58,6 @@ interface DesignerDash {
     bookingForecast: number;
     poForecast: number;
     incentiveForecast: number;
-    npsForecast: number | null;
-    npsOnTrack: boolean; // only NPS has a meaningful threshold (≥ 8.0)
   };
   attentionItems: Array<{ projectId: string; projectCode: string; clientName: string; leadId: string; category: string; description: string; daysOverdue: number }>;
   recentNotifications: Array<{ id: string; type: string; message: string; leadId: string | null; isRead: boolean; createdAt: string; lead?: { id: string; leadId: string; name: string } | null }>;
@@ -793,18 +791,11 @@ export default function DesignerDashboard() {
                 title="Month-End Forecast (Linear Projection)"
                 action={<span className="text-xs text-stone-400 italic">Extrapolated from days elapsed · no monthly targets set</span>}
               />
-              <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {[
-                  { label: 'Booking Forecast', value: fmt(dd.forecast.bookingForecast), note: 'approx. — based on stage transitions' },
+                  { label: 'Booking Forecast', value: fmt(dd.forecast.bookingForecast), note: 'booked + pipeline expected this month (by Expected OB Date)' },
                   { label: 'PO Forecast', value: fmt(dd.forecast.poForecast), note: 'approx. — collections extrapolated' },
                   { label: 'Incentive Forecast', value: fmt(dd.forecast.incentiveForecast), note: 'approx. — no incentive model yet' },
-                  {
-                    label: 'NPS Forecast',
-                    value: dd.forecast.npsForecast != null ? dd.forecast.npsForecast.toFixed(1) : '—',
-                    note: dd.forecast.npsForecast != null
-                      ? (dd.forecast.npsOnTrack ? '≥ 8.0 — meeting target' : '< 8.0 — below target')
-                      : 'no responses yet',
-                  },
                 ].map((f) => (
                   <div key={f.label} className="p-4 rounded-2xl text-center" style={{ background: MUTED_BG }}>
                     <p className="text-xl font-extrabold text-stone-900">{f.value}</p>

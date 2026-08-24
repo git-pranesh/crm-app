@@ -395,6 +395,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
       peerBookingGroups,
       peerNpsRaw,
       stageFunnelValueGroups,
+      pipelineExpectedAgg,
     ] = await Promise.all([
       // Project health breakdown for active projects
       prisma.project.groupBy({
@@ -544,6 +545,24 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         where: { ...leadWhere, status: 'ACTIVE', estimatedValue: { not: null } },
         _sum: { estimatedValue: true },
       }),
+
+      // Pipeline expected this month: active, not-yet-booked leads whose
+      // Expected OB Date falls within the selected range. Added to
+      // bookingAchieved to build bookingForecast (Option A — "what's already
+      // in, plus what's realistically expected to close this month based on
+      // when each lead said it would"). Excludes DESIGN_IN_PROGRESS/
+      // HANDED_OVER so a lead already counted in bookingAchieved is never
+      // double-counted here.
+      prisma.lead.aggregate({
+        where: {
+          ...leadWhere,
+          status: 'ACTIVE',
+          stage: { notIn: ['DESIGN_IN_PROGRESS', 'HANDED_OVER'] },
+          expectedObDate: { gte: rangeFrom, lte: rangeTo },
+          estimatedValue: { not: null },
+        },
+        _sum: { estimatedValue: true },
+      }),
     ]);
 
     // ── Compute derived values ────────────────────────────────────────────────
@@ -668,9 +687,13 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     const incentiveEarned = Math.round(bookingAchieved * tierRate);
     const incentiveForecast = Math.round(incentiveEarned * projFactor);
 
-    const bookingForecast = Math.round(bookingAchieved * projFactor);
+    // Booking Forecast = value already booked this month + the estimated
+    // value of active, not-yet-booked leads whose Expected OB Date falls in
+    // this month (Option A, approved) — replaces the old day-of-month linear
+    // projection.
+    const pipelineExpected = pipelineExpectedAgg._sum.estimatedValue ? Number(pipelineExpectedAgg._sum.estimatedValue) : 0;
+    const bookingForecast = bookingAchieved + pipelineExpected;
     const poForecast = Math.round(poAchieved * projFactor);
-    const npsForecast = avgNPS;
 
     // Performance score placeholder (based on tier + conversionRate)
     const tierScoreBase: Record<string, number> = { BASIC: 45, STANDARD: 65, PREMIUM: 82 };
@@ -746,10 +769,6 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         bookingForecast,
         poForecast,
         incentiveForecast,
-        npsForecast,
-        // Only NPS has a meaningful threshold (8.0); booking/PO/incentive
-        // have no stored targets yet, so we omit on-track flags for those.
-        npsOnTrack: npsForecast != null && npsForecast >= 8,
       },
       recentNotifications: recentNotifications.map((n) => ({
         id: n.id,
