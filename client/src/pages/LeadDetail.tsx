@@ -88,7 +88,14 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Inactivated by Mistake', 'Other'];
-const INACTIVE_REASONS = ['Budget mismatch', 'Not interested', 'Went with another vendor', 'Unresponsive', 'Timeline mismatch', 'Other'];
+const INACTIVE_REASONS = [
+  'No Response', 'Budget Constraint', 'Quality Constraint', 'Timeline Constraint',
+  "Client Won't Move Out During Execution", 'UPVC Material Required', 'SS Material Required',
+  'Stone Material Required', 'Aluminium Material Required', 'No Scope for Interiors',
+  'Onboarded with Other Interior', 'Onboarded with Other Vendor', 'Window Shopping',
+  'Service Out of Location', 'Project Value Below 5L', 'Repeated Lead', 'Invalid Number',
+  'Has Not Bought Property Yet', 'Others',
+];
 // Distinct from INACTIVE_REASONS above — this is the On Hold form's own reason list.
 const ON_HOLD_REASONS = ['Client requested', 'Budget Issue', 'Site Not Ready'];
 
@@ -641,7 +648,7 @@ export default function LeadDetail() {
     e.preventDefault();
     if (!statusModal) return;
     if (statusModal === 'INACTIVE') {
-      const resolvedInactiveReason = inactiveReasonChoice === 'Other' ? inactivationReason.trim() : inactiveReasonChoice;
+      const resolvedInactiveReason = inactiveReasonChoice === 'Others' ? inactivationReason.trim() : inactiveReasonChoice;
       if (!resolvedInactiveReason) { toast.error('Please select or describe a reason for inactivation'); return; }
       setChangingStatus(true);
       try {
@@ -921,16 +928,16 @@ export default function LeadDetail() {
                       {INACTIVE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
-                  {inactiveReasonChoice === 'Other' && (
+                  {inactiveReasonChoice === 'Others' && (
                     <input type="text" value={inactivationReason} onChange={(e) => setInactivationReason(e.target.value)}
                       required placeholder="Describe the reason"
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   )}
                   <div>
-                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">Notes (optional)</label>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">Notes (internal only)</label>
                     <textarea rows={2} value={inactiveNotes} onChange={(e) => setInactiveNotes(e.target.value)}
-                      placeholder="Any additional context"
+                      placeholder="Not shared with the client — for internal reference only"
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   </div>

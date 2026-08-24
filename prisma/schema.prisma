@@ -319,7 +319,7 @@ model Lead {
   /// Reason category for marking inactive — required when status moves to INACTIVE
   inactiveReason       String?
   /// Free-text notes accompanying inactivation, separate from the reason
-  /// category above. Optionally emailed to the client (task #88).
+  /// category above. Internal-only — never emailed or texted to the client.
   inactiveNotes        String?
   /// Legacy — was used to restore `stage` on reactivation back when ON_HOLD/
   /// INACTIVE were themselves stage values. Now that status is separate from
