@@ -313,6 +313,9 @@ model Lead {
   onHoldRevivalDate    DateTime?
   /// Reason for placing on hold — required when stage moves to ON_HOLD
   onHoldReason         String?
+  /// Free-text internal notes accompanying an On Hold status change, separate
+  /// from the reason category above. Internal-only — never sent to the client.
+  onHoldNotes          String?
   /// Reason category for marking inactive — required when status moves to INACTIVE
   inactiveReason       String?
   /// Free-text notes accompanying inactivation, separate from the reason

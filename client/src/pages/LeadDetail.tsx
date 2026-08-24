@@ -89,6 +89,8 @@ const STAGE_COLORS: Record<string, string> = {
 
 const REACTIVATION_REASONS = ['Client re-engaged', 'Budget approved', 'Timeline resumed', 'Inactivated by Mistake', 'Other'];
 const INACTIVE_REASONS = ['Budget mismatch', 'Not interested', 'Went with another vendor', 'Unresponsive', 'Timeline mismatch', 'Other'];
+// Distinct from INACTIVE_REASONS above — this is the On Hold form's own reason list.
+const ON_HOLD_REASONS = ['Client requested', 'Budget Issue', 'Site Not Ready'];
 
 const STAGE_LABELS: Record<string, string> = {
   EFFECTIVE_LEAD: 'Effective Lead', MQL: 'MQL', DQL: 'DQL',
@@ -289,6 +291,7 @@ export default function LeadDetail() {
   const [inactiveNotes, setInactiveNotes] = useState('');
   const [inactiveNotifyClient, setInactiveNotifyClient] = useState(true);
   const [onHoldReason, setOnHoldReason] = useState('');
+  const [onHoldNotes, setOnHoldNotes] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
   const [changingStatus, setChangingStatus] = useState(false);
 
@@ -459,7 +462,7 @@ export default function LeadDetail() {
 
   const openStatusModal = (status: 'ON_HOLD' | 'INACTIVE') => {
     setInactivationReason(''); setInactiveReasonChoice(''); setInactiveNotes(''); setInactiveNotifyClient(false);
-    setOnHoldReason(''); setOnHoldReopenDate('');
+    setOnHoldReason(''); setOnHoldNotes(''); setOnHoldReopenDate('');
     setStatusModal(status);
   };
 
@@ -659,7 +662,8 @@ export default function LeadDetail() {
       return;
     }
     // ON_HOLD
-    if (!onHoldReason.trim()) { toast.error('Please provide a reason for placing on hold'); return; }
+    if (!lead?.email?.trim()) { toast.error("Add the client's email on this lead's profile before placing it on hold"); return; }
+    if (!onHoldReason.trim()) { toast.error('Please select a reason for placing on hold'); return; }
     if (!onHoldReopenDate) { toast.error('Please select a reopen date'); return; }
     if (onHoldReopenDate <= istDateOnly(new Date())) { toast.error('Reopen date must be in the future'); return; }
     setChangingStatus(true);
@@ -667,6 +671,7 @@ export default function LeadDetail() {
       await api.patch(`/leads/${leadId}/status`, {
         status: 'ON_HOLD',
         reason: onHoldReason.trim(),
+        notes: onHoldNotes.trim() || undefined,
         onHoldRevivalDate: onHoldReopenDate,
       });
       toast.success('Lead placed On Hold');
@@ -934,12 +939,27 @@ export default function LeadDetail() {
               )}
               {statusModal === 'ON_HOLD' && (
                 <>
+                  {!lead?.email?.trim() && (
+                    <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">
+                      This lead has no client email on file. Add one on the profile before placing it on hold.
+                    </p>
+                  )}
                   <div>
                     <label className="block text-sm font-semibold text-stone-700 mb-1.5">
                       Reason <span className="text-brand-500">*</span>
                     </label>
-                    <textarea rows={2} value={onHoldReason} onChange={(e) => setOnHoldReason(e.target.value)}
-                      required placeholder="e.g. Client travelling, budget review pending"
+                    <select value={onHoldReason} onChange={(e) => setOnHoldReason(e.target.value)}
+                      required
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
+                      style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }}>
+                      <option value="">Select a reason…</option>
+                      {ON_HOLD_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-stone-700 mb-1.5">Notes (internal only)</label>
+                    <textarea rows={2} value={onHoldNotes} onChange={(e) => setOnHoldNotes(e.target.value)}
+                      placeholder="Not shared with the client — for internal reference only"
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   </div>

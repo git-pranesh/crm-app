@@ -36,9 +36,10 @@ export async function putLeadOnHold(opts: {
   actorId: string;
   actorName: string;
   reason: string;
+  notes?: string;
   revivalDate: Date;
 }) {
-  const { leadId, actorId, actorName, reason, revivalDate } = opts;
+  const { leadId, actorId, actorName, reason, notes, revivalDate } = opts;
   const existing = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!existing) throw new Error('Lead not found');
 
@@ -47,11 +48,14 @@ export async function putLeadOnHold(opts: {
     data: {
       status: 'ON_HOLD',
       onHoldReason: reason,
+      onHoldNotes: notes?.trim() || null,
       onHoldRevivalDate: revivalDate,
     },
   });
 
-  await logActivity(actorId, 'STATUS_CHANGED', leadId, { from: existing.status, to: 'ON_HOLD', reason });
+  await logActivity(actorId, 'STATUS_CHANGED', leadId, {
+    from: existing.status, to: 'ON_HOLD', reason, notes: notes?.trim() || undefined,
+  });
 
   const revivalStr = revivalDate.toLocaleDateString('en-IN');
 

@@ -1405,6 +1405,10 @@ leadsRouter.patch('/:id/status', verifyToken, async (req, res) => {
     }
 
     if (status === 'ON_HOLD') {
+      if (!existing.email?.trim()) {
+        res.status(400).json({ error: 'Client email is required before placing a lead on hold. Add it on the lead profile first.' });
+        return;
+      }
       if (!reason?.trim()) {
         res.status(400).json({ error: 'A reason is required when placing a lead on hold.' });
         return;
@@ -1419,7 +1423,7 @@ leadsRouter.patch('/:id/status', verifyToken, async (req, res) => {
         return;
       }
       const lead = await putLeadOnHold({
-        leadId: id, actorId: user.id, actorName: user.name, reason: reason.trim(), revivalDate: reopenDate,
+        leadId: id, actorId: user.id, actorName: user.name, reason: reason.trim(), notes: notes?.trim(), revivalDate: reopenDate,
       });
       res.json({ lead });
       return;
