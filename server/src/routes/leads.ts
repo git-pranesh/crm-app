@@ -11,7 +11,7 @@ import { selectBLForLead, assignLeadToDesigner, incrementAssigned } from '../ser
 import { checkStageRequirements, isStageJumpAllowed, FUNNEL_ORDER } from '../config/stageRequirements.js';
 import { computeSystemRating } from '../services/intentScoring.js';
 import { isAuthorizedForLead } from '../lib/leadAuth.js';
-import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
+import { isValidEmail, isValidPhone, isValidPhoneStrict } from '../lib/leadValidation.js';
 import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } from '../lib/stageSla.js';
 import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
@@ -306,16 +306,16 @@ leadsRouter.post('/', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'name, phone, projectType, scope, location, possessionTimeline and source are required' });
       return;
     }
-    if (!isValidPhone(phone)) {
-      res.status(400).json({ error: 'phone: must be 7–15 digits' });
+    if (!isValidPhoneStrict(phone)) {
+      res.status(400).json({ error: phone.trim().startsWith('+') ? 'phone: invalid number for the selected country' : 'phone: must be 7–15 digits' });
       return;
     }
     if (email?.trim() && !isValidEmail(email)) {
       res.status(400).json({ error: 'email: invalid format' });
       return;
     }
-    if (phone2?.trim() && !isValidPhone(phone2)) {
-      res.status(400).json({ error: 'phone2: must be 7–15 digits' });
+    if (phone2?.trim() && !isValidPhoneStrict(phone2)) {
+      res.status(400).json({ error: phone2.trim().startsWith('+') ? 'phone2: invalid number for the selected country' : 'phone2: must be 7–15 digits' });
       return;
     }
 
@@ -413,12 +413,12 @@ leadsRouter.post(
         res.status(400).json({ error: 'phone is required' });
         return;
       }
-      if (!isValidPhone(phone)) {
-        res.status(400).json({ error: 'phone: must be 7–15 digits' });
+      if (!isValidPhoneStrict(phone)) {
+        res.status(400).json({ error: phone.trim().startsWith('+') ? 'phone: invalid number for the selected country' : 'phone: must be 7–15 digits' });
         return;
       }
-      if (phone2?.trim() && !isValidPhone(phone2)) {
-        res.status(400).json({ error: 'phone2: must be 7–15 digits' });
+      if (phone2?.trim() && !isValidPhoneStrict(phone2)) {
+        res.status(400).json({ error: phone2.trim().startsWith('+') ? 'phone2: invalid number for the selected country' : 'phone2: must be 7–15 digits' });
         return;
       }
       if (email?.trim() && !isValidEmail(email)) {
@@ -794,12 +794,12 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       res.status(400).json({ error: 'email2: invalid format' });
       return;
     }
-    if (phone !== undefined && phone?.trim() && !isValidPhone(phone)) {
-      res.status(400).json({ error: 'phone: must be 7–15 digits' });
+    if (phone !== undefined && phone?.trim() && !isValidPhoneStrict(phone)) {
+      res.status(400).json({ error: phone.trim().startsWith('+') ? 'phone: invalid number for the selected country' : 'phone: must be 7–15 digits' });
       return;
     }
-    if (phone2 !== undefined && phone2?.trim() && !isValidPhone(phone2)) {
-      res.status(400).json({ error: 'phone2: must be 7–15 digits' });
+    if (phone2 !== undefined && phone2?.trim() && !isValidPhoneStrict(phone2)) {
+      res.status(400).json({ error: phone2.trim().startsWith('+') ? 'phone2: invalid number for the selected country' : 'phone2: must be 7–15 digits' });
       return;
     }
     // Note: name/phone/projectType/scope/location are required on the primary

@@ -10,7 +10,8 @@ import {
 import { api } from '../lib/api';
 import NotificationList from './NotificationList';
 import { getStoredUser, logout } from '../lib/auth';
-import { validateEmail, validatePhone } from '../lib/validation';
+import { validateEmail, validatePhoneStrict } from '../lib/validation';
+import PhoneInput from './PhoneInput';
 import { SOURCE_OPTIONS } from '../lib/leadSources';
 import { todayISTDateString } from '../lib/dateFormat';
 
@@ -117,7 +118,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const validateNewLeadField = (key: string, value: string) => {
     let error: string | null = null;
     if (key === 'email') error = validateEmail(value);
-    else if (key === 'phone') error = validatePhone(value);
+    else if (key === 'phone') error = validatePhoneStrict(value);
     else if (NEW_LEAD_REQUIRED.includes(key) && !value.trim()) error = 'This field is required';
     setNewLeadErrors((prev) => {
       const next = { ...prev };
@@ -185,7 +186,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       toast.error('Enter a lead source');
       return;
     }
-    const phoneError = validatePhone(newLead.phone);
+    const phoneError = validatePhoneStrict(newLead.phone);
     const emailError = validateEmail(newLead.email);
     if (phoneError || emailError) {
       setNewLeadErrors((prev) => ({ ...prev, ...(phoneError ? { phone: phoneError } : {}), ...(emailError ? { email: emailError } : {}) }));
@@ -449,16 +450,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <label className="block text-xs font-semibold text-stone-600 mb-1.5">
                     {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
                   </label>
-                  <input
-                    value={(newLead as any)[f.key]}
-                    onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
-                    onBlur={(e) => { validateNewLeadField(f.key, e.target.value); e.currentTarget.style.background = '#FDFAF7'; }}
-                    required={f.required}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
-                    style={{ border: newLeadErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
-                    onFocus={(e) => e.currentTarget.style.background = '#fff'}
-                  />
+                  {f.key === 'phone' ? (
+                    <PhoneInput
+                      value={newLead.phone}
+                      onChange={(v) => setNewLead({ ...newLead, phone: v })}
+                      onBlur={() => validateNewLeadField('phone', newLead.phone)}
+                      required={f.required}
+                      hasError={!!newLeadErrors[f.key]}
+                    />
+                  ) : (
+                    <input
+                      value={(newLead as any)[f.key]}
+                      onChange={(e) => setNewLead({ ...newLead, [f.key]: e.target.value })}
+                      onBlur={(e) => { validateNewLeadField(f.key, e.target.value); e.currentTarget.style.background = '#FDFAF7'; }}
+                      required={f.required}
+                      placeholder={f.placeholder}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 transition-all"
+                      style={{ border: newLeadErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3', background: '#FDFAF7' }}
+                      onFocus={(e) => e.currentTarget.style.background = '#fff'}
+                    />
+                  )}
                   {newLeadErrors[f.key] && (
                     <p className="text-[11px] text-red-500 mt-1">{newLeadErrors[f.key]}</p>
                   )}

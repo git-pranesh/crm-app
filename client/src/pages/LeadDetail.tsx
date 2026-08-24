@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { api, uploadFile } from '../lib/api';
 import { describeActivity } from '../lib/activityLabels';
-import { validateEmail, validatePhone } from '../lib/validation';
+import { validateEmail, validatePhoneStrict } from '../lib/validation';
 import { formatISTDate, formatPossession, istDateOnly, istDatetimeLocalValue, istInputToISO } from '../lib/dateFormat';
 import CallLogTab from '../components/tabs/CallLogTab';
 import FollowUpTab from '../components/tabs/FollowUpTab';
@@ -18,6 +18,7 @@ import QuoteTab from '../components/tabs/QuoteTab';
 import FilesTab from '../components/tabs/FilesTab';
 import TeamTab from '../components/tabs/TeamTab';
 import DIPChecklistPanel from '../components/DIPChecklistPanel';
+import PhoneInput from '../components/PhoneInput';
 import PDOBChecklistPanel from '../components/PDOBChecklistPanel';
 import OBOBMChecklistPanel from '../components/OBOBMChecklistPanel';
 import StageCaptureModal from '../components/StageCaptureModal';
@@ -317,7 +318,7 @@ export default function LeadDetail() {
     } else if (key === 'email' || key === 'email2') {
       error = validateEmail(value);
     } else if (key === 'phone' || key === 'phone2') {
-      error = validatePhone(value);
+      error = validatePhoneStrict(value);
     }
     setEditDetailsErrors((prev) => {
       const next = { ...prev };
@@ -942,18 +943,29 @@ export default function LeadDetail() {
                       <label className="block text-xs font-semibold text-stone-600 mb-1">
                         {f.label}{f.required && <span className="text-brand-500 ml-0.5">*</span>}
                       </label>
-                      <input
-                        type={f.type ?? 'text'}
-                        value={editDetails[f.key]}
-                        onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
-                        onBlur={(e) => validateEditField(f.key, e.target.value)}
-                        placeholder={f.placeholder}
-                        className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
-                        style={{
-                          border: editDetailsErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
-                          background: '#FDFAF7',
-                        }}
-                      />
+                      {f.key === 'phone' || f.key === 'phone2' ? (
+                        <PhoneInput
+                          id={f.key}
+                          value={editDetails[f.key]}
+                          onChange={(v) => setEditDetails({ ...editDetails, [f.key]: v })}
+                          onBlur={() => validateEditField(f.key, editDetails[f.key])}
+                          required={f.required}
+                          hasError={!!editDetailsErrors[f.key]}
+                        />
+                      ) : (
+                        <input
+                          type={f.type ?? 'text'}
+                          value={editDetails[f.key]}
+                          onChange={(e) => setEditDetails({ ...editDetails, [f.key]: e.target.value })}
+                          onBlur={(e) => validateEditField(f.key, e.target.value)}
+                          placeholder={f.placeholder}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-all"
+                          style={{
+                            border: editDetailsErrors[f.key] ? '1px solid #EF4444' : '1px solid #EDE8E3',
+                            background: '#FDFAF7',
+                          }}
+                        />
+                      )}
                       {editDetailsErrors[f.key] && (
                         <p className="text-[11px] text-red-500 mt-1">{editDetailsErrors[f.key]}</p>
                       )}

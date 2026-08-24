@@ -603,6 +603,9 @@ importers:
       axios:
         specifier: ^1.16.1
         version: 1.16.1
+      libphonenumber-js:
+        specifier: ^1.13.11
+        version: 1.13.11
       lucide-react:
         specifier: 'catalog:'
         version: 0.545.0(react@18.3.1)
@@ -740,6 +743,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
+      libphonenumber-js:
+        specifier: ^1.13.11
+        version: 1.13.11
       multer:
         specifier: ^2.1.1
         version: 2.1.1
@@ -3113,6 +3119,9 @@ packages:
   leven@4.1.0:
     resolution: {integrity: sha512-KZ9W9nWDT7rF7Dazg8xyLHGLrmpgq2nVNFUckhqdW3szVP6YhCpp/RAnpmVExA9JvrMynjwSLVrEj3AepHR6ew==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  libphonenumber-js@1.13.11:
+    resolution: {integrity: sha512-ETER2kMaIFTI/Nh1a8Gk03dUF/SL0VZqtI+CcVHZxp5WIHYwNS7S+uiYZDYCvLy3lOR4/DAD5jf0h5WkePPpqg==}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -6936,6 +6945,8 @@ snapshots:
       readable-stream: 2.3.8
 
   leven@4.1.0: {}
+
+  libphonenumber-js@1.13.11: {}
 
   lie@3.3.0:
     dependencies:
