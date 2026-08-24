@@ -89,49 +89,11 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
 // ── Pre-built templates ────────────────────────────────────────────────────────
 
-// meetingConfirmationEmail / momEmail moved to lib/mailTemplates.ts (Task #66)
-// so their default subject/body are admin-editable from Settings.
-
-export function noShowEmail(opts: { clientName: string }): EmailPayload {
-  return {
-    to: '',
-    subject: `We Missed You — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>We noticed you weren't able to make it to today's meeting. No worries!</p>
-<p>Please reply to this email with your availability so we can reschedule at a time that works for you.</p>
-<p>Looking forward to connecting!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
-
-export function rescheduleEmail(opts: {
-  clientName: string;
-  reason: string;
-}): EmailPayload {
-  return {
-    to: '',
-    subject: `Meeting Rescheduled — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Your meeting has been rescheduled. Reason: ${opts.reason}</p>
-<p>Our team will reach out shortly to confirm the new time.<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
-
-export function inactivationEmail(opts: {
-  clientName: string;
-  feedbackUrl: string;
-  reason?: string;
-}): EmailPayload {
-  return {
-    to: '',
-    subject: `We'd love your feedback — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Thank you for your interest in Interiors by DeX.</p>
-${opts.reason ? `<p>We understand that the project may not have moved forward at this time.</p>` : ''}
-<p>We'd really appreciate a minute of your time to share your thoughts — it helps us improve:</p>
-<p><a href="${opts.feedbackUrl}" style="background:#d95f32;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Share Feedback</a></p>
-<p>Thank you!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
+// meetingConfirmationEmail / momEmail moved to lib/mailTemplates.ts (Task #66).
+// noShowEmail / rescheduleEmail / inactivationEmail / onHoldEmail /
+// leadReactivatedClientEmail / npsEmail also moved to lib/mailTemplates.ts
+// (NO_SHOW, RESCHEDULED, INACTIVATION_FEEDBACK, ON_HOLD, REACTIVATION,
+// NPS_SURVEY) so their default subject/body are admin-editable from Settings.
 
 export function stageMoveBackwardEmail(opts: {
   recipientName: string;
@@ -253,59 +215,3 @@ export function leadReactivatedInternalEmail(opts: {
   };
 }
 
-export function leadReactivatedClientEmail(opts: {
-  clientName: string;
-  notes?: string;
-}): EmailPayload {
-  return {
-    to: '',
-    subject: `Your Project is Back On Track — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Good news — your interior design project with <strong>Interiors by DeX</strong> is now active again and our team will be in touch shortly.</p>
-${opts.notes ? `<p>${opts.notes}</p>` : ''}
-<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
-
-export function npsEmail(opts: {
-  clientName: string;
-  stageName: string;
-  ratingUrl: string;
-  designerName: string;
-}): EmailPayload {
-  const scores = Array.from({ length: 11 }, (_, i) => i);
-  const scoreLinks = scores.map((i) => {
-    const bg = i <= 6 ? '#f0ece8' : i <= 8 ? '#f59e0b' : '#22c55e';
-    const color = i <= 6 ? '#6b7280' : '#fff';
-    return `<a href="${opts.ratingUrl}?score=${i}" style="display:inline-block;width:34px;height:34px;line-height:34px;text-align:center;background:${bg};color:${color};border-radius:8px;text-decoration:none;margin:2px;font-size:13px;font-weight:700">${i}</a>`;
-  }).join('');
-
-  return {
-    to: '',
-    subject: `Quick feedback on your ${opts.stageName} experience — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>Your <strong>${opts.stageName}</strong> milestone with Interiors by DeX is complete — congratulations! 🎉</p>
-<p>We'd love to know: on a scale of <strong>0–10</strong>, how likely are you to recommend us to a friend or family?</p>
-<p style="text-align:center;margin:24px 0;">${scoreLinks}</p>
-<p style="text-align:center;font-size:12px;color:#9ca3af;">0 = Not at all likely &nbsp;&nbsp;&nbsp; 10 = Extremely likely</p>
-<p>Or tap here to open the survey: <a href="${opts.ratingUrl}" style="color:#d95f32">${opts.ratingUrl}</a></p>
-<p>Thank you for trusting us with your space!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}
-
-export function onHoldEmail(opts: {
-  clientName: string;
-  revivalDate: string;
-  reason: string;
-}): EmailPayload {
-  return {
-    to: '',
-    subject: `Your Project is On Hold — Interiors by DeX`,
-    html: `<p>Dear ${opts.clientName},</p>
-<p>We wanted to let you know that your interior design project with <strong>Interiors by DeX</strong> has been placed on hold.</p>
-<p><strong>Revival Date:</strong> ${opts.revivalDate}<br/>
-<strong>Reason:</strong> ${opts.reason}</p>
-<p>We will reach out to you on or before the revival date to resume the project. In the meantime, feel free to contact us with any questions.</p>
-<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
-  };
-}

@@ -23,6 +23,8 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
   const [form, setForm] = useState({
     dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '',
   });
+  const [taskNotifyClient, setTaskNotifyClient] = useState(true);
+  const [rescheduleNotifyClient, setRescheduleNotifyClient] = useState(true);
   // Task #115 — tasks support multiple attachments; no fixed category list.
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -85,8 +87,10 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
         taskType: form.taskType,
         agenda: form.agenda.trim() || undefined,
         attachments,
+        notifyClient: form.taskType === 'EXTERNAL' ? taskNotifyClient : undefined,
       });
       setForm({ dueDate: '', dueTime: '', timeFrom: '', timeTo: '', taskType: 'INTERNAL', agenda: '' });
+      setTaskNotifyClient(true);
       setAttachmentFiles([]);
       setShowForm(false);
       await loadTasks();
@@ -122,6 +126,7 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
       } else {
         await api.patch(`/tasks/${actionModal.taskId}/reschedule`, {
           dueDate: actionForm.dueDate, dueTime: actionForm.dueTime || undefined, reason: actionForm.reason.trim(),
+          notifyClient: actionModal.task.taskType === 'EXTERNAL' ? rescheduleNotifyClient : undefined,
         });
         toast.success('Task rescheduled');
       }
@@ -227,6 +232,17 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
               </select>
             </div>
           </div>
+          {form.taskType === 'EXTERNAL' && (
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={taskNotifyClient}
+                onChange={(e) => setTaskNotifyClient(e.target.checked)}
+                className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+              />
+              Send follow-up reminder email to client
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
@@ -379,6 +395,17 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
                   </div>
+                  {actionModal.task.taskType === 'EXTERNAL' && (
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={rescheduleNotifyClient}
+                        onChange={(e) => setRescheduleNotifyClient(e.target.checked)}
+                        className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                      />
+                      Send updated follow-up email to client
+                    </label>
+                  )}
                 </>
               )}
               {error && <p className="text-sm text-red-500">{error}</p>}

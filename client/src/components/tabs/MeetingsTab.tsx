@@ -69,6 +69,9 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
 
   // Schedule form
   const [form, setForm] = useState({ type: '', mode: '', scheduledAt: '', location: '' });
+  const [notifyClient, setNotifyClient] = useState(true);
+  const [sendNpsSurvey, setSendNpsSurvey] = useState(true);
+  const NPS_TRIGGER_TYPES = new Set(['DQL', 'PP', 'DESIGN_FREEZE', 'SIGN_OFF']);
 
   // Status update modal
   const [statusModal, setStatusModal] = useState<{
@@ -134,8 +137,10 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
         mode: form.mode,
         scheduledAt: form.scheduledAt,
         location: form.location || undefined,
+        notifyClient,
       });
       setForm({ type: '', mode: '', scheduledAt: '', location: '' });
+      setNotifyClient(true);
       setShowForm(false);
       await loadMeetings();
       onMeetingCreated?.();
@@ -208,6 +213,7 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
             ? istInputToISO(statusForm.replanScheduledAt)
             : undefined,
           replanLocation: statusForm.replanLocation || undefined,
+          sendNpsSurvey: statusModal.status === 'COMPLETED' && NPS_TRIGGER_TYPES.has(statusModal.meetingType) ? sendNpsSurvey : undefined,
         },
       );
       const completedType = statusModal.status === 'COMPLETED' ? statusModal.meetingType : null;
@@ -351,8 +357,20 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
               </select>
             </div>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-gray-400">
-            <Mail size={12} strokeWidth={1.8} /> Confirmation email + SMS will be sent to client automatically.
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={notifyClient}
+              onChange={(e) => setNotifyClient(e.target.checked)}
+              className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+            />
+            <span className="flex items-center gap-1.5">
+              <Mail size={14} strokeWidth={1.8} className="text-gray-400" />
+              Send confirmation email to client
+            </span>
+          </label>
+          <p className="text-xs text-gray-400 pl-6">
+            {notifyClient ? 'A confirmation email + SMS will be sent to the client.' : 'No email will be sent — internal team notifications and SMS still fire.'}
           </p>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button
@@ -388,6 +406,17 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
                   />
                   <p className="text-xs text-gray-400 mt-1">MOM will be emailed to the client automatically.</p>
                 </div>
+              )}
+              {statusModal.status === 'COMPLETED' && NPS_TRIGGER_TYPES.has(statusModal.meetingType) && (
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={sendNpsSurvey}
+                    onChange={(e) => setSendNpsSurvey(e.target.checked)}
+                    className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                  />
+                  Send NPS survey email to client
+                </label>
               )}
               {statusModal.status === 'COMPLETED' && (
                 <>

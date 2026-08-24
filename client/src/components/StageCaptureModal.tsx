@@ -12,16 +12,19 @@ interface Props {
   initialValue: number | string | null | undefined;
   saving: boolean;
   error: string | null;
+  /** True when this move fires the automatic sign-off NPS survey email (DESIGN_IN_PROGRESS/HANDED_OVER) — shows the mandatory checkbox. */
+  triggersNpsSurvey?: boolean;
   onCancel: () => void;
-  onConfirm: (rating: number, value: number, reason: string) => void;
+  onConfirm: (rating: number, value: number, reason: string, sendNpsSurvey: boolean) => void;
 }
 
 export default function StageCaptureModal({
-  leadName, targetStageLabel, initialRating, initialValue, saving, error, onCancel, onConfirm,
+  leadName, targetStageLabel, initialRating, initialValue, saving, error, triggersNpsSurvey, onCancel, onConfirm,
 }: Props) {
   const [rating, setRating] = useState(initialRating || 0);
   const [value, setValue] = useState(initialValue != null ? String(initialValue) : '');
   const [reason, setReason] = useState('');
+  const [sendNpsSurvey, setSendNpsSurvey] = useState(true);
 
   const parsedValue = parseFloat(value);
   const canSubmit = rating > 0 && value.trim() !== '' && !isNaN(parsedValue) && parsedValue >= 0;
@@ -76,6 +79,14 @@ export default function StageCaptureModal({
           />
         </div>
 
+        {triggersNpsSurvey && (
+          <label className="flex items-center gap-2 text-sm text-stone-700 mb-4">
+            <input type="checkbox" checked={sendNpsSurvey} onChange={(e) => setSendNpsSurvey(e.target.checked)}
+              className="rounded border-stone-300 text-brand-500 focus:ring-brand-400" />
+            Send NPS survey email to client
+          </label>
+        )}
+
         {error && (
           <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
@@ -95,7 +106,7 @@ export default function StageCaptureModal({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(rating, parsedValue, reason.trim())}
+            onClick={() => onConfirm(rating, parsedValue, reason.trim(), sendNpsSurvey)}
             disabled={saving || !canSubmit}
             className="flex-1 bg-brand-500 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-brand-600 disabled:opacity-50 transition-colors"
           >

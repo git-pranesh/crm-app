@@ -58,9 +58,9 @@ function startOfToday(): Date {
   return istDayBounds().start;
 }
 
-async function notifyExternalTask(lead: { id: string; leadId: string; name: string; email: string | null; phone: string | null }, task: { dueDate: Date; dueTime: string | null; agenda: string | null }) {
+async function notifyExternalTask(lead: { id: string; leadId: string; name: string; email: string | null; phone: string | null }, task: { dueDate: Date; dueTime: string | null; agenda: string | null }, notifyClientEmail = true) {
   const dueStr = task.dueDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
-  if (lead.email) {
+  if (notifyClientEmail && lead.email) {
     await sendEmail({
       to: lead.email,
       subject: `Upcoming follow-up — Interiors by DeX`,
@@ -107,7 +107,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
   const user = req.user!;
 
-  const { dueDate, dueTime, timeFrom, timeTo, assignedToId, taskType, agenda, attachments } = req.body as {
+  const { dueDate, dueTime, timeFrom, timeTo, assignedToId, taskType, agenda, attachments, notifyClient } = req.body as {
     dueDate?: string;
     dueTime?: string;
     timeFrom?: string;
@@ -116,6 +116,8 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
     taskType?: string;
     agenda?: string;
     attachments?: TaskAttachmentInput[];
+    // Gates the client-facing follow-up email — mandatory checkbox when taskType === 'EXTERNAL'.
+    notifyClient?: boolean;
   };
 
   try {
@@ -196,7 +198,7 @@ tasksRouter.post('/', verifyToken, async (req, res) => {
   }
 
   if (taskType === 'EXTERNAL') {
-    await notifyExternalTask(lead, { dueDate: parsedDueDate, dueTime: resolvedTimeFrom ?? null, agenda: agenda ?? null });
+    await notifyExternalTask(lead, { dueDate: parsedDueDate, dueTime: resolvedTimeFrom ?? null, agenda: agenda ?? null }, notifyClient !== false);
   }
 
   res.status(201).json({ task });
@@ -381,12 +383,14 @@ myTasksRouter.patch('/:id/not-done', verifyToken, async (req, res) => {
 myTasksRouter.patch('/:id/reschedule', verifyToken, async (req, res) => {
   const { id } = req.params;
   const user = req.user!;
-  const { dueDate, dueTime, timeFrom, timeTo, reason } = req.body as {
+  const { dueDate, dueTime, timeFrom, timeTo, reason, notifyClient } = req.body as {
     dueDate?: string;
     dueTime?: string;
     timeFrom?: string;
     timeTo?: string;
     reason?: string;
+    // Gates the client-facing follow-up email when the task is EXTERNAL.
+    notifyClient?: boolean;
   };
 
   const task = await prisma.followUpTask.findUnique({ where: { id } });
@@ -478,7 +482,7 @@ myTasksRouter.patch('/:id/reschedule', verifyToken, async (req, res) => {
       select: { id: true, leadId: true, name: true, email: true, phone: true },
     });
     if (lead) {
-      await notifyExternalTask(lead, { dueDate: parsedDueDate, dueTime: resolvedTimeFrom ?? null, agenda: task.agenda });
+      await notifyExternalTask(lead, { dueDate: parsedDueDate, dueTime: resolvedTimeFrom ?? null, agenda: task.agenda }, notifyClient !== false);
     }
   }
 

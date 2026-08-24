@@ -49,6 +49,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     callbackDetails,
     meetingDetails,
     nextPlanOfAction,
+    notifyClient,
   } = req.body as {
     outcome: string;
     duration?: number;
@@ -65,10 +66,13 @@ callsRouter.post('/', verifyToken, async (req, res) => {
     followUpTask?: { dueDate: string; dueTime?: string; assignedToId?: string; attachments?: { type: string; fileUrl?: string; storagePath?: string }[] };
     // Required when outcome === 'CALLBACK': asks for date/time + agenda
     callbackDetails?: { dueDate: string; dueTime?: string; agenda?: string; assignedToId?: string; attachments?: { type: string; fileUrl?: string; storagePath?: string }[] };
-    // Required when outcome === 'MEETING_SCHEDULED': creates a linked Meeting instead of a follow-up task
-    meetingDetails?: { type: string; mode: string; scheduledAt: string; location?: string };
+    // Required when outcome === 'MEETING_SCHEDULED': creates a linked Meeting instead of a follow-up task.
+    // notifyClient gates the client-facing confirmation email — mandatory checkbox on the call-log form.
+    meetingDetails?: { type: string; mode: string; scheduledAt: string; location?: string; notifyClient?: boolean };
     // Shared Call/Meeting/Task multi-select "next plan of action" flow
     nextPlanOfAction?: NextPlanItem[];
+    // Gates the ANSWERED-outcome call-summary client email — mandatory checkbox on the call-log form.
+    notifyClient?: boolean;
   };
 
   if (!outcome) {
@@ -345,6 +349,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
       mode: meetingDetails!.mode,
       scheduledAt: meetingDetails!.scheduledAt,
       ppNumber: meetingPpNumber,
+      notifyClient: meetingDetails!.notifyClient !== false,
     });
   }
 
@@ -374,7 +379,7 @@ callsRouter.post('/', verifyToken, async (req, res) => {
   // the External Notes + follow-up plan, CC'ing the designer, BL, and
   // management. Internal Notes (`notes`) must NEVER be read in this block —
   // that is the enforcement point that keeps internal content off client mail.
-  if (outcome === 'ANSWERED' && lead.email) {
+  if (outcome === 'ANSWERED' && notifyClient !== false && lead.email) {
     const followUpDate = task
       ? new Date(task.dueDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }) + (task.dueTime ? ` at ${task.dueTime}` : '')
       : meeting

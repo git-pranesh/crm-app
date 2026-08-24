@@ -111,6 +111,8 @@ export interface MeetingScheduledSideEffectsParams {
   mode: string;
   scheduledAt: string;
   ppNumber: number | null;
+  /** Gates the client-facing confirmation email only — internal notifications/SMS/milestones still fire. Defaults to true for call sites that predate the mandatory checkbox (Task: client-mail rules). */
+  notifyClient?: boolean;
 }
 
 /**
@@ -122,7 +124,7 @@ export interface MeetingScheduledSideEffectsParams {
  * part of the meeting's own atomic write.
  */
 export async function runMeetingScheduledSideEffects(params: MeetingScheduledSideEffectsParams): Promise<void> {
-  const { meeting, lead, user, type, mode, scheduledAt, ppNumber } = params;
+  const { meeting, lead, user, type, mode, scheduledAt, ppNumber, notifyClient = true } = params;
   const leadId = lead.id;
 
   await logActivity(user.id, 'MEETING_SCHEDULED', leadId, { meetingId: meeting.id, type, ppNumber, scheduledAt });
@@ -143,8 +145,8 @@ export async function runMeetingScheduledSideEffects(params: MeetingScheduledSid
     );
   }
 
-  // Queue confirmation email (auto-trigger, no checkbox)
-  if (lead.email) {
+  // Queue confirmation email — gated by the mandatory "send externally?" checkbox on the booking form.
+  if (notifyClient && lead.email) {
     const designer = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
     const meetingDateStr = new Date(scheduledAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
     const rendered = await renderMailTemplate('MEETING_CONFIRMATION', {

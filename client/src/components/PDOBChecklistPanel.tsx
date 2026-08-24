@@ -58,6 +58,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
   const [showMailModal, setShowMailModal] = useState(false);
 
   const [form, setForm] = useState({ paymentValue: '', projectValue: '', furnitureValue: '', obMeetingScheduledAt: '', obMeetingLocation: '', notes: '', finalPitchPresentationConfirmed: false });
+  const [obMeetingNotifyClient, setObMeetingNotifyClient] = useState(true);
 
   const isEditable = stage === 'PROPOSAL_DISCUSSION' && !isLocked;
 
@@ -113,6 +114,7 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
         obMeetingLocation: form.obMeetingLocation || null,
         notes: form.notes || null,
         finalPitchPresentationConfirmed: form.finalPitchPresentationConfirmed,
+        notifyClient: obMeetingNotifyClient,
       });
       setChecklist(data.checklist);
       await load();
@@ -276,6 +278,17 @@ export default function PDOBChecklistPanel({ leadId, stage, clientEmail, onCompl
           </select>
         </div>
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+        <input
+          type="checkbox"
+          disabled={!isEditable || saving}
+          checked={obMeetingNotifyClient}
+          onChange={(e) => setObMeetingNotifyClient(e.target.checked)}
+          className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+        />
+        Send meeting confirmation email to client (applies when OB meeting date &amp; location above are saved)
+      </label>
 
       <div className="mb-3">
         <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>

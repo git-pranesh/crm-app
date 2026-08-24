@@ -48,6 +48,8 @@ import { scheduleSLACheck } from './jobs/slaCheck.js';
 import { scheduleReportJobs } from './jobs/reportScheduler.js';
 import { schedulePerformanceRecalc } from './jobs/performanceRecalc.js';
 import { startTaskReminderLoop } from './services/taskReminders.js';
+import { scheduleWeeklyTaskDigest } from './jobs/weeklyTaskDigest.js';
+import { scheduleUpcomingDueReminder } from './jobs/upcomingDueReminder.js';
 import './jobs/emailWorker.js';
 import './jobs/performanceRecalc.js';
 
@@ -210,6 +212,8 @@ app.listen(PORT, async () => {
       await scheduleSLACheck();
       await scheduleReportJobs();
       await schedulePerformanceRecalc();
+      await scheduleWeeklyTaskDigest();
+      await scheduleUpcomingDueReminder();
     } catch (e) {
       console.warn('[jobs] Could not schedule background jobs:', e);
     }

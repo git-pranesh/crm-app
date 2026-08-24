@@ -26,7 +26,9 @@ export type NotificationType =
   | 'TEAM_MEMBER_APPROVED'
   | 'TEAM_MEMBER_REJECTED'
   | 'PD_ASSIGNED'
-  | 'DTL_ASSIGNED';
+  | 'DTL_ASSIGNED'
+  | 'TASK_DUE_SOON'
+  | 'MEETING_DUE_SOON';
 
 export async function createNotification(
   userId: string,

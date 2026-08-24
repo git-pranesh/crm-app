@@ -810,6 +810,10 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // and OFFER_APPLIED activity log in sync) — this PATCH only accepts a
       // falsy value here, to explicitly clear the link.
       currentOfferId,
+      // Gates the automatic sign-off NPS survey email fired when a lead
+      // reaches DESIGN_IN_PROGRESS/HANDED_OVER — mandatory checkbox on the
+      // stage-move form. Defaults to true for callers that predate it.
+      sendNpsSurvey,
     } = req.body as Record<string, any>;
 
     // ── Format validation ─────────────────────────────────────────────────────
@@ -1118,7 +1122,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
       // (the new terminal/conversion stage — replaces the old HANDED_OVER
       // trigger; HANDED_OVER is kept as a legacy trigger so old data flows
       // are unaffected).
-      if (stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') {
+      if ((stage === 'DESIGN_IN_PROGRESS' || stage === 'HANDED_OVER') && sendNpsSurvey !== false) {
         createAndSendNps(id, 'SIGN_OFF').catch(() => {});
       }
 
@@ -1422,8 +1426,12 @@ leadsRouter.patch('/:id/status', verifyToken, async (req, res) => {
         res.status(400).json({ error: 'The reopen date must be a future date.' });
         return;
       }
+      if (typeof notifyClient !== 'boolean') {
+        res.status(400).json({ error: 'notifyClient must be true or false — confirm whether to email the client.' });
+        return;
+      }
       const lead = await putLeadOnHold({
-        leadId: id, actorId: user.id, actorName: user.name, reason: reason.trim(), notes: notes?.trim(), revivalDate: reopenDate,
+        leadId: id, actorId: user.id, actorName: user.name, reason: reason.trim(), notes: notes?.trim(), revivalDate: reopenDate, notifyClient,
       });
       res.json({ lead });
       return;

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { verifyToken } from '../middleware/auth.js';
 import { logActivity } from '../lib/activityLog.js';
 import { createNotification } from '../lib/notifications.js';
-import { sendEmail, noShowEmail, noShowNoPlanEmail, rescheduleEmail } from '../lib/email.js';
+import { sendEmail, noShowNoPlanEmail } from '../lib/email.js';
 import { saveDraft } from '../lib/emailService.js';
 import { renderMailTemplate } from '../lib/mailTemplates.js';
 import { createAndSendNps } from '../lib/npsHelper.js';
@@ -58,15 +58,21 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
   const { leadId } = req.params as { leadId: string };
   const user = req.user!;
 
-  const { type, mode, scheduledAt, location } = req.body as {
+  const { type, mode, scheduledAt, location, notifyClient } = req.body as {
     type?: string;
     mode?: string;
     scheduledAt?: string;
     location?: string;
+    // Mandatory "send externally?" checkbox — must be explicitly provided by the booking form.
+    notifyClient?: boolean;
   };
 
   if (!type || !mode || !scheduledAt) {
     res.status(400).json({ error: 'type, mode, and scheduledAt are required' });
+    return;
+  }
+  if (typeof notifyClient !== 'boolean') {
+    res.status(400).json({ error: 'notifyClient must be true or false — confirm whether to email the client.' });
     return;
   }
 
@@ -126,6 +132,7 @@ meetingsRouter.post('/', verifyToken, async (req, res) => {
     mode,
     scheduledAt,
     ppNumber,
+    notifyClient,
   });
 
   res.status(201).json({ meeting });
@@ -231,7 +238,7 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
   const {
     status, mom, rescheduledReason, noShowReason, outcome, newScheduledAt, replanScheduledAt, replanLocation,
-    momAttachmentTypes, momAttachments, nextPlanOfAction,
+    momAttachmentTypes, momAttachments, nextPlanOfAction, sendNpsSurvey,
   } = req.body as {
     status?: string;
     mom?: string;
@@ -244,6 +251,9 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
     momAttachmentTypes?: string[];
     momAttachments?: { type: string; storagePath?: string; fileUrl?: string }[];
     nextPlanOfAction?: NextPlanItem[];
+    // Gates the automatic NPS survey email fired on completing a
+    // DQL/PP/DESIGN_FREEZE/SIGN_OFF meeting — mandatory checkbox on the form.
+    sendNpsSurvey?: boolean;
   };
 
   const validStatuses = ['COMPLETED', 'RESCHEDULED', 'NO_SHOW'];
@@ -513,12 +523,14 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
       });
       emailPayload = { to: '', subject: rendered.subject, html: rendered.html, attachments: momEmailAttachments.length ? momEmailAttachments : undefined };
     } else if (status === 'RESCHEDULED') {
-      emailPayload = rescheduleEmail({
+      const rendered = await renderMailTemplate('RESCHEDULED', {
         clientName: lead.name,
         reason: rescheduledReason!,
       });
+      emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     } else if (status === 'NO_SHOW') {
-      emailPayload = noShowEmail({ clientName: lead.name });
+      const rendered = await renderMailTemplate('NO_SHOW', { clientName: lead.name });
+      emailPayload = { to: '', subject: rendered.subject, html: rendered.html };
     }
 
     if (emailPayload) {
@@ -611,8 +623,10 @@ meetingStatusRouter.patch('/:id/status', verifyToken, async (req, res) => {
 
   await recalculateMilestones(lead.id);
 
-  // NPS email triggers on meeting completion
-  if (status === 'COMPLETED') {
+  // NPS email triggers on meeting completion — gated by the mandatory
+  // "send NPS survey?" checkbox shown on the completion form for these
+  // meeting types. Defaults to true for callers that predate the checkbox.
+  if (status === 'COMPLETED' && sendNpsSurvey !== false) {
     if (meeting.type === 'DQL' || meeting.type === 'PP') {
       // Sales NPS — triggered when first real sales meeting completes
       createAndSendNps(lead.id, 'SALE').catch(() => {});

@@ -215,6 +215,8 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
     meetingScheduledAt: '',
     meetingLocation: '',
   });
+  const [meetingNotifyClient, setMeetingNotifyClient] = useState(true);
+  const [answeredNotifyClient, setAnsweredNotifyClient] = useState(true);
   const [nextPlanItems, setNextPlanItems] = useState<NextPlanItem[]>([]);
   const [selectedAttachmentTypes, setSelectedAttachmentTypes] = useState<string[]>([]);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
@@ -397,9 +399,10 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
           ? { dueDate: form.callbackDueDate, dueTime: form.callbackDueTime, agenda: form.callbackAgenda.trim() || undefined }
           : undefined,
         meetingDetails: form.outcome === 'MEETING_SCHEDULED'
-          ? { type: form.meetingType, mode: form.meetingMode, scheduledAt: istInputToISO(form.meetingScheduledAt), location: form.meetingLocation.trim() || undefined }
+          ? { type: form.meetingType, mode: form.meetingMode, scheduledAt: istInputToISO(form.meetingScheduledAt), location: form.meetingLocation.trim() || undefined, notifyClient: meetingNotifyClient }
           : undefined,
         nextPlanOfAction: nextPlanItems.length ? nextPlanItems : undefined,
+        notifyClient: form.outcome === 'ANSWERED' ? answeredNotifyClient : undefined,
       });
       resetForm();
       setTaskAttachmentFiles([]);
@@ -721,6 +724,17 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
                 </label>
               )}
             </div>
+            {form.outcome === 'ANSWERED' && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 mt-2">
+                <input
+                  type="checkbox"
+                  checked={answeredNotifyClient}
+                  onChange={(e) => setAnsweredNotifyClient(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                />
+                Send call summary email to client
+              </label>
+            )}
           </div>
 
           {/* Outcome-specific sub-forms */}
@@ -796,6 +810,15 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
                   {MEETING_LOCATION_OPTIONS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700 mt-3">
+                <input
+                  type="checkbox"
+                  checked={meetingNotifyClient}
+                  onChange={(e) => setMeetingNotifyClient(e.target.checked)}
+                  className="rounded border-gray-300 text-brand-500 focus:ring-brand-400"
+                />
+                Send confirmation email to client
+              </label>
               <p className="text-xs text-gray-400 mt-1">A meeting will be created automatically and linked back to this call.</p>
             </div>
           )}

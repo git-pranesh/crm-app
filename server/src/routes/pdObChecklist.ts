@@ -49,6 +49,7 @@ async function syncOBMeetingFromChecklist(
   scheduledAt: Date,
   location: string,
   user: { id: string },
+  notifyClient: boolean,
 ): Promise<void> {
   const existing = await prisma.meeting.findFirst({
     where: { leadId: lead.id, type: 'ONBOARDING' },
@@ -84,7 +85,7 @@ async function syncOBMeetingFromChecklist(
   };
   await runMeetingScheduledSideEffects({
     meeting, lead: scheduleLead, user, type: 'ONBOARDING', mode: location,
-    scheduledAt: scheduledAt.toISOString(), ppNumber,
+    scheduledAt: scheduledAt.toISOString(), ppNumber, notifyClient,
   });
 }
 
@@ -174,7 +175,7 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
 
     const {
       paymentValue, projectValue, furnitureValue, obMeetingScheduledAt, obMeetingLocation, notes,
-      finalPitchPresentationConfirmed,
+      finalPitchPresentationConfirmed, notifyClient,
     } = req.body as Record<string, any>;
 
     const data: Record<string, any> = {};
@@ -204,8 +205,10 @@ pdObChecklistRouter.patch('/', verifyToken, async (req, res) => {
     // unrelated active meeting blocking a new one).
     if ((obMeetingScheduledAt !== undefined || obMeetingLocation !== undefined)
       && checklist.obMeetingScheduledAt && checklist.obMeetingLocation) {
-      await syncOBMeetingFromChecklist(lead, checklist.obMeetingScheduledAt, checklist.obMeetingLocation, req.user!)
-        .catch((e: any) => console.warn('[pd-ob-checklist:meeting-sync]', e.message));
+      await syncOBMeetingFromChecklist(
+        lead, checklist.obMeetingScheduledAt, checklist.obMeetingLocation, req.user!,
+        notifyClient !== false,
+      ).catch((e: any) => console.warn('[pd-ob-checklist:meeting-sync]', e.message));
     }
 
     res.json({ checklist });

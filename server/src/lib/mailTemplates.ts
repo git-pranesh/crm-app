@@ -96,6 +96,78 @@ export const MAIL_TEMPLATES: MailTemplateDef[] = [
 <p>{{details}}</p>
 <p>Team Interiors by DeX</p>`,
   },
+  {
+    code: 'NO_SHOW',
+    label: 'No-show follow-up',
+    description: 'Sent automatically to the client when they no-show a scheduled meeting.',
+    placeholders: ['clientName'],
+    defaultSubject: 'We Missed You — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>We noticed you weren't able to make it to today's meeting. No worries!</p>
+<p>Please reply to this email with your availability so we can reschedule at a time that works for you.</p>
+<p>Looking forward to connecting!<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'RESCHEDULED',
+    label: 'Meeting rescheduled',
+    description: 'Sent automatically to the client when a meeting is rescheduled.',
+    placeholders: ['clientName', 'reason'],
+    defaultSubject: 'Meeting Rescheduled — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>Your meeting has been rescheduled. Reason: {{reason}}</p>
+<p>Our team will reach out shortly to confirm the new time.<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'ON_HOLD',
+    label: 'Lead placed On Hold',
+    description: 'Sent automatically to the client when their lead is placed On Hold.',
+    placeholders: ['clientName', 'revivalDate', 'reason'],
+    defaultSubject: 'Your Project is On Hold — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>We wanted to let you know that your interior design project with <strong>Interiors by DeX</strong> has been placed on hold.</p>
+<p><strong>Revival Date:</strong> {{revivalDate}}<br/>
+<strong>Reason:</strong> {{reason}}</p>
+<p>We will reach out to you on or before the revival date to resume the project. In the meantime, feel free to contact us with any questions.</p>
+<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'INACTIVATION_FEEDBACK',
+    label: 'Inactivation feedback request',
+    description: 'Sent automatically to the client when their lead is marked Inactive.',
+    placeholders: ['clientName', 'feedbackUrl', 'reasonHtml'],
+    defaultSubject: "We'd love your feedback — Interiors by DeX",
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>Thank you for your interest in Interiors by DeX.</p>
+{{reasonHtml}}
+<p>We'd really appreciate a minute of your time to share your thoughts — it helps us improve:</p>
+<p><a href="{{feedbackUrl}}" style="background:#d95f32;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Share Feedback</a></p>
+<p>Thank you!<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'REACTIVATION',
+    label: 'Lead reactivated',
+    description: 'Sent automatically to the client when their On Hold/Inactive lead is reactivated.',
+    placeholders: ['clientName', 'notesHtml'],
+    defaultSubject: 'Your Project is Back On Track — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>Good news — your interior design project with <strong>Interiors by DeX</strong> is now active again and our team will be in touch shortly.</p>
+{{notesHtml}}
+<p>Thank you for your patience!<br/><em>Team Interiors by DeX</em></p>`,
+  },
+  {
+    code: 'NPS_SURVEY',
+    label: 'NPS survey request',
+    description: 'Sent automatically to the client when a stage milestone triggers an NPS survey.',
+    placeholders: ['clientName', 'stageName', 'ratingUrl', 'scoreLinksHtml'],
+    defaultSubject: 'Quick feedback on your {{stageName}} experience — Interiors by DeX',
+    defaultHtml: `<p>Dear {{clientName}},</p>
+<p>Your <strong>{{stageName}}</strong> milestone with Interiors by DeX is complete — congratulations! 🎉</p>
+<p>We'd love to know: on a scale of <strong>0–10</strong>, how likely are you to recommend us to a friend or family?</p>
+<p style="text-align:center;margin:24px 0;">{{scoreLinksHtml}}</p>
+<p style="text-align:center;font-size:12px;color:#9ca3af;">0 = Not at all likely &nbsp;&nbsp;&nbsp; 10 = Extremely likely</p>
+<p>Or tap here to open the survey: <a href="{{ratingUrl}}" style="color:#d95f32">{{ratingUrl}}</a></p>
+<p>Thank you for trusting us with your space!<br/><em>Team Interiors by DeX</em></p>`,
+  },
 ];
 
 const MAIL_TEMPLATE_CONFIG_KEY = 'mail_template_overrides';

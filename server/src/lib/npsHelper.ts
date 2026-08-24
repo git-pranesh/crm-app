@@ -12,7 +12,7 @@
  */
 import { randomUUID } from 'crypto';
 import { prisma } from './prisma.js';
-import { npsEmail } from './email.js';
+import { renderMailTemplate } from './mailTemplates.js';
 import { queues } from '../jobs/index.js';
 import { resolveBaseUrl as resolveBaseUrlShared } from './baseUrl.js';
 
@@ -97,13 +97,20 @@ export async function createAndSendNps(leadId: string, npsStage: string): Promis
     const ratingUrl = `${baseUrl}/nps/${record.formToken}`;
     const stageName = NPS_STAGE_LABELS[npsStage] ?? npsStage;
 
-    const emailPayload = npsEmail({
+    const scores = Array.from({ length: 11 }, (_, i) => i);
+    const scoreLinksHtml = scores.map((i) => {
+      const bg = i <= 6 ? '#f0ece8' : i <= 8 ? '#f59e0b' : '#22c55e';
+      const color = i <= 6 ? '#6b7280' : '#fff';
+      return `<a href="${ratingUrl}?score=${i}" style="display:inline-block;width:34px;height:34px;line-height:34px;text-align:center;background:${bg};color:${color};border-radius:8px;text-decoration:none;margin:2px;font-size:13px;font-weight:700">${i}</a>`;
+    }).join('');
+
+    const rendered = await renderMailTemplate('NPS_SURVEY', {
       clientName: lead.name,
       stageName,
       ratingUrl,
-      designerName: lead.assignedDesigner?.name ?? 'your designer',
+      scoreLinksHtml,
     });
-    emailPayload.to = lead.email;
+    const emailPayload = { to: lead.email, subject: rendered.subject, html: rendered.html };
 
     // ── 5. Enqueue with a deterministic job ID to prevent BullMQ duplicates ───
     // BullMQ's `jobId` option deduplicates: a job with the same ID that is already

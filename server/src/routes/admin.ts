@@ -4,6 +4,8 @@ import { verifyToken, requireRole } from '../middleware/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { runSLACheck } from '../jobs/slaCheck.js';
 import { runMidnightCheck } from '../jobs/midnightOverdueTask.js';
+import { runWeeklyTaskDigest } from '../jobs/weeklyTaskDigest.js';
+import { runUpcomingDueReminder } from '../jobs/upcomingDueReminder.js';
 import { runPerformanceRecalc } from '../jobs/performanceRecalc.js';
 import { SALES_STAGE_SLA, type StageSlaThreshold } from '../config/slaConfig.js';
 import { getEffectiveStageSla } from '../lib/stageSla.js';
@@ -1017,7 +1019,19 @@ adminRouter.post('/jobs/trigger', async (req, res) => {
       return;
     }
 
-    res.status(400).json({ error: `Unknown job "${job}". Valid: sla-check, midnight-overdue, performance-recalc` });
+    if (job === 'weekly-task-digest') {
+      const result = await runWeeklyTaskDigest();
+      res.json({ job: 'weekly-task-digest', ...result });
+      return;
+    }
+
+    if (job === 'upcoming-due-reminder') {
+      const result = await runUpcomingDueReminder();
+      res.json({ job: 'upcoming-due-reminder', ...result });
+      return;
+    }
+
+    res.status(400).json({ error: `Unknown job "${job}". Valid: sla-check, midnight-overdue, performance-recalc, weekly-task-digest, upcoming-due-reminder` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

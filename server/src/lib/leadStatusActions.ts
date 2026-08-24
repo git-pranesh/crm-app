@@ -16,9 +16,10 @@ import { logActivity } from './activityLog.js';
 import { createNotification } from './notifications.js';
 import { sendSms } from '../services/smsService.js';
 import {
-  sendEmail, inactivationEmail, onHoldEmail, onHoldInternalEmail, inactiveInternalEmail,
-  leadReactivatedInternalEmail, leadReactivatedClientEmail,
+  sendEmail, onHoldInternalEmail, inactiveInternalEmail,
+  leadReactivatedInternalEmail,
 } from './email.js';
+import { renderMailTemplate } from './mailTemplates.js';
 import { sendWhatsAppMessage, fillTemplate } from './whatsapp.js';
 
 async function internalRecipientsFor(lead: { assignedBLId: string | null; assignedDesignerId: string | null }) {
@@ -38,8 +39,9 @@ export async function putLeadOnHold(opts: {
   reason: string;
   notes?: string;
   revivalDate: Date;
+  notifyClient: boolean;
 }) {
-  const { leadId, actorId, actorName, reason, notes, revivalDate } = opts;
+  const { leadId, actorId, actorName, reason, notes, revivalDate, notifyClient } = opts;
   const existing = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!existing) throw new Error('Lead not found');
 
@@ -66,10 +68,10 @@ export async function putLeadOnHold(opts: {
       leadId,
     ).catch((e) => console.warn('[leadStatus:sms:on_hold]', e.message));
 
-    if (existing.email) {
+    if (notifyClient && existing.email) {
       try {
-        const emailPayload = onHoldEmail({ clientName: existing.name, revivalDate: revivalStr, reason });
-        emailPayload.to = existing.email;
+        const rendered = await renderMailTemplate('ON_HOLD', { clientName: existing.name, revivalDate: revivalStr, reason });
+        const emailPayload = { to: existing.email, subject: rendered.subject, html: rendered.html };
         await sendEmail(emailPayload);
         await prisma.emailLog.create({ data: { leadId, type: 'ON_HOLD', sentTo: existing.email, subject: emailPayload.subject } });
       } catch (e) {
@@ -115,10 +117,7 @@ export async function markLeadInactive(opts: {
   notes?: string;
   notifyClient: boolean;
 }) {
-  const { leadId, actorId, actorName, reason, notes } = opts;
-  // Client notification is an agreed inactive-lead workflow, not an optional
-  // UI preference. Deliver through every available client channel.
-  const notifyClient = true;
+  const { leadId, actorId, actorName, reason, notes, notifyClient } = opts;
   const existing = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!existing) throw new Error('Lead not found');
 
@@ -163,8 +162,9 @@ export async function markLeadInactive(opts: {
     });
 
     if (existing.email) {
-      const emailPayload = inactivationEmail({ clientName: existing.name, feedbackUrl, reason });
-      emailPayload.to = existing.email;
+      const reasonHtml = reason ? `<p>We understand that the project may not have moved forward at this time.</p>` : '';
+      const rendered = await renderMailTemplate('INACTIVATION_FEEDBACK', { clientName: existing.name, feedbackUrl, reasonHtml });
+      const emailPayload = { to: existing.email, subject: rendered.subject, html: rendered.html };
       sendEmail(emailPayload).catch((e) => console.warn('[leadStatus:email:inactive]', e.message));
       await prisma.emailLog.create({ data: { leadId, type: 'INACTIVATION_FEEDBACK', sentTo: existing.email, subject: emailPayload.subject } });
     }
@@ -202,8 +202,7 @@ export async function reactivateLead(opts: {
   notes?: string;
   notifyClient: boolean;
 }) {
-  const { leadId, actorId, actorName, reason, notes } = opts;
-  const notifyClient = true;
+  const { leadId, actorId, actorName, reason, notes, notifyClient } = opts;
   const lead = await prisma.lead.findUnique({ where: { id: leadId } });
   if (!lead) throw new Error('Lead not found');
   if (lead.status !== 'ON_HOLD' && lead.status !== 'INACTIVE') {
@@ -244,8 +243,10 @@ export async function reactivateLead(opts: {
   }
 
   if (notifyClient && lead.email) {
-    const payload = leadReactivatedClientEmail({ clientName: lead.name, notes: notes?.trim() });
-    payload.to = lead.email;
+    const trimmedNotes = notes?.trim();
+    const notesHtml = trimmedNotes ? `<p>${trimmedNotes}</p>` : '';
+    const rendered = await renderMailTemplate('REACTIVATION', { clientName: lead.name, notesHtml });
+    const payload = { to: lead.email, subject: rendered.subject, html: rendered.html };
     sendEmail(payload).catch(() => {});
   }
 

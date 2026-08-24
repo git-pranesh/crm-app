@@ -300,6 +300,7 @@ export default function LeadDetail() {
   const [onHoldReason, setOnHoldReason] = useState('');
   const [onHoldNotes, setOnHoldNotes] = useState('');
   const [onHoldReopenDate, setOnHoldReopenDate] = useState('');
+  const [onHoldNotifyClient, setOnHoldNotifyClient] = useState(true);
   const [changingStatus, setChangingStatus] = useState(false);
 
   // Task #40/#88 — reactivation flow for ON_HOLD / INACTIVE leads
@@ -307,7 +308,7 @@ export default function LeadDetail() {
   const [reactivateReason, setReactivateReason] = useState('');
   const [reactivateReasonOther, setReactivateReasonOther] = useState('');
   const [reactivateNotes, setReactivateNotes] = useState('');
-  const [reactivateNotifyClient] = useState(true);
+  const [reactivateNotifyClient, setReactivateNotifyClient] = useState(true);
   const [reactivating, setReactivating] = useState(false);
 
   const [intentModal, setIntentModal] = useState(false);
@@ -469,7 +470,7 @@ export default function LeadDetail() {
 
   const openStatusModal = (status: 'ON_HOLD' | 'INACTIVE') => {
     setInactivationReason(''); setInactiveReasonChoice(''); setInactiveNotes(''); setInactiveNotifyClient(false);
-    setOnHoldReason(''); setOnHoldNotes(''); setOnHoldReopenDate('');
+    setOnHoldReason(''); setOnHoldNotes(''); setOnHoldReopenDate(''); setOnHoldNotifyClient(true);
     setStatusModal(status);
   };
 
@@ -615,7 +616,7 @@ export default function LeadDetail() {
     setStageCapture({ targetStage: newStage });
   };
 
-  const handleStageCaptureConfirm = async (rating: number, value: number, reason: string) => {
+  const handleStageCaptureConfirm = async (rating: number, value: number, reason: string, sendNpsSurvey: boolean) => {
     if (!stageCapture || !lead) return;
     setChangingStage(true);
     setStageCaptureError(null);
@@ -632,7 +633,12 @@ export default function LeadDetail() {
           return;
         }
       }
-      await api.patch(`/leads/${leadId}`, { stage: stageCapture.targetStage, estimatedValue: value });
+      const npsTriggerStages = new Set(['DESIGN_IN_PROGRESS', 'HANDED_OVER']);
+      await api.patch(`/leads/${leadId}`, {
+        stage: stageCapture.targetStage,
+        estimatedValue: value,
+        sendNpsSurvey: npsTriggerStages.has(stageCapture.targetStage) ? sendNpsSurvey : undefined,
+      });
       toast.success(`Stage → ${STAGE_LABELS[stageCapture.targetStage] ?? stageCapture.targetStage}`);
       setStageCapture(null);
       loadLead(); loadActivities();
@@ -680,6 +686,7 @@ export default function LeadDetail() {
         reason: onHoldReason.trim(),
         notes: onHoldNotes.trim() || undefined,
         onHoldRevivalDate: onHoldReopenDate,
+        notifyClient: onHoldNotifyClient,
       });
       toast.success('Lead placed On Hold');
       setStatusModal(null);
@@ -899,6 +906,7 @@ export default function LeadDetail() {
           initialValue={lead.estimatedValue}
           saving={changingStage}
           error={stageCaptureError}
+          triggersNpsSurvey={stageCapture.targetStage === 'DESIGN_IN_PROGRESS' || stageCapture.targetStage === 'HANDED_OVER'}
           onCancel={() => { setStageCapture(null); setStageCaptureError(null); }}
           onConfirm={handleStageCaptureConfirm}
         />
@@ -941,7 +949,12 @@ export default function LeadDetail() {
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
                   </div>
-                  <p className="text-xs text-stone-500 mt-1">The client is notified by email and SMS when contact details are available. The internal team is also notified.</p>
+                  <label className="flex items-center gap-2 text-sm text-stone-700">
+                    <input type="checkbox" checked={inactiveNotifyClient} onChange={(e) => setInactiveNotifyClient(e.target.checked)}
+                      className="rounded border-stone-300 text-brand-500 focus:ring-brand-400" />
+                    Send feedback-request email + SMS to client
+                  </label>
+                  <p className="text-xs text-stone-500 mt-1">The internal team is always notified.</p>
                 </>
               )}
               {statusModal === 'ON_HOLD' && (
@@ -978,8 +991,13 @@ export default function LeadDetail() {
                       required min={istDateOnly(new Date(Date.now() + 86400000))}
                       className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                       style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
-                    <p className="text-xs text-stone-400 mt-1">Client + internal team notified now. Lead auto-reactivates (and client is notified again) when this date arrives.</p>
+                    <p className="text-xs text-stone-400 mt-1">Internal team notified now. Lead auto-reactivates when this date arrives.</p>
                   </div>
+                  <label className="flex items-center gap-2 text-sm text-stone-700">
+                    <input type="checkbox" checked={onHoldNotifyClient} onChange={(e) => setOnHoldNotifyClient(e.target.checked)}
+                      className="rounded border-stone-300 text-brand-500 focus:ring-brand-400" />
+                    Send on-hold email + SMS to client
+                  </label>
                 </>
               )}
               <div className="flex gap-3 pt-1">
@@ -1261,7 +1279,12 @@ export default function LeadDetail() {
                   className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                   style={{ border: '1px solid #EDE8E3', background: '#FDFAF7' }} />
               </div>
-              <p className="text-xs text-stone-500">The client is notified by email when an address is available. The internal team is also notified automatically.</p>
+              <label className="flex items-center gap-2 text-sm text-stone-700">
+                <input type="checkbox" checked={reactivateNotifyClient} onChange={(e) => setReactivateNotifyClient(e.target.checked)}
+                  className="rounded border-stone-300 text-brand-500 focus:ring-brand-400" />
+                Send reactivation email to client
+              </label>
+              <p className="text-xs text-stone-500">The internal team is always notified automatically.</p>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setReactivateModal(false)}
                   className="flex-1 text-stone-600 py-2.5 rounded-xl text-sm hover:bg-stone-50 transition-colors"
