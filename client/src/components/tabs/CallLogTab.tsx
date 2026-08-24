@@ -432,7 +432,13 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Call Log</h2>
-          <p className="text-sm text-gray-500">{calls.length} call{calls.length !== 1 ? 's' : ''} · {rnrCount} RNR</p>
+          <p className="text-sm text-gray-500">
+            {calls.filter((c) => c.outcome === 'ANSWERED').length} answered ·{' '}
+            {rnrCount} RNR ·{' '}
+            {calls.filter((c) => c.outcome === 'CALLBACK').length} callback ·{' '}
+            {calls.filter((c) => c.outcome === 'MEETING_SCHEDULED').length} meeting scheduled ·{' '}
+            {calls.length} total
+          </p>
         </div>
         {!isLocked && (
           <div className="flex gap-2">

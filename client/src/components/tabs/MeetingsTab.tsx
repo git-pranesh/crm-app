@@ -266,7 +266,13 @@ export default function MeetingsTab({ leadId, clientEmail, onMeetingCreated, onM
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900">Meetings</h2>
-          <p className="text-sm text-gray-500">{meetings.length} scheduled</p>
+          <p className="text-sm text-gray-500">
+            {meetings.filter((m) => m.status === 'SCHEDULED').length} scheduled ·{' '}
+            {meetings.filter((m) => m.status === 'COMPLETED').length} completed ·{' '}
+            {meetings.filter((m) => m.status === 'RESCHEDULED').length} rescheduled ·{' '}
+            {meetings.filter((m) => m.status === 'NO_SHOW').length} no-show ·{' '}
+            {meetings.length} total
+          </p>
         </div>
         {!isLocked && (
           <button

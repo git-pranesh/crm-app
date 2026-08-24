@@ -162,8 +162,14 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
         <div>
           <h2 className="text-base font-semibold text-gray-900">Follow-up Tasks</h2>
           <p className="text-sm text-gray-500">
-            {tasks.filter(t => t.status === 'PENDING').length} pending ·{' '}
-            {tasks.filter(t => t.isOverdue && t.status === 'PENDING').length} overdue
+            {tasks.filter(t => t.status === 'PENDING').length} pending
+            {tasks.filter(t => t.isOverdue && t.status === 'PENDING').length > 0
+              ? ` (${tasks.filter(t => t.isOverdue && t.status === 'PENDING').length} overdue)`
+              : ''} ·{' '}
+            {tasks.filter(t => t.status === 'COMPLETED').length} completed ·{' '}
+            {tasks.filter(t => t.status === 'RESCHEDULED').length} rescheduled ·{' '}
+            {tasks.filter(t => t.status === 'NOT_DONE').length} not done ·{' '}
+            {tasks.length} total
           </p>
         </div>
         {!isLocked && (
