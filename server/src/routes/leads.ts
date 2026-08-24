@@ -16,6 +16,7 @@ import { computeSlaInfoForLeads, computeSlaInfoForLead, getEffectiveStageSla } f
 import { putLeadOnHold, markLeadInactive, reactivateLead } from '../lib/leadStatusActions.js';
 import { buildLeadRoleWhere } from '../lib/leadScope.js';
 import { isLeadLocked, sendLeadLockedError } from '../lib/leadLock.js';
+import { hasAllMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -397,13 +398,17 @@ leadsRouter.post(
   async (req, res) => {
     try {
       const user = req.user!;
-      const { name, phone, phone2, email, source, designerId } = req.body as {
+      const { name, phone, phone2, email, source, designerId, projectType, scope, location, possessionTimeline } = req.body as {
         name?: string;
         phone?: string;
         phone2?: string;
         email?: string;
         source?: string;
         designerId?: string;
+        projectType?: string;
+        scope?: string;
+        location?: string;
+        possessionTimeline?: string;
       };
 
       if (!name?.trim()) {
@@ -498,6 +503,19 @@ leadsRouter.post(
 
       const leadId = await generateLeadId();
 
+      // This route intentionally never required projectType/scope/location/
+      // possessionTimeline (fast walk-in/referral capture — those details get
+      // filled in later). Those are exactly the fields the primary `/leads`
+      // create form requires before a lead is allowed into MQL, so a lead
+      // still missing them here must land at EFFECTIVE_LEAD (pre-MQL)
+      // instead, and only qualify into MQL once someone fills them in — this
+      // reuses the same mandatory list rather than a new one (see
+      // leadMandatoryFields.ts). Assignment/notification behavior below is
+      // unchanged either way.
+      const initialStage = hasAllMqlMandatoryFields({ projectType, scope, location, possessionTimeline })
+        ? 'MQL'
+        : 'EFFECTIVE_LEAD';
+
       const lead = await prisma.lead.create({
         data: {
           leadId,
@@ -506,7 +524,11 @@ leadsRouter.post(
           ...(phone2?.trim() && { phone2: phone2.trim() }),
           ...(email?.trim() && { email: email.trim() }),
           source,
-          stage: 'MQL',
+          ...(projectType?.trim() && { projectType: projectType.trim() }),
+          ...(scope?.trim() && { scope: scope.trim() }),
+          ...(location?.trim() && { location: location.trim() }),
+          ...(possessionTimeline?.trim() && { possessionTimeline: possessionTimeline.trim() }),
+          stage: initialStage,
           assignmentPath: 'DIRECT',
           createdById: user.id,
           ...(assignedDesignerId && { assignedDesignerId }),

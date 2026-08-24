@@ -5,6 +5,7 @@ import { logActivity } from '../lib/activityLog.js';
 
 import { isValidEmail, isValidPhone } from '../lib/leadValidation.js';
 import { selectCREForLead, incrementAssigned } from '../services/assignmentService.js';
+import { hasAllMqlMandatoryFields } from '../lib/leadMandatoryFields.js';
 
 export const leadWebhooksRouter = Router();
 
@@ -67,6 +68,14 @@ async function createLeadFromWebhook(data: {
   const cre = await selectCREForLead();
 
   const leadId = await generateLeadId();
+  // Webhook-sourced leads never carry projectType/scope/location/
+  // possessionTimeline (a CRE fills those in after qualifying the lead), so
+  // they must land at EFFECTIVE_LEAD (pre-MQL) rather than skip straight into
+  // MQL — same mandatory list as the primary lead-creation form, see
+  // leadMandatoryFields.ts. This data shape has no project-detail fields at
+  // all, so the check is always false today, but stays correct if a future
+  // webhook payload starts supplying them.
+  const initialStage = hasAllMqlMandatoryFields({}) ? 'MQL' : 'EFFECTIVE_LEAD';
   const lead = await prisma.lead.create({
     data: {
       leadId,
@@ -77,7 +86,7 @@ async function createLeadFromWebhook(data: {
       adName: data.adName,
       utmCampaign: data.utmCampaign,
       utmSource: data.utmSource,
-      stage: 'MQL',
+      stage: initialStage,
       ...(cre && { assignedDesignerId: cre.id }),
     },
   });
@@ -194,6 +203,12 @@ leadWebhooksRouter.post('/google', async (req, res) => {
         const cre = await selectCREForLead();
 
         const leadId = await generateLeadId();
+        // Same EL-vs-MQL mandatory-field check as createLeadFromWebhook above
+        // — this path can supply `location` (city) but never projectType/
+        // scope/possessionTimeline, so it still can't qualify straight into
+        // MQL. Reuses the shared mandatory list, not a new one.
+        const googleLeadLocation = b.city || b.location || undefined;
+        const initialStage = hasAllMqlMandatoryFields({ location: googleLeadLocation }) ? 'MQL' : 'EFFECTIVE_LEAD';
         const lead = await prisma.lead.create({
           data: {
             leadId,
@@ -203,8 +218,8 @@ leadWebhooksRouter.post('/google', async (req, res) => {
             utmCampaign: b.utm_campaign || b.campaign_name || undefined,
             utmSource: b.utm_source || 'google',
             utmAdSet: b.utm_adset || undefined,
-            location: b.city || b.location || undefined,
-            stage: 'MQL',
+            location: googleLeadLocation,
+            stage: initialStage,
             ...(cre && { assignedDesignerId: cre.id }),
           },
         });
