@@ -36,7 +36,7 @@ function minRescheduleDateTime() {
 const TYPES = [
   { value: 'DQL', label: 'DQL (Initial Meeting)' },
   { value: 'PP', label: 'PP (Proposal Presentation)' },
-  { value: 'PD', label: 'PD (Post-Design)' },
+  { value: 'PD', label: 'PD (Pitch Discussion)' },
   { value: 'ONBOARDING', label: 'OB (Onboarding)' },
   { value: 'OBM', label: 'OBM (Onboarding Meeting)' },
 ];
