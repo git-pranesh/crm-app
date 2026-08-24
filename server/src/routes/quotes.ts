@@ -58,8 +58,29 @@ usersDiscountRouter.get('/', async (req, res) => {
 });
 
 // ── POST /api/quotes/callback — Quote Builder posts back when quote created ───
+//
+// This endpoint is called directly by the external Quote Builder app
+// (proposals.interiorsbydex.com), which is not a CRM user and has no
+// Supabase session — verifyToken doesn't apply here. Soft-enforcement:
+// a shared secret is checked and mismatches/missing values are logged,
+// but the request is still allowed through until the Quote Builder app
+// is confirmed to be sending the secret. Flip QUOTE_CALLBACK_HARD_ENFORCE
+// to 'true' once that's confirmed to start rejecting bad requests.
+const QUOTE_BUILDER_CALLBACK_SECRET = process.env.QUOTE_BUILDER_CALLBACK_SECRET ?? '';
+const QUOTE_CALLBACK_HARD_ENFORCE = process.env.QUOTE_CALLBACK_HARD_ENFORCE === 'true';
 quotesRouter.post('/callback', async (req, res) => {
   try {
+    const providedSecret = req.header('x-quote-builder-secret') ?? '';
+    if (!QUOTE_BUILDER_CALLBACK_SECRET) {
+      console.warn('[quotes:callback] QUOTE_BUILDER_CALLBACK_SECRET is not configured — callback is unauthenticated');
+    } else if (providedSecret !== QUOTE_BUILDER_CALLBACK_SECRET) {
+      console.warn(`[quotes:callback] secret mismatch from ${req.ip} for lead ${req.body?.leadId ?? 'unknown'}${QUOTE_CALLBACK_HARD_ENFORCE ? ' — rejecting' : ' — allowing through (soft-enforce)'}`);
+      if (QUOTE_CALLBACK_HARD_ENFORCE) {
+        res.status(401).json({ error: 'Invalid callback secret' });
+        return;
+      }
+    }
+
     const { leadId: leadRef, amount, discountPct, quoteRef } = req.body as {
       leadId?: string; amount?: number; discountPct?: number; quoteRef?: string;
     };
