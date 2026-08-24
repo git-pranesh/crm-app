@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Check, Mail, AlertCircle, Send } from 'lucide-react';
 import { api } from '../lib/api';
 import toast from 'react-hot-toast';
@@ -48,16 +48,48 @@ function toDateInputValue(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+// Small inline indicator so a field mid-save (or just saved) is visually
+// distinguishable from a genuinely disabled/locked one — the ambiguity here
+// was the root cause of testers mistaking in-flight saves for a stuck form.
+function FieldStatus({ saving, saved }: { saving: boolean; saved: boolean }) {
+  if (saving) return <span className="text-[10px] font-normal text-gray-400 animate-pulse">saving…</span>;
+  if (saved) return <span className="text-[10px] font-normal text-green-600">saved</span>;
+  return null;
+}
+
 export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComplete, isLocked }: Props) {
   const [checklist, setChecklist] = useState<OBOBMChecklist | null>(null);
   const [docItems, setDocItems] = useState<{ key: string; label: string }[]>([]);
   const [template, setTemplate] = useState({ subject: '', html: '' });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  // Task #168 — per-field saving/saved state, not a single form-wide flag.
+  // Previously one shared `saving` boolean disabled EVERY field in the panel
+  // while any single field was mid-save, which is what made a form with ~14
+  // fields feel broken/stuck when filled in quickly. Now only the field(s)
+  // actually in flight are disabled; everything else stays interactive.
+  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
+  const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set());
   const [triggeringNps, setTriggeringNps] = useState(false);
   const [sending, setSending] = useState(false);
   const [showMailModal, setShowMailModal] = useState(false);
   const [dates, setDates] = useState<Record<string, string>>({});
+
+  // Edits are sent immediately (no artificial delay), and any further edits
+  // made while a PATCH is already in flight are merged into the very next
+  // request instead of each firing their own round-trip. This gives the same
+  // "one request for a burst of clicks" benefit as a debounce, without ever
+  // leaving an edit sitting unsent in a timer window — the first edit in a
+  // burst starts its network request synchronously, so it survives even a
+  // near-instant navigation away from the page.
+  const pendingRef = useRef<Record<string, any>>({});
+  const inFlightRef = useRef(false);
+  // Previous value for each key currently queued/in-flight, so a failed save
+  // can be rolled back instead of leaving the optimistic (wrong) value in
+  // place — otherwise the "missing requirements" list could look satisfied
+  // when the server actually rejected the change.
+  const revertRef = useRef<Record<string, any>>({});
+  const savedTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const mountedRef = useRef(true);
 
   const isEditable = stage === 'ONBOARDING' && !isLocked;
 
@@ -88,37 +120,131 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId, stage]);
 
-  const saveDate = async (key: string, value: string) => {
-    setDates((d) => ({ ...d, [key]: value }));
-    setSaving(true);
-    try {
-      const data = await api.patch<{ checklist: OBOBMChecklist }>(`/leads/${leadId}/ob-obm-checklist`, {
-        [key]: value || null,
-      });
-      setChecklist(data.checklist);
-      await load();
-      onComplete?.();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSaving(false);
+  const markSaved = (keys: string[]) => {
+    setSavedKeys((prev) => new Set([...prev, ...keys]));
+    for (const key of keys) {
+      if (savedTimersRef.current[key]) clearTimeout(savedTimersRef.current[key]);
+      savedTimersRef.current[key] = setTimeout(() => {
+        setSavedKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }, 1500);
     }
   };
 
-  const toggleDoc = async (key: string, value: boolean) => {
-    setSaving(true);
-    try {
-      const data = await api.patch<{ checklist: OBOBMChecklist }>(`/leads/${leadId}/ob-obm-checklist`, {
-        [key]: value,
-      });
-      setChecklist(data.checklist);
-      await load();
-      onComplete?.();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSaving(false);
+  // Reverts the optimistic local value for `key` back to what it was before
+  // this batch was queued — used when the server rejects a save, so a failed
+  // checkbox doesn't sit there looking checked/satisfied.
+  const revertField = (key: string) => {
+    if (!(key in revertRef.current)) return;
+    const prev = revertRef.current[key];
+    if (TIMELINE_FIELDS.some((f) => f.key === key)) {
+      setDates((d) => ({ ...d, [key]: prev ?? '' }));
+    } else {
+      setChecklist((c) => (c ? { ...c, [key]: prev } : c));
     }
+  };
+
+  // Drains `pendingRef` by sending it as a PATCH, then — if more edits were
+  // queued while that request was in flight — immediately sends those too.
+  // This loop is intentionally NOT gated on `mountedRef`: the network writes
+  // must complete and persist even if the panel unmounts mid-request (e.g.
+  // the user navigated away right after clicking); only the resulting state
+  // updates are skipped post-unmount.
+  const drainQueue = useCallback(async () => {
+    if (inFlightRef.current) return;
+    const payload = pendingRef.current;
+    const keys = Object.keys(payload);
+    if (!keys.length) return;
+    pendingRef.current = {};
+    inFlightRef.current = true;
+    try {
+      const data = await api.patch<{ checklist: OBOBMChecklist }>(`/leads/${leadId}/ob-obm-checklist`, payload);
+      if (mountedRef.current) {
+        // Only apply the response's value for a key if it hasn't been
+        // re-edited since this request was sent — otherwise an in-flight
+        // response for an earlier value could stomp a newer optimistic edit
+        // that's already queued for the next request.
+        setChecklist((c) => {
+          if (!c) return data.checklist;
+          const merged = { ...c };
+          for (const k of keys) {
+            if (!(k in pendingRef.current) && !TIMELINE_FIELDS.some((f) => f.key === k)) merged[k] = data.checklist[k];
+          }
+          return merged;
+        });
+        for (const f of TIMELINE_FIELDS) {
+          if (f.key in payload && !(f.key in pendingRef.current)) {
+            setDates((d) => ({ ...d, [f.key]: toDateInputValue(data.checklist[f.key]) }));
+          }
+        }
+        markSaved(keys.filter((k) => !(k in pendingRef.current)));
+        onComplete?.();
+      }
+    } catch (e: any) {
+      if (mountedRef.current) {
+        toast.error(e.message);
+        // Same re-edit guard on failure: don't revert a field the user has
+        // already changed again while this request was failing.
+        for (const k of keys) if (!(k in pendingRef.current)) revertField(k);
+      }
+    } finally {
+      for (const k of keys) if (!(k in pendingRef.current)) delete revertRef.current[k];
+      if (mountedRef.current) {
+        setSavingKeys((prev) => {
+          const next = new Set(prev);
+          for (const k of keys) if (!(k in pendingRef.current)) next.delete(k);
+          return next;
+        });
+      }
+      inFlightRef.current = false;
+      // More edits may have queued up while this request was in flight —
+      // send them right away rather than waiting for the next user action.
+      if (Object.keys(pendingRef.current).length) drainQueue();
+    }
+  }, [leadId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Queues a field change locally, shows it as "saving", and kicks off the
+  // send immediately (or merges into the in-flight request if one is
+  // already running) — so ticking several checkboxes back-to-back still
+  // collapses into as few requests as possible, with no unsaved edit ever
+  // sitting idle in a timer.
+  const queueUpdate = (key: string, value: any, previousValue: any) => {
+    if (!(key in revertRef.current)) revertRef.current[key] = previousValue;
+    pendingRef.current[key] = value;
+    setSavingKeys((prev) => new Set(prev).add(key));
+    setSavedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    drainQueue();
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      for (const t of Object.values(savedTimersRef.current)) clearTimeout(t);
+    };
+  }, []);
+
+  const saveDate = (key: string, value: string) => {
+    const previous = dates[key] ?? '';
+    setDates((d) => ({ ...d, [key]: value }));
+    queueUpdate(key, value || null, previous);
+  };
+
+  const toggleDoc = (key: string, value: boolean) => {
+    // Reflected in `checklist` immediately for a responsive checkbox; the
+    // authoritative value comes back from the PATCH response, and is rolled
+    // back automatically if the server rejects it.
+    const previous = checklist ? checklist[key] : undefined;
+    setChecklist((c) => (c ? { ...c, [key]: value } : c));
+    queueUpdate(key, value, previous);
   };
 
   const triggerNps = async () => {
@@ -203,10 +329,13 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
         <div className="grid grid-cols-2 gap-2">
           {TIMELINE_FIELDS.map((f) => (
             <div key={f.key}>
-              <label className="block text-[11px] text-gray-500 mb-0.5">{f.label}</label>
+              <label className="flex items-center gap-1.5 text-[11px] text-gray-500 mb-0.5">
+                {f.label}
+                <FieldStatus saving={savingKeys.has(f.key)} saved={savedKeys.has(f.key)} />
+              </label>
               <input
                 type="date"
-                disabled={!isEditable || saving}
+                disabled={!isEditable || savingKeys.has(f.key)}
                 value={dates[f.key] ?? ''}
                 onChange={(e) => saveDate(f.key, e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400 disabled:bg-gray-50"
@@ -229,21 +358,23 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
                   <input
                     type="checkbox"
                     checked={done}
-                    disabled={!isEditable || saving}
+                    disabled={!isEditable || savingKeys.has(`${item.key}Done`)}
                     onChange={(e) => toggleDoc(`${item.key}Done`, e.target.checked)}
                     className="w-4 h-4 accent-brand-500 shrink-0"
                   />
                   <span className={`text-xs ${done ? 'text-green-700' : 'text-gray-700'} truncate`}>{item.label}</span>
+                  <FieldStatus saving={savingKeys.has(`${item.key}Done`)} saved={savedKeys.has(`${item.key}Done`)} />
                 </label>
                 <label className="flex items-center gap-1.5 text-[11px] text-gray-400 shrink-0 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={confirmed}
-                    disabled={!isEditable || saving}
+                    disabled={!isEditable || savingKeys.has(`${item.key}Confirmed`)}
                     onChange={(e) => toggleDoc(`${item.key}Confirmed`, e.target.checked)}
                     className="w-3.5 h-3.5 accent-gray-500"
                   />
                   Client confirmed
+                  <FieldStatus saving={savingKeys.has(`${item.key}Confirmed`)} saved={savedKeys.has(`${item.key}Confirmed`)} />
                 </label>
               </div>
             );
@@ -273,19 +404,20 @@ export default function OBOBMChecklistPanel({ leadId, stage, clientEmail, onComp
           <input
             type="checkbox"
             checked={!!checklist.clientConfirmed}
-            disabled={!isEditable || saving}
+            disabled={!isEditable || savingKeys.has('clientConfirmed')}
             onChange={(e) => toggleDoc('clientConfirmed', e.target.checked)}
             className="w-3.5 h-3.5 accent-gray-500"
           />
           Client confirmed
+          <FieldStatus saving={savingKeys.has('clientConfirmed')} saved={savedKeys.has('clientConfirmed')} />
         </label>
       </div>
 
       {isEditable && (
         <button
           onClick={() => setShowMailModal(true)}
-          disabled={saving || missing.length > 0}
-          title={missing.length > 0 ? `Missing: ${missing.join(', ')}` : undefined}
+          disabled={savingKeys.size > 0 || missing.length > 0}
+          title={missing.length > 0 ? `Missing: ${missing.join(', ')}` : savingKeys.size > 0 ? 'Waiting for pending changes to save…' : undefined}
           className="w-full flex items-center justify-center gap-1.5 bg-brand-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Mail size={13} strokeWidth={2.5} /> Share OBM mail

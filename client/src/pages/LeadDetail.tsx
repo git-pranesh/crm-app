@@ -1493,7 +1493,7 @@ export default function LeadDetail() {
       {/* OB→OBM checklist for ONBOARDING (and later, as a record) */}
       {lead && ['ONBOARDING', 'ONBOARDING_MEETING', 'DESIGN_IN_PROGRESS', 'HANDED_OVER'].includes(lead.stage) && (
         <div className="px-6 pt-4">
-          <OBOBMChecklistPanel leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} isLocked={isLocked} />
+          <OBOBMChecklistPanel key={leadId} leadId={leadId!} stage={lead.stage} clientEmail={lead.email ?? null} onComplete={loadLead} isLocked={isLocked} />
         </div>
       )}
 
