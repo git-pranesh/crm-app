@@ -74,6 +74,15 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
 
           {(item.kind === 'TASK' || item.kind === 'CALL') && (
             <div className="grid grid-cols-2 gap-2">
+              {item.kind === 'TASK' && (
+                <input
+                  type="text"
+                  value={item.agenda ?? ''}
+                  onChange={(e) => updateItem(idx, { agenda: e.target.value })}
+                  placeholder="Agenda…"
+                  className="col-span-2 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+                />
+              )}
               <input
                 type="date"
                 required
@@ -90,24 +99,15 @@ export default function NextPlanOfActionPicker({ items, onChange }: Props) {
                 className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
               {item.kind === 'TASK' && (
-                <>
-                  <select
-                    value={item.taskType ?? ''}
-                    onChange={(e) => updateItem(idx, { taskType: (e.target.value || undefined) as any })}
-                    className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  >
-                    <option value="">Internal/External…</option>
-                    <option value="INTERNAL">Internal</option>
-                    <option value="EXTERNAL">External</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={item.agenda ?? ''}
-                    onChange={(e) => updateItem(idx, { agenda: e.target.value })}
-                    placeholder="Agenda…"
-                    className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
-                  />
-                </>
+                <select
+                  value={item.taskType ?? ''}
+                  onChange={(e) => updateItem(idx, { taskType: (e.target.value || undefined) as any })}
+                  className="col-span-2 border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-400"
+                >
+                  <option value="">Internal/External…</option>
+                  <option value="INTERNAL">Internal</option>
+                  <option value="EXTERNAL">External</option>
+                </select>
               )}
               {item.kind === 'CALL' && (
                 <input

@@ -184,7 +184,17 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
 
       {!isLocked && showForm && (
         <form onSubmit={handleCreate} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          <h3 className="font-medium text-gray-900">New Follow-up Task</h3>
+          <h3 className="font-medium text-gray-900">New Follow-up / Task</h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
+            <input
+              type="text"
+              value={form.agenda}
+              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
+              placeholder="What this task is about…"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -230,16 +240,6 @@ export default function FollowUpTab({ leadId, isLocked }: Props) {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
-            <input
-              type="text"
-              value={form.agenda}
-              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
-              placeholder="What this task is about…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>

@@ -457,6 +457,16 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
         <form onSubmit={handleScheduleCall} className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
           <h3 className="font-medium text-gray-900">Schedule a Call</h3>
           <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
+              <input
+                type="text"
+                value={scheduleForm.agenda}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, agenda: e.target.value })}
+                placeholder="What's this call for…"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Stage Type <span className="text-red-500">*</span>
@@ -506,16 +516,6 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
                 value={scheduleForm.dueTime}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, dueTime: e.target.value })}
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Agenda</label>
-              <input
-                type="text"
-                value={scheduleForm.agenda}
-                onChange={(e) => setScheduleForm({ ...scheduleForm, agenda: e.target.value })}
-                placeholder="What's this call for…"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
             </div>
@@ -797,7 +797,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
           {!['CALLBACK', 'MEETING_SCHEDULED'].includes(form.outcome) && (
             <div className="border-t border-gray-100 pt-4">
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Follow-up Task <span className="text-red-500">*</span>
+                Follow-up / Task <span className="text-red-500">*</span>
                 <span className="text-xs font-normal text-gray-400 ml-1">(mandatory)</span>
               </p>
               <div className="grid grid-cols-2 gap-3">
