@@ -949,6 +949,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
     const skippedStages = skipFromIdx !== -1 && skipToIdx !== -1 && skipToIdx > skipFromIdx
       ? FUNNEL_ORDER.slice(skipFromIdx + 1, skipToIdx)
       : [];
+    const isDqlSkip = skippedStages.includes('DQL' as any);
     const isProposalReadySkip = skippedStages.includes('PROPOSAL_READY' as any);
     const isPpToObSkip = skippedStages.includes('PROPOSAL_DISCUSSION' as any);
 
@@ -961,6 +962,7 @@ leadsRouter.patch('/:id', verifyToken, async (req, res) => {
         ...(email !== undefined && { email: email || null }),
         ...(source && { source }),
         ...(stage && { stage: stage as any }),
+        ...(isDqlSkip && { skippedDQL: true }),
         ...(isProposalReadySkip && { skippedProposalReady: true }),
         ...(isPpToObSkip && { skippedProposalDiscussion: true }),
         ...(projectType !== undefined && { projectType: projectType?.trim() || null }),

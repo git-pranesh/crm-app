@@ -287,6 +287,23 @@ function isExcludedWhenSkipping(req: StageRequirement, skippedStage: string): bo
 }
 
 /**
+ * Requirements that get excluded from the gate on the skip transition itself
+ * (per isExcludedWhenSkipping) but must still be collected before the lead
+ * can advance any further — "skippable" means "not required at this exact
+ * hop", not "waived forever". Keyed by the Lead boolean flag
+ * (skippedDQL/skippedProposalReady/skippedProposalDiscussion) that records
+ * the skip actually happened, so these only apply to leads that took that
+ * specific skip path.
+ */
+const DEFERRED_SKIP_REQUIREMENTS: Record<string, StageRequirement[]> = {
+  skippedDQL: (STAGE_REQUIREMENTS['MQL->DQL'] ?? []).filter((r) => isExcludedWhenSkipping(r, 'DQL')),
+  skippedProposalReady: (STAGE_REQUIREMENTS['DQL->PROPOSAL_READY'] ?? [])
+    .filter((r) => isExcludedWhenSkipping(r, 'PROPOSAL_READY')),
+  skippedProposalDiscussion: (STAGE_REQUIREMENTS['PROPOSAL_PRESENTED->PROPOSAL_DISCUSSION'] ?? [])
+    .filter((r) => isExcludedWhenSkipping(r, 'PROPOSAL_DISCUSSION')),
+};
+
+/**
  * Collect all requirements that apply when moving from `fromStage` to
  * `toStage`. For forward moves along the funnel this accumulates every
  * intermediate step's requirements so jumps cannot bypass a gate — except
@@ -359,6 +376,24 @@ export async function checkStageRequirements(
   const isForwardFunnelMove = fromIdx !== -1 && toIdx !== -1 && toIdx > fromIdx;
 
   const reqs = requirementsForTransition(fromStage, toStage);
+
+  // A lead that previously skipped DQL/Proposal Ready/Proposal Discussion
+  // still owes that stage's excluded requirements — they were only waived
+  // for the skip hop itself, not forever. Keep surfacing them on every later
+  // forward move until fulfilled. Dedup by label in case a requirement is
+  // already part of this transition's own leg.
+  if (isForwardFunnelMove) {
+    const seenLabels = new Set(reqs.map((r) => r.label));
+    for (const [flag, deferredReqs] of Object.entries(DEFERRED_SKIP_REQUIREMENTS)) {
+      if (!lead[flag]) continue;
+      for (const r of deferredReqs) {
+        if (seenLabels.has(r.label)) continue;
+        seenLabels.add(r.label);
+        reqs.push(r);
+      }
+    }
+  }
+
   const missing: string[] = [];
   const details: { label: string; satisfied: boolean; type: string }[] = [];
 

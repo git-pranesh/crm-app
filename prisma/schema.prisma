@@ -299,13 +299,23 @@ model Lead {
   /// Lifecycle status, decoupled from `stage` (task #88). `stage` keeps
   /// reflecting the lead's real funnel position even while ON_HOLD/INACTIVE.
   status               LeadStatus     @default(ACTIVE)
+  /// True when this lead took an explicit skip path that bypassed DQL
+  /// (MQL → Proposal Ready or MQL → Proposal Presented). Set automatically
+  /// by the stage-change handler. Its excluded requirement (the DQL meeting)
+  /// stays required on every later forward move until fulfilled — see
+  /// DEFERRED_SKIP_REQUIREMENTS in stageRequirements.ts.
+  skippedDQL           Boolean        @default(false)
   /// True when this lead took an explicit skip path that bypassed Proposal
   /// Ready (DQL → Proposal Presented or MQL → Proposal Presented). Set
-  /// automatically by the stage-change handler.
+  /// automatically by the stage-change handler. Its excluded requirements
+  /// stay required on every later forward move until fulfilled — see
+  /// DEFERRED_SKIP_REQUIREMENTS in stageRequirements.ts.
   skippedProposalReady Boolean        @default(false)
   /// True when this lead took the explicit Proposal Presented → Onboarding
   /// skip path (bypassing Proposal Discussion). Set automatically by the
-  /// stage-change handler.
+  /// stage-change handler. Its excluded requirements stay required on every
+  /// later forward move until fulfilled — see DEFERRED_SKIP_REQUIREMENTS in
+  /// stageRequirements.ts.
   skippedProposalDiscussion Boolean   @default(false)
   /// Founder-spec "Expected OB date" — required before Proposal Ready →
   /// Proposal Presented and filterable on the lead list/pipeline views.
