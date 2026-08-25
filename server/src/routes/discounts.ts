@@ -71,27 +71,40 @@ const discountInclude = {
   requestedBy: { select: { id: true, name: true, role: true } },
   reviewedBy: { select: { id: true, name: true } },
   forwardedBy: { select: { id: true, name: true } },
+  files: { orderBy: { createdAt: 'asc' as const } },
 } as const;
 
-// Hydrate a fresh 1-hour signed URL for each request's quote attachment
+// Hydrate a fresh 1-hour signed URL for each request's quote attachment(s)
 // (never store long-lived URLs — mirrors files.ts/quotes.ts). Requests
-// created before this migration only have the legacy `quoteLink`, which is
-// left as-is for display.
-async function withQuoteFileUrl<T extends { quoteStoragePath: string | null }>(requests: T[]): Promise<(T & { quoteFileUrl?: string })[]> {
+// created before this migration only have the legacy `quoteLink` or the
+// legacy single quoteFileName/quoteStoragePath pair, both left as-is for display.
+async function withQuoteFileUrl<T extends { quoteStoragePath: string | null; files?: { id: string; fileName: string; storagePath: string }[] }>(requests: T[]): Promise<(T & { quoteFileUrl?: string; files?: { id: string; fileName: string; storagePath: string; fileUrl?: string }[] })[]> {
   if (!supabaseAdmin) return requests;
   return Promise.all(
     requests.map(async (r) => {
-      if (!r.quoteStoragePath) return r;
-      const { data } = await supabaseAdmin!.storage.from(QUOTE_FILES_BUCKET).createSignedUrl(r.quoteStoragePath, 60 * 60);
-      return { ...r, quoteFileUrl: data?.signedUrl };
+      const [legacyUrl, hydratedFiles] = await Promise.all([
+        r.quoteStoragePath
+          ? supabaseAdmin!.storage.from(QUOTE_FILES_BUCKET).createSignedUrl(r.quoteStoragePath, 60 * 60).then((res) => res.data?.signedUrl)
+          : Promise.resolve(undefined),
+        r.files?.length
+          ? Promise.all(
+              r.files.map(async (f) => {
+                const { data } = await supabaseAdmin!.storage.from(QUOTE_FILES_BUCKET).createSignedUrl(f.storagePath, 60 * 60);
+                return { ...f, fileUrl: data?.signedUrl };
+              }),
+            )
+          : Promise.resolve(r.files),
+      ]);
+      return { ...r, quoteFileUrl: legacyUrl, files: hydratedFiles };
     }),
   );
 }
 
 // ── POST /api/leads/:leadId/discount-request ──────────────────────────────────
-// Task #89: the quote document is now a real attachment (multipart `quoteFile`
-// field), not a pasted link — mirrors files.ts/quotes.ts's upload pattern.
-leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, async (req, res) => {
+// Task #89: the quote document is a real attachment (multipart `quoteFiles`
+// field, one or more files), not a pasted link — mirrors files.ts/quotes.ts's
+// upload pattern. Allows multiple attachments per request.
+leadDiscountRouter.post('/', verifyToken, upload.array('quoteFiles', 10) as any, async (req, res) => {
   try {
     const { leadId } = req.params as { leadId: string };
     const user = req.user!;
@@ -161,27 +174,28 @@ leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, asy
     // ≤ 10%: auto-approve (designer has authority; no upstream review needed)
     const isAutoApproved = approverRole === 'SELF';
 
-    // ── Quote document attachment (task #89 — real file, not a pasted link) ──
-    let quoteFileName: string | null = null;
-    let quoteStoragePath: string | null = null;
-    const file = req.file;
-    if (file) {
-      const ext = (file.originalname.split('.').pop() ?? '').toLowerCase();
-      if (!ALLOWED_QUOTE_MIMES.has(file.mimetype) || !ALLOWED_QUOTE_EXTS.has(ext)) {
-        res.status(400).json({ error: 'Unsupported quote file type. Allowed: PDF, images, Excel.' });
+    // ── Quote document attachment(s) (task #89 — real files, not a pasted link) ──
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    for (const f of files) {
+      const ext = (f.originalname.split('.').pop() ?? '').toLowerCase();
+      if (!ALLOWED_QUOTE_MIMES.has(f.mimetype) || !ALLOWED_QUOTE_EXTS.has(ext)) {
+        res.status(400).json({ error: `Unsupported quote file type (${f.originalname}). Allowed: PDF, images, Excel.` });
         return;
       }
-      if (!supabaseAdmin) { res.status(500).json({ error: 'Storage not configured' }); return; }
+    }
+    if (files.length > 0 && !supabaseAdmin) { res.status(500).json({ error: 'Storage not configured' }); return; }
 
-      await supabaseAdmin.storage.createBucket(QUOTE_FILES_BUCKET, { public: false }).catch(() => {});
-      const storagePath = `discount-requests/${leadId}/${Date.now()}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(QUOTE_FILES_BUCKET)
-        .upload(storagePath, file.buffer, { contentType: file.mimetype, upsert: false });
-      if (uploadError) { res.status(500).json({ error: uploadError.message }); return; }
-
-      quoteFileName = file.originalname;
-      quoteStoragePath = storagePath;
+    const uploaded: { fileName: string; storagePath: string }[] = [];
+    if (files.length > 0) {
+      await supabaseAdmin!.storage.createBucket(QUOTE_FILES_BUCKET, { public: false }).catch(() => {});
+      for (const f of files) {
+        const storagePath = `discount-requests/${leadId}/${Date.now()}_${f.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const { error: uploadError } = await supabaseAdmin!.storage
+          .from(QUOTE_FILES_BUCKET)
+          .upload(storagePath, f.buffer, { contentType: f.mimetype, upsert: false });
+        if (uploadError) { res.status(500).json({ error: uploadError.message }); return; }
+        uploaded.push({ fileName: f.originalname, storagePath });
+      }
     }
 
     const request = await prisma.discountRequest.create({
@@ -194,8 +208,6 @@ leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, asy
         reason,
         woodworkValueExGst,
         totalValueExGst,
-        quoteFileName,
-        quoteStoragePath,
         approverRole: isAutoApproved ? 'SELF' : approverRole,
         isSpecialCase,
         status: isAutoApproved ? 'APPROVED' : 'PENDING',
@@ -204,6 +216,9 @@ leadDiscountRouter.post('/', verifyToken, upload.single('quoteFile') as any, asy
           reviewedAt: new Date(),
           reviewerComment: 'Auto-approved: discount ≤ 10%',
         }),
+        files: uploaded.length
+          ? { create: uploaded.map((u) => ({ fileName: u.fileName, storagePath: u.storagePath, uploadedById: user.id })) }
+          : undefined,
       },
       include: discountInclude,
     });

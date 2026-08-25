@@ -245,6 +245,7 @@ model User {
   designerProjects          Project[]
   uploadedFiles             LeadFile[]
   uploadedQuoteFiles        QuoteFile[]
+  uploadedDiscountRequestFiles DiscountRequestFile[]
 
   /// Task #87 — project team assignment
   pdProjects                Project[]           @relation("ProjectPD")
@@ -604,8 +605,9 @@ model DiscountRequest {
   /// by the quoteFileName/quoteStoragePath attachment (task #89) — kept
   /// read-only so pre-existing requests still display their old link.
   quoteLink          String?
-  /// Real file attachment for the quote document (private `crm-quote-files`
-  /// bucket), replacing the bare link above for all new requests.
+  /// Legacy single-file attachment for the quote document. Superseded by the
+  /// `files` relation below (multiple attachments); kept read-only so
+  /// pre-existing requests still display their original single file.
   quoteFileName      String?
   quoteStoragePath   String?
   status             DiscountStatus @default(PENDING)
@@ -623,13 +625,33 @@ model DiscountRequest {
   createdAt          DateTime       @default(now())
   reviewedAt         DateTime?
 
-  lead        Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  quote       Quote? @relation(fields: [quoteId], references: [id])
-  requestedBy User   @relation("RequesterDiscounts", fields: [requestedById], references: [id])
-  reviewedBy  User?  @relation("ReviewerDiscounts", fields: [reviewedById], references: [id])
-  forwardedBy User?  @relation("ForwarderDiscounts", fields: [forwardedById], references: [id])
+  lead        Lead                  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  quote       Quote?                @relation(fields: [quoteId], references: [id])
+  requestedBy User                  @relation("RequesterDiscounts", fields: [requestedById], references: [id])
+  reviewedBy  User?                 @relation("ReviewerDiscounts", fields: [reviewedById], references: [id])
+  forwardedBy User?                 @relation("ForwarderDiscounts", fields: [forwardedById], references: [id])
+  files       DiscountRequestFile[]
 
   @@map("discount_requests")
+}
+
+/// Real quote-file attachments for a discount request (private
+/// `crm-quote-files` bucket, same as QuoteFile). Replaces the legacy single
+/// quoteFileName/quoteStoragePath pair above, allowing multiple files.
+model DiscountRequestFile {
+  id                String          @id @default(cuid())
+  discountRequestId String
+  fileName          String
+  /// Path within the private `crm-quote-files` bucket
+  storagePath       String
+  uploadedById      String
+  createdAt         DateTime        @default(now())
+
+  discountRequest DiscountRequest @relation(fields: [discountRequestId], references: [id], onDelete: Cascade)
+  uploadedBy      User            @relation(fields: [uploadedById], references: [id])
+
+  @@index([discountRequestId])
+  @@map("discount_request_files")
 }
 
 model WhatsAppMessage {

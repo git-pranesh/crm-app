@@ -12,10 +12,12 @@ interface DiscountRequest {
   reason: string;
   woodworkValueExGst?: number | null;
   totalValueExGst?: number | null;
-  /// Legacy link, superseded by the file attachment below (task #89).
+  /// Legacy link, superseded by the file attachment(s) below (task #89).
   quoteLink?: string | null;
+  /// Legacy single-file attachment, superseded by `files` (multiple attachments).
   quoteFileName?: string | null;
   quoteFileUrl?: string;
+  files?: { id: string; fileName: string; fileUrl?: string }[];
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   approverRole?: string | null;  // 'SELF' | 'BL' | 'BRANCH_HEAD'
   isSpecialCase?: boolean;
@@ -110,7 +112,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [confirm, setConfirm] = useState<{ open: boolean }>({ open: false });
   const [form, setForm] = useState({ woodworkValue: '', totalValue: '', discountPct: '', reason: '' });
-  const [quoteFile, setQuoteFile] = useState<File | null>(null);
+  const [quoteFiles, setQuoteFiles] = useState<File[]>([]);
 
   const userRole = getStoredRole();
   const isBL = userRole === 'BL' || userRole === 'BRANCH_HEAD';
@@ -167,7 +169,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
       fd.set('reason', form.reason);
       fd.set('woodworkValueExGst', form.woodworkValue);
       fd.set('totalValueExGst', form.totalValue);
-      if (quoteFile) fd.set('quoteFile', quoteFile);
+      for (const f of quoteFiles) fd.append('quoteFiles', f);
       await uploadFile(`/leads/${leadId}/discount-request`, fd);
 
       const info = getApprovalInfo(pctNum, Number(form.woodworkValue));
@@ -177,7 +179,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
         toast.success(`Request submitted — sent to ${info.approverRole === 'BL' ? 'your BL' : 'Branch Head'} for approval`);
       }
       setForm({ woodworkValue: '', totalValue: '', discountPct: '', reason: '' });
-      setQuoteFile(null);
+      setQuoteFiles([]);
       setShowForm(false);
       await loadRequests();
     } catch (e: any) {
@@ -386,14 +388,29 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Quote Attachment
+                Quote Attachment(s)
               </label>
               <input
-                type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
-                onChange={(e) => setQuoteFile(e.target.files?.[0] ?? null)}
+                type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.xls,.xlsx"
+                onChange={(e) => setQuoteFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])])}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-gray-600 file:mr-3 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
-              {quoteFile && <p className="text-xs text-gray-500 mt-1 truncate">{quoteFile.name}</p>}
+              {quoteFiles.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {quoteFiles.map((f, i) => (
+                    <li key={`${f.name}-${i}`} className="flex items-center justify-between text-xs text-gray-500">
+                      <span className="truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuoteFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-500 hover:text-red-700 ml-2 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -498,7 +515,7 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
                 </div>
               </div>
 
-              {(req.woodworkValueExGst != null || req.totalValueExGst != null || req.quoteFileUrl || req.quoteLink) && (
+              {(req.woodworkValueExGst != null || req.totalValueExGst != null || (req.files && req.files.length > 0) || req.quoteFileUrl || req.quoteLink) && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mb-2">
                   {req.woodworkValueExGst != null && (
                     <span>
@@ -524,7 +541,13 @@ export default function DiscountTab({ leadId, isLocked }: Props) {
                       </span>
                     </span>
                   )}
-                  {req.quoteFileUrl ? (
+                  {req.files && req.files.length > 0 ? (
+                    req.files.map((f) => (
+                      <a key={f.id} href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-600 underline">
+                        <Paperclip size={11} /> {f.fileName}
+                      </a>
+                    ))
+                  ) : req.quoteFileUrl ? (
                     <a href={req.quoteFileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-600 underline">
                       <Paperclip size={11} /> {req.quoteFileName ?? 'Quote attachment'}
                     </a>

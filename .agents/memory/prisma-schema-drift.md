@@ -16,3 +16,6 @@ Don't run a plain `prisma db push` for unrelated schema changes (e.g. adding an 
 4. Run `prisma generate` afterward so the client types match.
 
 This leaves the pre-existing drift (dead legacy columns, duplicate rows blocking a constraint) untouched — it needs its own dedicated cleanup task that first resolves the duplicate rows and confirms the legacy columns are truly unused before dropping them.
+
+## Practical note
+`prisma db push` can partially apply before hitting the unrelated drift failure (e.g. it created a brand-new table but errored before adding its foreign keys). If a push fails, check `\d "<new_table>"` in psql before assuming nothing happened — you may just need to add the missing FK constraints/indexes with raw SQL rather than recreating the table.
