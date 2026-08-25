@@ -52,6 +52,7 @@ export default function ProjectList() {
   const hasOutstanding = searchParams.get('hasOutstanding') ?? '';
   const phase = searchParams.get('phase') ?? '';
   const dashboardScope = searchParams.get('dashboardScope') ?? '';
+  const leadStage = searchParams.get('leadStage') ?? '';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +64,7 @@ export default function ProjectList() {
       if (hasAttention) params.set('hasAttention', hasAttention);
       if (hasOutstanding) params.set('hasOutstanding', hasOutstanding);
       if (dashboardScope) params.set('dashboardScope', dashboardScope);
+      if (leadStage) params.set('leadStage', leadStage);
       const data = await api.get<{ projects: ProjectRow[]; total: number }>(`/projects?${params}`);
       setProjects(data.projects);
     } catch (e: any) {
@@ -70,13 +72,16 @@ export default function ProjectList() {
     } finally {
       setLoading(false);
     }
-  }, [phase, excludePhases, hasAttention, hasOutstanding, dashboardScope]);
+  }, [phase, excludePhases, hasAttention, hasOutstanding, dashboardScope, leadStage]);
 
   useEffect(() => { load(); }, [load]);
+
+  const LEAD_STAGE_LABELS: Record<string, string> = { DESIGN_IN_PROGRESS: 'Design In Progress' };
 
   const filterLabel =
     hasAttention === 'true' ? 'Projects needing attention' :
     hasOutstanding === 'true' ? 'Projects with outstanding balance' :
+    leadStage ? `Active projects — ${LEAD_STAGE_LABELS[leadStage] ?? leadStage}` :
     excludePhases ? 'Projects currently in delivery' :
     phase ? `Projects in ${PHASE_LABELS[phase] ?? phase}` :
     'All projects';

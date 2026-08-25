@@ -73,6 +73,7 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     onboardingLeads,
     ppMeetingsDone,
     pipelineValueRaw,
+    activeProjectsDipAgg,
     npsResponses,
     collectionsThisMonth,
     outstandingProjects,
@@ -135,6 +136,14 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
         stage: { notIn: ['HANDED_OVER', 'DESIGN_IN_PROGRESS'] },
         estimatedValue: { not: null },
       },
+      _sum: { estimatedValue: true },
+    }),
+    // Active Projects tile: leads currently at DESIGN_IN_PROGRESS (the funnel's
+    // "project" stage), count + estimated value — distinct from "In Delivery"
+    // above, which spans every non-Handover/Completed *project phase* instead.
+    prisma.lead.aggregate({
+      where: { ...leadWhere, stage: 'DESIGN_IN_PROGRESS' },
+      _count: { id: true },
       _sum: { estimatedValue: true },
     }),
     // NPS responses with scores — filtered by respondedAt so the dashboard period
@@ -233,6 +242,15 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
   // ── Financial ────────────────────────────────────────────────────────────────
   const collectedThisMonth = collectionsThisMonth._sum.amount ?? 0;
   const outstanding = outstandingProjects._sum.outstandingAmount ?? 0;
+
+  // ── Active Leads value (same population as `activeLeads` count above) ────────
+  const activeLeadsValue = pipelineValue; // pipelineValueRaw already sums estimatedValue over the identical active/non-DIP/non-Handover population
+
+  // ── Active Projects (DIP) ─────────────────────────────────────────────────────
+  const activeProjectsDip = {
+    count: activeProjectsDipAgg._count.id,
+    value: activeProjectsDipAgg._sum.estimatedValue ? Number(activeProjectsDipAgg._sum.estimatedValue) : 0,
+  };
 
   // ── Projects delivery widgets ─────────────────────────────────────────────────
   let deliveryWidgets: any = null;
@@ -791,6 +809,8 @@ dashboardRouter.get('/', verifyToken, async (req, res) => {
     // this is NOT scoped to the createdAt date range, so it reflects the
     // real current pipeline even when no new leads were created this period.
     activeLeads,
+    activeLeadsValue,
+    activeProjectsDip,
     leadsToday,
     leadsThisWeek,
     leadsThisMonth,

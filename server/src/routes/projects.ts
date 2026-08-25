@@ -138,8 +138,8 @@ async function buildProjectWhere(user: { id: string; role: string; blId?: string
 projectsRouter.get('/', verifyToken, async (req, res) => {
   try {
     const user = req.user!;
-    const { phase, health, excludePhases, hasAttention, hasOutstanding, dashboardScope } = req.query as {
-      phase?: string; health?: string; excludePhases?: string; hasAttention?: string; hasOutstanding?: string; dashboardScope?: string;
+    const { phase, health, excludePhases, hasAttention, hasOutstanding, dashboardScope, leadStage } = req.query as {
+      phase?: string; health?: string; excludePhases?: string; hasAttention?: string; hasOutstanding?: string; dashboardScope?: string; leadStage?: string;
     };
 
     let where: any;
@@ -156,6 +156,10 @@ projectsRouter.get('/', verifyToken, async (req, res) => {
     // through here with the exact same predicates used to compute those counts.
     if (hasAttention === 'true') where.attentionFlags = { some: { resolvedAt: null } };
     if (hasOutstanding === 'true') where.outstandingAmount = { gt: 0 };
+    // Dashboard "Active Projects" tile drill-through — projects whose lead is
+    // currently at a given funnel stage (e.g. DESIGN_IN_PROGRESS), distinct
+    // from `phase` which filters on the project's own delivery phase.
+    if (leadStage) where.lead = { ...(where.lead ?? {}), stage: leadStage };
 
     const projects = await prisma.project.findMany({
       where,

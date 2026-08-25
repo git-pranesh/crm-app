@@ -19,6 +19,8 @@ interface NpsBreakdown {
 interface DashboardData {
   totalLeads: number;
   activeLeads: number;
+  activeLeadsValue?: number;
+  activeProjectsDip?: { count: number; value: number };
   pipelineValue: number;
   avgNPS: number | null;
   npsBreakdown?: NpsBreakdown;
@@ -162,6 +164,18 @@ function BHDashboard({ data }: { data: DashboardData }) {
           to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
         />
         <KPICard
+          label="Active Leads"
+          value={data.activeLeads}
+          sub={`${fmt(data.activeLeadsValue ?? 0)} estimated value`}
+          to="/leads?status=ACTIVE&excludeStages=DESIGN_IN_PROGRESS,HANDED_OVER"
+        />
+        <KPICard
+          label="Active Projects"
+          value={data.activeProjectsDip?.count ?? 0}
+          sub={`${fmt(data.activeProjectsDip?.value ?? 0)} estimated value · in Design`}
+          to="/projects?leadStage=DESIGN_IN_PROGRESS"
+        />
+        <KPICard
           label="In Delivery"
           value={data.inDelivery.count}
           sub={`${fmt(data.inDelivery.contractValueSum)} contract value in flight`}
@@ -194,6 +208,26 @@ function BHDashboard({ data }: { data: DashboardData }) {
           sub="Avg across touchpoints this month"
           to="/nps"
         />
+      </div>
+
+      {/* Row 1b – Coming Soon tiles (not yet built pending open questions) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'OB Progress' },
+          { label: 'PO Progress' },
+          { label: 'Revenue Generated' },
+          { label: 'Estimated Incentive' },
+        ].map((t) => (
+          <div
+            key={t.label}
+            className="rounded-2xl p-5 shadow-warm-sm flex flex-col items-center justify-center text-center min-h-[112px]"
+            style={{ background: '#FAF6F2', border: '1px dashed #EDE8E3' }}
+          >
+            <Wrench size={20} strokeWidth={1.5} className="text-stone-300 mb-1.5" />
+            <p className="text-sm font-semibold text-stone-400">{t.label}</p>
+            <p className="text-[10px] text-stone-400 mt-0.5">Coming Soon</p>
+          </div>
+        ))}
       </div>
 
       {/* NPS breakdown by stage */}
