@@ -173,9 +173,9 @@ function CallCard({ call, onRecordingRefresh }: CardProps) {
   );
 }
 
-interface Props { leadId: string; isLocked?: boolean }
+interface Props { leadId: string; isLocked?: boolean; onCallLogged?: () => void }
 
-export default function CallLogTab({ leadId, isLocked }: Props) {
+export default function CallLogTab({ leadId, isLocked, onCallLogged }: Props) {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [scheduledCalls, setScheduledCalls] = useState<FollowUpTask[]>([]);
   const [rnrCount, setRnrCount] = useState(0);
@@ -411,6 +411,7 @@ export default function CallLogTab({ leadId, isLocked }: Props) {
       setTaskAttachmentFiles([]);
       setShowForm(false);
       await loadCalls();
+      onCallLogged?.();
     } catch (e: any) {
       setError(e.message);
       setUploadingAttachment(false);

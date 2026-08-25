@@ -1978,7 +1978,7 @@ export default function LeadDetail() {
               );
             })()}
 
-            {activeTab === 'calls' && <CallLogTab leadId={leadId!} isLocked={isLocked} />}
+            {activeTab === 'calls' && <CallLogTab leadId={leadId!} isLocked={isLocked} onCallLogged={loadLead} />}
             {activeTab === 'followups' && <FollowUpTab leadId={leadId!} isLocked={isLocked} />}
             {activeTab === 'meetings' && (
               <MeetingsTab
